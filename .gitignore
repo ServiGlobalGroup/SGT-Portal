@@ -1,0 +1,49 @@
+# Dependencias
+node_modules/
+venv/
+env/
+
+# Archivos de construcción
+dist/
+build/
+
+# Archivos temporales de Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Archivos temporales de desarrollo
+*.backup.*
+*.simple.*
+*.new.*
+*.old.*
+*.temp.*
+*.test.*
+
+# Archivos de logs
+*.log
+logs/
+
+# Archivos de IDE
+.vscode/settings.json
+.idea/
+
+# Archivos del sistema
+.DS_Store
+Thumbs.db
+
+# Archivos de configuración local
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Archivos de uploads temporales
+uploads/temp/
+files/temp/
+
+# Cache de TypeScript
+*.tsbuildinfo
