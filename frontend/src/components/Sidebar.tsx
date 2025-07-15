@@ -33,6 +33,7 @@ import {
   Menu as MenuIcon,
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
 
 const drawerWidth = 280;
 const collapsedWidth = 80;
@@ -64,6 +65,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
 
@@ -92,8 +94,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
         navigate('/settings');
         break;
       case 'cerrar-sesion':
-        // Aquí se manejaría el cierre de sesión
-        console.log('Cerrando sesión...');
+        logout();
+        navigate('/login');
         break;
       default:
         console.log(`Acción seleccionada: ${action}`);
@@ -266,7 +268,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               },
             }}
           >
-            JP
+            {user?.initials || user?.first_name?.charAt(0) || 'U'}
           </Avatar>
           
           {(!isCollapsed || isMobile) && (
@@ -283,7 +285,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   whiteSpace: 'nowrap',
                 }}
               >
-                Usuario
+                {user?.full_name || user?.first_name || 'Usuario'}
               </Typography>
               <Typography 
                 variant="caption" 
@@ -296,7 +298,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   textTransform: 'capitalize',
                 }}
               >
-                Administrador
+                {user?.role === 'ADMIN' ? 'Administrador' : 
+                 user?.role === 'MANAGER' ? 'Gestor' : 
+                 user?.role === 'EMPLOYEE' ? 'Empleado' : 'Usuario'}
               </Typography>
             </Box>
           )}
