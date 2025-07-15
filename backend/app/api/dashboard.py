@@ -16,27 +16,5 @@ async def get_dashboard_stats():
 @router.get("/recent-activity")
 async def get_recent_activity():
     return {
-        "activities": [
-            {
-                "id": 1,
-                "user": "Juan Pérez",
-                "action": "Subió documento",
-                "timestamp": datetime.now().isoformat(),
-                "type": "document"
-            },
-            {
-                "id": 2,
-                "user": "María García",
-                "action": "Solicitó vacaciones",
-                "timestamp": datetime.now().isoformat(),
-                "type": "vacation"
-            },
-            {
-                "id": 3,
-                "user": "Carlos López",
-                "action": "Visitó página de tráfico",
-                "timestamp": datetime.now().isoformat(),
-                "type": "traffic"
-            }
-        ]
+        "activities": []
     }

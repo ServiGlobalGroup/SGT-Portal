@@ -18,10 +18,10 @@ class SystemConfig(BaseModel):
     debug_mode: bool = False
 
 class EmailConfig(BaseModel):
-    smtp_server: str = "smtp.empresa.com"
+    smtp_server: str = ""
     smtp_port: str = "587"
-    smtp_user: str = "sistema@empresa.com"
-    smtp_password: str = "••••••••"
+    smtp_user: str = ""
+    smtp_password: str = ""
     enable_email_notifications: bool = True
     order_notifications: bool = True
     vacation_notifications: bool = True
@@ -63,10 +63,10 @@ settings_data = {
         "updated_at": "2025-07-14T15:30:00Z"
     },
     "email": {
-        "smtp_server": "smtp.empresa.com",
+        "smtp_server": "",
         "smtp_port": "587",
-        "smtp_user": "sistema@empresa.com",
-        "smtp_password": "password123",
+        "smtp_user": "",
+        "smtp_password": "",
         "enable_email_notifications": True,
         "order_notifications": True,
         "vacation_notifications": True,
@@ -202,10 +202,10 @@ async def reset_system_settings():
             "updated_at": datetime.now().isoformat()
         },
         "email": {
-            "smtp_server": "smtp.empresa.com",
+            "smtp_server": "",
             "smtp_port": "587",
-            "smtp_user": "sistema@empresa.com",
-            "smtp_password": "password123",
+            "smtp_user": "",
+            "smtp_password": "",
             "enable_email_notifications": True,
             "order_notifications": True,
             "vacation_notifications": True,

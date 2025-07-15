@@ -14,113 +14,11 @@ router = APIRouter()
 PAYROLL_FILES_DIR = Path("backend/files/payroll")
 PAYROLL_FILES_DIR.mkdir(parents=True, exist_ok=True)
 
-# Datos simulados de usuarios
-users_db = [
-    User(
-        id=1,
-        name="Juan Pérez",
-        email="juan.perez@empresa.com",
-        role="user",
-        department="Administración",
-        is_active=True
-    ),
-    User(
-        id=2,
-        name="María García",
-        email="maria.garcia@empresa.com",
-        role="user",
-        department="Recursos Humanos",
-        is_active=True
-    ),
-    User(
-        id=3,
-        name="Carlos López",
-        email="carlos.lopez@empresa.com",
-        role="admin",
-        department="IT",
-        is_active=True
-    ),
-    User(
-        id=4,
-        name="Ana Martínez",
-        email="ana.martinez@empresa.com",
-        role="user",
-        department="Contabilidad",
-        is_active=True
-    ),
-    User(
-        id=5,
-        name="David Rodríguez",
-        email="david.rodriguez@empresa.com",
-        role="user",
-        department="Ventas",
-        is_active=False
-    )
-]
+# Base de datos simulada de usuarios (se debe reemplazar por consulta real a DB)
+users_db = []
 
-# Datos simulados de documentos de nómina
-payroll_documents_db = [
-    PayrollDocument(
-        id=1,
-        user_id=1,
-        user_name="Juan Pérez",
-        type="nomina",
-        month="2024-12",
-        file_url="/files/payroll/nomina_juan_2024_12.pdf",
-        file_name="nomina_juan_perez_diciembre_2024.pdf",
-        file_size=1024000,
-        upload_date=datetime.now(),
-        status="active"
-    ),
-    PayrollDocument(
-        id=2,
-        user_id=1,
-        user_name="Juan Pérez",
-        type="dieta",
-        month="2024-12",
-        file_url="/files/payroll/dieta_juan_2024_12.pdf",
-        file_name="dieta_juan_perez_diciembre_2024.pdf",
-        file_size=512000,
-        upload_date=datetime.now(),
-        status="active"
-    ),
-    PayrollDocument(
-        id=3,
-        user_id=2,
-        user_name="María García",
-        type="nomina",
-        month="2024-12",
-        file_url="/files/payroll/nomina_maria_2024_12.pdf",
-        file_name="nomina_maria_garcia_diciembre_2024.pdf",
-        file_size=1024000,
-        upload_date=datetime.now(),
-        status="active"
-    ),
-    PayrollDocument(
-        id=4,
-        user_id=1,
-        user_name="Juan Pérez",
-        type="nomina",
-        month="2024-11",
-        file_url="/files/payroll/nomina_juan_2024_11.pdf",
-        file_name="nomina_juan_perez_noviembre_2024.pdf",
-        file_size=1024000,
-        upload_date=datetime.now(),
-        status="active"
-    ),
-    PayrollDocument(
-        id=5,
-        user_id=3,
-        user_name="Carlos López",
-        type="nomina",
-        month="2024-12",
-        file_url="/files/payroll/nomina_carlos_2024_12.pdf",
-        file_name="nomina_carlos_lopez_diciembre_2024.pdf",
-        file_size=1024000,
-        upload_date=datetime.now(),
-        status="active"
-    ),
-]
+# Base de datos simulada de documentos de nómina
+payroll_documents_db = []
 
 def get_current_user():
     """Simulación de obtener el usuario actual (normalmente vendría del token de autenticación)"""
@@ -191,14 +89,8 @@ async def view_document(document_id: int, current_user = Depends(get_current_use
     if current_user["role"] != "admin" and document.user_id != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="No tienes permisos para ver este documento")
     
-    # Simular contenido PDF (en producción esto leería el archivo real)
-    fake_pdf_content = b"%PDF-1.4\n1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n2 0 obj\n<<\n/Type /Pages\n/Kids [3 0 R]\n/Count 1\n>>\nendobj\n3 0 obj\n<<\n/Type /Page\n/Parent 2 0 R\n/MediaBox [0 0 612 792]\n>>\nendobj\nxref\n0 4\n0000000000 65535 f \n0000000010 00000 n \n0000000079 00000 n \n0000000136 00000 n \ntrailer\n<<\n/Size 4\n/Root 1 0 R\n>>\nstartxref\n205\n%%EOF"
-    
-    return StreamingResponse(
-        io.BytesIO(fake_pdf_content),
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"inline; filename={document.file_name}"}
-    )
+    # TODO: Implementar lectura real del archivo
+    raise HTTPException(status_code=501, detail="Funcionalidad no implementada")
 
 @router.get("/documents/{document_id}/download")
 async def download_document(document_id: int, current_user = Depends(get_current_user)):
@@ -211,14 +103,8 @@ async def download_document(document_id: int, current_user = Depends(get_current
     if current_user["role"] != "admin" and document.user_id != current_user["user_id"]:
         raise HTTPException(status_code=403, detail="No tienes permisos para descargar este documento")
     
-    # Simular contenido PDF
-    fake_pdf_content = b"%PDF-1.4\n1 0 obj\n<<\n/Type /Catalog\n/Pages 2 0 R\n>>\nendobj\n2 0 obj\n<<\n/Type /Pages\n/Kids [3 0 R]\n/Count 1\n>>\nendobj\n3 0 obj\n<<\n/Type /Page\n/Parent 2 0 R\n/MediaBox [0 0 612 792]\n>>\nendobj\nxref\n0 4\n0000000000 65535 f \n0000000010 00000 n \n0000000079 00000 n \n0000000136 00000 n \ntrailer\n<<\n/Size 4\n/Root 1 0 R\n>>\nstartxref\n205\n%%EOF"
-    
-    return StreamingResponse(
-        io.BytesIO(fake_pdf_content),
-        media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename={document.file_name}"}
-    )
+    # TODO: Implementar descarga real del archivo
+    raise HTTPException(status_code=501, detail="Funcionalidad no implementada")
 
 @router.delete("/documents/{document_id}")
 async def delete_document(document_id: int, current_user = Depends(get_current_user)):

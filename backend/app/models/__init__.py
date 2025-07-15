@@ -1,1 +1,3 @@
-# Archivo vacío para hacer que models sea un paquete de Python
+from .user import User, UserRole
+
+__all__ = ["User", "UserRole"]

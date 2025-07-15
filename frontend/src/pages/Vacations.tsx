@@ -49,43 +49,7 @@ interface VacationRequest {
 }
 
 export const Vacations: React.FC = () => {
-  const [requests, setRequests] = useState<VacationRequest[]>([
-    {
-      id: 1,
-      employeeName: "Juan Pérez",
-      startDate: "2025-08-15",
-      endDate: "2025-08-25",
-      reason: "Vacaciones familiares",
-      status: "approved",
-      days: 10,
-      requestDate: "2025-07-01",
-      approvedBy: "Admin",
-      approvedDate: "2025-07-02"
-    },
-    {
-      id: 2,
-      employeeName: "María García",
-      startDate: "2025-09-10",
-      endDate: "2025-09-15",
-      reason: "Descanso personal",
-      status: "pending",
-      days: 5,
-      requestDate: "2025-07-10"
-    },
-    {
-      id: 3,
-      employeeName: "Carlos López",
-      startDate: "2025-10-01",
-      endDate: "2025-10-07",
-      reason: "Vacaciones anuales",
-      status: "rejected",
-      days: 6,
-      requestDate: "2025-07-05",
-      approvedBy: "Admin",
-      approvedDate: "2025-07-06",
-      comments: "No disponible en esas fechas"
-    }
-  ]);
+  const [requests, setRequests] = useState<VacationRequest[]>([]);
 
   // Estados para el formulario
   const [openDialog, setOpenDialog] = useState(false);

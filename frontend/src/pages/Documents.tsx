@@ -47,58 +47,7 @@ interface PayrollDocument {
 }
 
 export const Documents: React.FC = () => {
-  const [documents] = useState<PayrollDocument[]>([
-    {
-      id: 1,
-      user_name: "Usuario Actual",
-      type: "nomina",
-      month: "2024-12",
-      file_name: "nomina_diciembre_2024.pdf",
-      file_size: 1024000,
-      upload_date: new Date(2024, 11, 1),
-      status: "active"
-    },
-    {
-      id: 2,
-      user_name: "Usuario Actual",
-      type: "dieta",
-      month: "2024-12",
-      file_name: "dieta_diciembre_2024.pdf",
-      file_size: 512000,
-      upload_date: new Date(2024, 11, 1),
-      status: "active"
-    },
-    {
-      id: 3,
-      user_name: "Usuario Actual",
-      type: "nomina",
-      month: "2024-11",
-      file_name: "nomina_noviembre_2024.pdf",
-      file_size: 1024000,
-      upload_date: new Date(2024, 10, 1),
-      status: "active"
-    },
-    {
-      id: 4,
-      user_name: "Usuario Actual",
-      type: "dieta",
-      month: "2024-11",
-      file_name: "dieta_noviembre_2024.pdf",
-      file_size: 487000,
-      upload_date: new Date(2024, 10, 1),
-      status: "active"
-    },
-    {
-      id: 5,
-      user_name: "Usuario Actual",
-      type: "nomina",
-      month: "2024-10",
-      file_name: "nomina_octubre_2024.pdf",
-      file_size: 1024000,
-      upload_date: new Date(2024, 9, 1),
-      status: "active"
-    }
-  ]);
+  const [documents] = useState<PayrollDocument[]>([]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'nomina' | 'dieta'>('all');
@@ -179,7 +128,7 @@ export const Documents: React.FC = () => {
       // Abrir preview de PDF
       setPdfPreview({
         open: true,
-        fileUrl: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf", // PDF de ejemplo
+        fileUrl: "", // URL del archivo real
         fileName: selectedDocument.file_name
       });
     }

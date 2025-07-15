@@ -7,32 +7,8 @@ import random
 router = APIRouter()
 
 # Datos de ejemplo en memoria
-vacation_requests = [
-    VacationRequest(
-        id=1,
-        employee_name="Juan Pérez",
-        start_date=datetime.now() + timedelta(days=10),
-        end_date=datetime.now() + timedelta(days=17),
-        reason="Vacaciones familiares",
-        status="pending"
-    ),
-    VacationRequest(
-        id=2,
-        employee_name="María García",
-        start_date=datetime.now() + timedelta(days=5),
-        end_date=datetime.now() + timedelta(days=12),
-        reason="Viaje personal",
-        status="approved"
-    ),
-    VacationRequest(
-        id=3,
-        employee_name="Carlos López",
-        start_date=datetime.now() + timedelta(days=20),
-        end_date=datetime.now() + timedelta(days=25),
-        reason="Descanso médico",
-        status="rejected"
-    )
-]
+# Base de datos simulada de solicitudes de vacaciones
+vacation_requests = []
 
 @router.get("/", response_model=List[VacationRequest])
 async def get_vacation_requests():

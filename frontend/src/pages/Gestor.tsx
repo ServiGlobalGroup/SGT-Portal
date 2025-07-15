@@ -63,117 +63,9 @@ interface PayrollDocument {
 }
 
 export const Gestor: React.FC = () => {
-  const [users] = useState<User[]>([
-    {
-      id: 1,
-      name: "Juan Pérez",
-      email: "juan.perez@empresa.com",
-      role: "user",
-      department: "Administración",
-      is_active: true
-    },
-    {
-      id: 2,
-      name: "María García",
-      email: "maria.garcia@empresa.com",
-      role: "user",
-      department: "Recursos Humanos",
-      is_active: true
-    },
-    {
-      id: 3,
-      name: "Carlos López",
-      email: "carlos.lopez@empresa.com",
-      role: "admin",
-      department: "IT",
-      is_active: true
-    },
-    {
-      id: 4,
-      name: "Ana Martínez",
-      email: "ana.martinez@empresa.com",
-      role: "user",
-      department: "Contabilidad",
-      is_active: true
-    },
-    {
-      id: 5,
-      name: "David Rodríguez",
-      email: "david.rodriguez@empresa.com",
-      role: "user",
-      department: "Ventas",
-      is_active: false
-    }
-  ]);
+  const [users] = useState<User[]>([]);
 
-  const [documents] = useState<PayrollDocument[]>([
-    {
-      id: 1,
-      user_id: 1,
-      user_name: "Juan Pérez",
-      type: "nomina",
-      month: "2024-12",
-      file_name: "nomina_juan_perez_diciembre_2024.pdf",
-      file_size: 1024000,
-      upload_date: new Date(2024, 11, 1),
-      status: "active"
-    },
-    {
-      id: 2,
-      user_id: 1,
-      user_name: "Juan Pérez",
-      type: "dieta",
-      month: "2024-12",
-      file_name: "dieta_juan_perez_diciembre_2024.pdf",
-      file_size: 512000,
-      upload_date: new Date(2024, 11, 1),
-      status: "active"
-    },
-    {
-      id: 3,
-      user_id: 2,
-      user_name: "María García",
-      type: "nomina",
-      month: "2024-12",
-      file_name: "nomina_maria_garcia_diciembre_2024.pdf",
-      file_size: 1024000,
-      upload_date: new Date(2024, 11, 1),
-      status: "active"
-    },
-    {
-      id: 4,
-      user_id: 1,
-      user_name: "Juan Pérez",
-      type: "nomina",
-      month: "2024-11",
-      file_name: "nomina_juan_perez_noviembre_2024.pdf",
-      file_size: 1024000,
-      upload_date: new Date(2024, 10, 1),
-      status: "active"
-    },
-    {
-      id: 5,
-      user_id: 3,
-      user_name: "Carlos López",
-      type: "nomina",
-      month: "2024-12",
-      file_name: "nomina_carlos_lopez_diciembre_2024.pdf",
-      file_size: 1024000,
-      upload_date: new Date(2024, 11, 1),
-      status: "active"
-    },
-    {
-      id: 6,
-      user_id: 2,
-      user_name: "María García",
-      type: "dieta",
-      month: "2024-11",
-      file_name: "dieta_maria_garcia_noviembre_2024.pdf",
-      file_size: 487000,
-      upload_date: new Date(2024, 10, 1),
-      status: "active"
-    }
-  ]);
+  const [documents] = useState<PayrollDocument[]>([]);
 
   const [searchTerm, setSearchTerm] = useState('');
   const [filterDepartment, setFilterDepartment] = useState('all');
@@ -249,7 +141,7 @@ export const Gestor: React.FC = () => {
     // Abrir preview de PDF
     setPdfPreview({
       open: true,
-      fileUrl: "https://www.africau.edu/images/default/sample.pdf", // PDF de ejemplo
+      fileUrl: "", // URL del archivo real
       fileName: document.file_name
     });
   };

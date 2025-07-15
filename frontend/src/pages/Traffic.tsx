@@ -62,20 +62,9 @@ interface TrafficFile {
 export const Traffic: React.FC = () => {
   // Estados principales
   const [currentFolderId, setCurrentFolderId] = useState<number | null>(null);
-  const [folders, setFolders] = useState<TrafficFolder[]>([
-    { id: 1, name: "Empresa A", parentId: null, createdDate: "2024-01-15", type: "company" },
-    { id: 2, name: "Empresa B", parentId: null, createdDate: "2024-01-20", type: "company" },
-    { id: 3, name: "Camiones", parentId: 1, createdDate: "2024-01-16", type: "vehicle_type" },
-    { id: 4, name: "Furgonetas", parentId: 1, createdDate: "2024-01-17", type: "vehicle_type" },
-    { id: 5, name: "Truck-001", parentId: 3, createdDate: "2024-01-18", type: "vehicle" },
-    { id: 6, name: "Van-002", parentId: 4, createdDate: "2024-01-19", type: "vehicle" },
-  ]);
+  const [folders, setFolders] = useState<TrafficFolder[]>([]);
   
-  const [files, setFiles] = useState<TrafficFile[]>([
-    { id: 1, name: "Permiso_Circulacion.pdf", size: 1024000, type: "pdf", folderId: 5, uploadDate: "2024-01-20", url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf" },
-    { id: 2, name: "Seguro_Vehiculo.pdf", size: 2048000, type: "pdf", folderId: 5, uploadDate: "2024-01-21", url: "https://www.africau.edu/images/default/sample.pdf" },
-    { id: 3, name: "ITV_Certificado.pdf", size: 1536000, type: "pdf", folderId: 6, uploadDate: "2024-01-22", url: "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf" },
-  ]);
+  const [files, setFiles] = useState<TrafficFile[]>([]);
 
   // Estados de UI
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; type: 'folder' | 'file'; id: number } | null>(null);
@@ -596,15 +585,17 @@ export const Traffic: React.FC = () => {
       >
         <MenuItemComponent
           onClick={() => {
-            const item = contextMenu?.type === 'folder' 
-              ? folders.find(f => f.id === contextMenu.id)
-              : files.find(f => f.id === contextMenu.id);
-            setRenameDialog({
-              open: true,
-              type: contextMenu?.type || 'folder',
-              id: contextMenu?.id || 0,
-              currentName: item?.name || ''
-            });
+            if (contextMenu) {
+              const item = contextMenu.type === 'folder' 
+                ? folders.find(f => f.id === contextMenu.id)
+                : files.find(f => f.id === contextMenu.id);
+              setRenameDialog({
+                open: true,
+                type: contextMenu.type,
+                id: contextMenu.id,
+                currentName: item?.name || ''
+              });
+            }
             setContextMenu(null);
           }}
         >

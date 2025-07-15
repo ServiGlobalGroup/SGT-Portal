@@ -413,81 +413,8 @@ const PDFUploadComponent: React.FC = () => {
 };
 
 const UploadHistoryComponent: React.FC = () => {
-  // Datos de ejemplo del historial de uploads
-  const [uploadHistory] = useState<UploadHistoryItem[]>([
-    {
-      id: 1,
-      fileName: 'nomina_enero_2025.pdf',
-      uploadDate: '2025-01-15T10:30:00Z',
-      user: 'María García',
-      documentType: 'nomina',
-      month: '01',
-      year: '2025',
-      totalPages: 25,
-      processedPages: 25,
-      status: 'completed'
-    },
-    {
-      id: 2,
-      fileName: 'dietas_diciembre_2024.pdf',
-      uploadDate: '2025-01-10T14:20:00Z',
-      user: 'Carlos Rodríguez',
-      documentType: 'dieta',
-      month: '12',
-      year: '2024',
-      totalPages: 42,
-      processedPages: 38,
-      status: 'processing'
-    },
-    {
-      id: 3,
-      fileName: 'nomina_diciembre_2024.pdf',
-      uploadDate: '2025-01-08T09:15:00Z',
-      user: 'Ana López',
-      documentType: 'nomina',
-      month: '12',
-      year: '2024',
-      totalPages: 30,
-      processedPages: 30,
-      status: 'completed'
-    },
-    {
-      id: 4,
-      fileName: 'dietas_noviembre_2024.pdf',
-      uploadDate: '2025-01-05T16:45:00Z',
-      user: 'Pedro Martín',
-      documentType: 'dieta',
-      month: '11',
-      year: '2024',
-      totalPages: 18,
-      processedPages: 0,
-      status: 'error'
-    },
-    {
-      id: 5,
-      fileName: 'nomina_octubre_2024.pdf',
-      uploadDate: '2024-11-03T12:30:00Z',
-      user: 'María García',
-      documentType: 'nomina',
-      month: '10',
-      year: '2024',
-      totalPages: 22,
-      processedPages: 22,
-      status: 'completed'
-    },
-    {
-      id: 6,
-      fileName: 'dietas_octubre_2024.pdf',
-      uploadDate: '2024-11-01T08:15:00Z',
-      user: 'Ana López',
-      documentType: 'dieta',
-      month: '10',
-      year: '2024',
-      totalPages: 35,
-      processedPages: 35,
-      status: 'completed'
-    }
-  ]);
+  // Historial de uploads
+  const [uploadHistory] = useState<UploadHistoryItem[]>([]);
 
   // Estados para los filtros
   const [searchTerm, setSearchTerm] = useState('');

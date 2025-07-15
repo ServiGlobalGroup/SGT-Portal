@@ -75,11 +75,30 @@ export interface PayrollDocument {
 
 export interface User {
   id: number;
-  name: string;
+  dni_nie: string;
+  first_name: string;
+  last_name: string;
   email: string;
-  role: 'admin' | 'user';
+  phone?: string;
+  role: 'ADMIN' | 'MANAGER' | 'EMPLOYEE';
   department: string;
+  position?: string;
+  hire_date?: string;
+  birth_date?: string;
+  address?: string;
+  city?: string;
+  postal_code?: string;
+  emergency_contact_name?: string;
+  emergency_contact_phone?: string;
   is_active: boolean;
+  is_verified: boolean;
+  avatar?: string;
+  user_folder_path?: string;
+  created_at: string;
+  updated_at: string;
+  last_login?: string;
+  full_name: string;
+  initials: string;
 }
 
 export interface UserProfile {

@@ -283,7 +283,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   whiteSpace: 'nowrap',
                 }}
               >
-                Juan Pérez
+                Usuario
               </Typography>
               <Typography 
                 variant="caption" 

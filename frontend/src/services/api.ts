@@ -1,7 +1,7 @@
 import axios from 'axios';
 import type { DashboardStats, TrafficData, VacationRequest, Document, Activity, TrafficFolder, TrafficDocument, PayrollDocument, PayrollStats, User } from '../types';
 
-const API_BASE_URL = 'http://127.0.0.1:8001';
+const API_BASE_URL = 'http://127.0.0.1:8000';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -221,4 +221,90 @@ export const settingsAPI = {
   // Obtener información del sistema
   getSystemInfo: () => 
     api.get('/api/settings/system-info').then(res => res.data),
+};
+
+// API de usuarios
+export const usersAPI = {
+  // Obtener lista de usuarios con paginación y filtros
+  getUsers: (params?: {
+    page?: number;
+    per_page?: number;
+    search?: string;
+    department?: string;
+    role?: string;
+    active_only?: boolean;
+  }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.page) searchParams.append('page', params.page.toString());
+    if (params?.per_page) searchParams.append('per_page', params.per_page.toString());
+    if (params?.search) searchParams.append('search', params.search);
+    if (params?.department) searchParams.append('department', params.department);
+    if (params?.role) searchParams.append('role', params.role);
+    if (params?.active_only !== undefined) searchParams.append('active_only', params.active_only.toString());
+    
+    return api.get(`/api/users?${searchParams.toString()}`).then(res => res.data);
+  },
+
+  // Crear nuevo usuario
+  createUser: (userData: {
+    dni_nie: string;
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone?: string;
+    role: 'ADMIN' | 'MANAGER' | 'EMPLOYEE';
+    department: string;
+    position?: string;
+    hire_date?: string;
+    birth_date?: string;
+    address?: string;
+    city?: string;
+    postal_code?: string;
+    emergency_contact_name?: string;
+    emergency_contact_phone?: string;
+    password: string;
+  }) => api.post('/api/users', userData).then(res => res.data),
+
+  // Obtener usuario por ID
+  getUserById: (id: number) => 
+    api.get(`/api/users/${id}`).then(res => res.data),
+
+  // Actualizar usuario
+  updateUser: (id: number, userData: Partial<{
+    first_name: string;
+    last_name: string;
+    email: string;
+    phone: string;
+    department: string;
+    position: string;
+    hire_date: string;
+    birth_date: string;
+    address: string;
+    city: string;
+    postal_code: string;
+    emergency_contact_name: string;
+    emergency_contact_phone: string;
+  }>) => api.put(`/api/users/${id}`, userData).then(res => res.data),
+
+  // Desactivar usuario (soft delete)
+  deactivateUser: (id: number) => 
+    api.delete(`/api/users/${id}`).then(res => res.data),
+
+  // Eliminar usuario permanentemente (hard delete)
+  deleteUserPermanently: (id: number) => 
+    api.delete(`/api/users/${id}/permanent`).then(res => res.data),
+
+  // Cambiar estado de usuario (activar/desactivar)
+  toggleUserStatus: (id: number) => 
+    api.patch(`/api/users/${id}/toggle-status`).then(res => res.data),
+
+  // Cambiar contraseña de usuario
+  changePassword: (id: number, passwordData: {
+    new_password: string;
+    confirm_password: string;
+  }) => api.patch(`/api/users/${id}/password`, passwordData).then(res => res.data),
+
+  // Obtener estadísticas de usuarios
+  getUserStats: () => 
+    api.get('/api/users/stats').then(res => res.data),
 };

@@ -37,28 +37,28 @@ import {
 import type { UserProfile } from '../types';
 
 export const Profile: React.FC = () => {
-  // Estado del perfil del usuario (simulado para demo)
+  // Estado del perfil del usuario (se debe cargar desde la API)
   const [userProfile, setUserProfile] = useState<UserProfile>({
-    id: 1001,
-    dni_nie: "12345678Z",
-    first_name: "Juan Carlos",
-    last_name: "Pérez González",
-    email: "juan.perez@empresa.com",
-    phone: "+34 666 123 456",
-    role: "manager",
-    department: "Recursos Humanos",
-    position: "Gerente de RRHH",
-    hire_date: "2020-03-15",
-    birth_date: "1985-07-22",
-    address: "Calle Mayor, 123, 2º A",
-    city: "Madrid",
-    postal_code: "28001",
-    emergency_contact_name: "María Pérez",
-    emergency_contact_phone: "+34 666 987 654",
-    avatar: "JC",
-    is_active: true,
-    created_at: "2020-03-15T10:00:00Z",
-    updated_at: "2025-07-14T15:30:00Z"
+    id: 0,
+    dni_nie: "",
+    first_name: "",
+    last_name: "",
+    email: "",
+    phone: "",
+    role: "",
+    department: "",
+    position: "",
+    hire_date: "",
+    birth_date: "",
+    address: "",
+    city: "",
+    postal_code: "",
+    emergency_contact_name: "",
+    emergency_contact_phone: "",
+    avatar: "",
+    is_active: false,
+    created_at: "",
+    updated_at: ""
   });
 
   const [isEditing, setIsEditing] = useState(false);
