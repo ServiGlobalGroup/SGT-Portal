@@ -1,12 +1,15 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from fastapi.responses import FileResponse, StreamingResponse
 from app.models.schemas import PayrollDocument, User, PayrollStats
+from app.services.payroll_pdf_service import PayrollPDFProcessor
+from app.config import settings
 from datetime import datetime
 from typing import List, Optional
 import os
 import uuid
 from pathlib import Path
 import io
+import tempfile
 
 router = APIRouter()
 
@@ -152,6 +155,206 @@ async def get_payroll_stats():
         total_size=total_size,
         by_type=by_type
     )
+
+# Endpoint para procesar PDFs con múltiples nóminas
+@router.post("/process-multiple-payrolls")
+async def process_multiple_payrolls(
+    file: UploadFile = File(...),
+    month_year: str = Form(...),
+    current_user = Depends(get_current_user)
+):
+    """
+    Procesa un PDF con múltiples nóminas, extrayendo cada página como PDF individual
+    y asignándola al trabajador correspondiente basándose en el DNI/NIE encontrado.
+    
+    Args:
+        file: Archivo PDF con múltiples nóminas
+        month_year: Mes y año de las nóminas (ej: "junio_2025" o "2025-06")
+        current_user: Usuario actual (debe ser admin)
+    """
+    # Verificar permisos de administrador
+    if current_user["role"] != "admin":
+        raise HTTPException(
+            status_code=403, 
+            detail="Acceso denegado: se requieren permisos de administrador para procesar nóminas múltiples"
+        )
+    
+    # Validar que el archivo sea PDF
+    if not file.filename or not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(
+            status_code=400, 
+            detail="Solo se permiten archivos PDF"
+        )
+    
+    # Validar tamaño del archivo (50MB máximo)
+    if file.size and file.size > 50 * 1024 * 1024:
+        raise HTTPException(
+            status_code=400, 
+            detail="El archivo es demasiado grande. Tamaño máximo: 50MB"
+        )
+    
+    try:
+        # Crear archivo temporal para procesar
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+            # Leer el contenido del archivo subido
+            content = await file.read()
+            temp_file.write(content)
+            temp_file_path = temp_file.name
+        
+        # Inicializar el procesador de PDFs
+        processor = PayrollPDFProcessor(settings.user_files_base_path)
+        
+        # Procesar el PDF
+        results = processor.process_payroll_pdf(temp_file_path, month_year, document_type="nominas")
+        
+        # Generar resumen legible
+        summary = processor.get_processing_summary(results)
+        
+        # Limpiar archivo temporal
+        os.unlink(temp_file_path)
+        
+        # Preparar respuesta
+        response = {
+            "success": True,
+            "message": "Procesamiento completado",
+            "filename": file.filename,
+            "month_year": month_year,
+            "stats": {
+                "total_pages": results["total_pages"],
+                "successful": results["successful_assignments"],
+                "failed": results["failed_assignments"],
+                "success_rate": round((results["successful_assignments"] / results["total_pages"]) * 100, 2) if results["total_pages"] > 0 else 0
+            },
+            "details": results.get("details", []),
+            "errors": results.get("errors", []),
+            "summary": summary,
+            "results": results,
+            "processed_at": datetime.now().isoformat()
+        }
+        
+        # Si hay errores críticos, devolver código de error parcial
+        if results["failed_assignments"] > 0:
+            response["warning"] = f"Se procesaron {results['successful_assignments']} nóminas exitosamente, pero {results['failed_assignments']} fallaron."
+        
+        return response
+        
+    except Exception as e:
+        # Limpiar archivo temporal si existe
+        if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
+            os.unlink(temp_file_path)
+        
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error procesando el archivo PDF: {str(e)}"
+        )
+
+@router.post("/process-multiple-dietas")
+async def process_multiple_dietas(
+    file: UploadFile = File(...),
+    month_year: str = Form(...),
+    current_user = Depends(get_current_user)
+):
+    """
+    Procesa un PDF con múltiples dietas, extrayendo cada página como PDF individual
+    y asignándola al trabajador correspondiente basándose en el DNI/NIE encontrado.
+    
+    Args:
+        file: Archivo PDF con múltiples dietas
+        month_year: Mes y año de las dietas (ej: "junio_2025" o "2025-06")
+        current_user: Usuario actual (debe ser admin)
+    """
+    # Verificar permisos de administrador
+    if current_user["role"] != "admin":
+        raise HTTPException(
+            status_code=403, 
+            detail="Acceso denegado: se requieren permisos de administrador para procesar dietas múltiples"
+        )
+    
+    # Validar que el archivo sea PDF
+    if not file.filename or not file.filename.lower().endswith('.pdf'):
+        raise HTTPException(
+            status_code=400, 
+            detail="Solo se permiten archivos PDF"
+        )
+    
+    # Validar tamaño del archivo (50MB máximo)
+    if file.size and file.size > 50 * 1024 * 1024:
+        raise HTTPException(
+            status_code=400, 
+            detail="El archivo es demasiado grande. Tamaño máximo: 50MB"
+        )
+    
+    try:
+        # Crear archivo temporal para procesar
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as temp_file:
+            # Leer el contenido del archivo subido
+            content = await file.read()
+            temp_file.write(content)
+            temp_file_path = temp_file.name
+        
+        # Inicializar el procesador de PDFs
+        processor = PayrollPDFProcessor(settings.user_files_base_path)
+        
+        # Procesar el PDF como dietas
+        results = processor.process_payroll_pdf(temp_file_path, month_year, document_type="dietas")
+        
+        # Generar resumen legible
+        summary = processor.get_processing_summary(results)
+        
+        # Limpiar archivo temporal
+        os.unlink(temp_file_path)
+        
+        # Preparar respuesta
+        response = {
+            "success": True,
+            "message": "Procesamiento de dietas completado",
+            "filename": file.filename,
+            "month_year": month_year,
+            "document_type": "dietas",
+            "stats": {
+                "total_pages": results["total_pages"],
+                "successful": results["successful_assignments"],
+                "failed": results["failed_assignments"],
+                "success_rate": round((results["successful_assignments"] / results["total_pages"]) * 100, 2) if results["total_pages"] > 0 else 0
+            },
+            "details": results.get("details", []),
+            "errors": results.get("errors", []),
+            "summary": summary,
+            "results": results,
+            "processed_at": datetime.now().isoformat()
+        }
+        
+        # Si hay errores críticos, devolver código de error parcial
+        if results["failed_assignments"] > 0:
+            response["warning"] = f"Se procesaron {results['successful_assignments']} dietas exitosamente, pero {results['failed_assignments']} fallaron."
+        
+        return response
+        
+    except Exception as e:
+        # Limpiar archivo temporal si existe
+        if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
+            os.unlink(temp_file_path)
+        
+        raise HTTPException(
+            status_code=500, 
+            detail=f"Error procesando el archivo PDF de dietas: {str(e)}"
+        )
+
+@router.get("/processing-status/{process_id}")
+async def get_processing_status(process_id: str, current_user = Depends(get_current_user)):
+    """
+    Obtiene el estado de procesamiento de un PDF (para futuras implementaciones asíncronas).
+    """
+    if current_user["role"] != "admin":
+        raise HTTPException(status_code=403, detail="Acceso denegado")
+    
+    # Por ahora retornamos un estado mock
+    # En una implementación real, consultaríamos una base de datos o cache
+    return {
+        "process_id": process_id,
+        "status": "completed",
+        "message": "Funcionalidad de seguimiento en desarrollo"
+    }
 
 # Endpoints de administrador
 @router.get("/admin/users", response_model=List[User])

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   Paper,
   Typography,
@@ -14,6 +14,10 @@ import {
   CircularProgress,
   LinearProgress,
   TextField,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from '@mui/material';
 import {
   CloudUpload,
@@ -22,18 +26,25 @@ import {
   Check,
   Search,
   FilterList,
+  AutoAwesome,
+  CheckCircle,
+  Error,
+  AssignmentTurnedIn,
 } from '@mui/icons-material';
+import { payrollAPI, userFilesAPI } from '../services/api';
 
 interface UploadHistoryItem {
   id: number;
-  fileName: string;
-  uploadDate: string;
-  user: string;
-  documentType: 'nomina' | 'dieta';
+  file_name: string;
+  upload_date: string;
+  user_dni: string;
+  user_name: string;
+  document_type: 'nominas' | 'dietas';
   month: string;
   year: string;
-  totalPages: number;
-  processedPages: number;
+  total_pages: number;
+  successful_pages: number;
+  failed_pages: number;
   status: 'processing' | 'completed' | 'error';
 }
 
@@ -42,14 +53,44 @@ interface UploadState {
   isUploading: boolean;
   uploadProgress: number;
   file: File | null;
-  documentType: 'nomina' | 'dieta' | '';
+  documentType: 'multiple' | 'multiple-dietas' | '';
   month: string;
   year: string;
   error: string;
   success: boolean;
 }
 
-const PDFUploadComponent: React.FC = () => {
+interface ProcessingResult {
+  page_number: number;
+  dni_nie_found?: string;
+  user_folder_exists: boolean;
+  pdf_saved: boolean;
+  saved_path?: string;
+  success: boolean;
+  error_message?: string;
+}
+
+interface ProcessingResponse {
+  success: boolean;
+  message: string;
+  filename: string;
+  month_year: string;
+  stats: {
+    total_pages: number;
+    successful: number;
+    failed: number;
+    success_rate: number;
+  };
+  details: ProcessingResult[];
+  errors: string[];
+  processed_at: string;
+}
+
+interface PDFUploadComponentProps {
+  setUploadHistory: React.Dispatch<React.SetStateAction<UploadHistoryItem[]>>;
+}
+
+const PDFUploadComponent: React.FC<PDFUploadComponentProps> = ({ setUploadHistory }) => {
   const [uploadState, setUploadState] = useState<UploadState>({
     isDragOver: false,
     isUploading: false,
@@ -57,17 +98,63 @@ const PDFUploadComponent: React.FC = () => {
     file: null,
     documentType: '',
     month: '',
-    year: new Date().getFullYear().toString(),
+    year: '',
     error: '',
     success: false,
   });
 
-  const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
+  const [processingResult, setProcessingResult] = useState<ProcessingResponse | null>(null);
+  const [showResultDialog, setShowResultDialog] = useState(false);
+  const [currentProcessingType, setCurrentProcessingType] = useState<'nominas' | 'dietas' | null>(null);
+
   const months = [
     'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
   ];
+
+  // Función para agregar entrada al historial usando API
+  const addToUploadHistory = async (filename: string, documentType: 'nominas' | 'dietas', result: ProcessingResponse) => {
+    try {
+      const historyItem = {
+        file_name: filename,
+        upload_date: new Date().toISOString(),
+        user_dni: 'CURRENT_USER', // Se obtendrá automáticamente del token en el backend
+        user_name: 'Admin', // Se obtendrá automáticamente del token en el backend
+        document_type: documentType,
+        month: uploadState.month,
+        year: uploadState.year,
+        total_pages: result.stats.total_pages,
+        successful_pages: result.stats.successful,
+        failed_pages: result.stats.failed,
+        status: result.stats.failed === result.stats.total_pages ? 'error' : 'completed',
+      };
+
+      // Crear el registro en la base de datos
+      await userFilesAPI.createUploadHistory(historyItem);
+      
+      // Recargar el historial desde la API
+      const response = await userFilesAPI.getUploadHistory({ limit: 100, skip: 0 });
+      setUploadHistory(response.items);
+    } catch (error) {
+      console.error('Error saving upload history:', error);
+      // Si falla, al menos agregar localmente como fallback
+      const newHistoryItem: UploadHistoryItem = {
+        id: Date.now(),
+        file_name: filename,
+        upload_date: new Date().toISOString(),
+        user_dni: 'CURRENT_USER',
+        user_name: 'Admin',
+        document_type: documentType,
+        month: uploadState.month,
+        year: uploadState.year,
+        total_pages: result.stats.total_pages,
+        successful_pages: result.stats.successful,
+        failed_pages: result.stats.failed,
+        status: result.stats.failed === result.stats.total_pages ? 'error' : 'completed',
+      };
+      setUploadHistory(prev => [newHistoryItem, ...prev]);
+    }
+  };
 
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -83,8 +170,12 @@ const PDFUploadComponent: React.FC = () => {
     if (file.type !== 'application/pdf') {
       return 'Solo se permiten archivos PDF';
     }
-    if (file.size > 10 * 1024 * 1024) { // 10MB
-      return 'El archivo no puede superar los 10MB';
+    
+    // Máximo 50MB para todos los documentos
+    const maxSize = 50 * 1024 * 1024;
+    
+    if (file.size > maxSize) {
+      return 'El archivo no puede superar los 50MB';
     }
     return '';
   };
@@ -126,38 +217,80 @@ const PDFUploadComponent: React.FC = () => {
   const handleUpload = async () => {
     if (!canUpload) return;
 
+    // Validar que el año sea válido
+    const yearNum = parseInt(uploadState.year);
+    if (isNaN(yearNum) || yearNum < 1900 || yearNum > 2100) {
+      setUploadState(prev => ({ ...prev, error: 'Por favor ingrese un año válido entre 1900 y 2100' }));
+      return;
+    }
+
     setUploadState(prev => ({ ...prev, isUploading: true, error: '', uploadProgress: 0 }));
 
     try {
-      // Simular progreso de subida
-      for (let i = 0; i <= 100; i += 10) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        setUploadState(prev => ({ ...prev, uploadProgress: i }));
+      if (uploadState.documentType === 'multiple') {
+        // Procesamiento de múltiples nóminas
+        const monthYear = `${uploadState.month.toLowerCase()}_${uploadState.year}`;
+        
+        setUploadState(prev => ({ ...prev, uploadProgress: 20 }));
+        
+        const response = await payrollAPI.processPayrollPDF(uploadState.file!, monthYear);
+        
+        setUploadState(prev => ({ ...prev, uploadProgress: 100 }));
+        
+        // Mostrar resultados del procesamiento
+        setCurrentProcessingType('nominas');
+        setProcessingResult(response);
+        setShowResultDialog(true);
+        
+        // Agregar al historial
+        addToUploadHistory(uploadState.file!.name, 'nominas', response);
+        
+        setUploadState(prev => ({ 
+          ...prev, 
+          isUploading: false, 
+          success: true,
+          file: null,
+          documentType: '',
+          month: '',
+          uploadProgress: 0,
+        }));
+        
+      } else if (uploadState.documentType === 'multiple-dietas') {
+        // Procesamiento de múltiples dietas
+        const monthYear = `${uploadState.month.toLowerCase()}_${uploadState.year}`;
+        
+        setUploadState(prev => ({ ...prev, uploadProgress: 20 }));
+        
+        const response = await payrollAPI.processDietasPDF(uploadState.file!, monthYear);
+        
+        setUploadState(prev => ({ ...prev, uploadProgress: 100 }));
+        
+        // Mostrar resultados del procesamiento
+        setCurrentProcessingType('dietas');
+        setProcessingResult(response);
+        setShowResultDialog(true);
+        
+        // Agregar al historial
+        addToUploadHistory(uploadState.file!.name, 'dietas', response);
+        
+        setUploadState(prev => ({ 
+          ...prev, 
+          isUploading: false, 
+          success: true,
+          file: null,
+          documentType: '',
+          month: '',
+          uploadProgress: 0,
+        }));
+        
       }
 
-      // Aquí iría la lógica real de subida al backend
-      console.log('Uploading:', {
-        file: uploadState.file,
-        type: uploadState.documentType,
-        month: uploadState.month,
-        year: uploadState.year,
-      });
-
+    } catch (error: any) {
+      console.error('Error uploading file:', error);
       setUploadState(prev => ({ 
         ...prev, 
         isUploading: false, 
-        success: true,
-        file: null,
-        documentType: '',
-        month: '',
-        uploadProgress: 0,
-      }));
-
-    } catch {
-      setUploadState(prev => ({ 
-        ...prev, 
-        isUploading: false, 
-        error: 'Error al subir el archivo. Intenta de nuevo.',
+        error: error.response?.data?.detail || 'Error al procesar el archivo. Intenta de nuevo.',
         uploadProgress: 0,
       }));
     }
@@ -268,10 +401,20 @@ const PDFUploadComponent: React.FC = () => {
                 px: { xs: 1, sm: 0 }
               }}
             >
-              Arrastra un archivo PDF aquí o haz clic para seleccionar
+              {uploadState.documentType === 'multiple' 
+                ? 'Arrastra un PDF con nóminas aquí o haz clic para seleccionar'
+                : uploadState.documentType === 'multiple-dietas'
+                ? 'Arrastra un PDF con dietas aquí o haz clic para seleccionar'
+                : 'Selecciona el tipo de documento para continuar'
+              }
             </Typography>
             <Typography variant="body2" sx={{ color: '#6c757d' }}>
-              Máximo 10MB • Solo archivos PDF
+              {uploadState.documentType === 'multiple' 
+                ? 'Máximo 50MB • El sistema extraerá automáticamente cada nómina por DNI/NIE'
+                : uploadState.documentType === 'multiple-dietas'
+                ? 'Máximo 50MB • El sistema extraerá automáticamente cada dieta por DNI/NIE'
+                : 'Solo archivos PDF'
+              }
             </Typography>
           </Box>
         )}
@@ -289,10 +432,20 @@ const PDFUploadComponent: React.FC = () => {
           <Select
             value={uploadState.documentType}
             label="Tipo de Documento"
-            onChange={(e) => setUploadState(prev => ({ ...prev, documentType: e.target.value as 'nomina' | 'dieta' }))}
+            onChange={(e) => setUploadState(prev => ({ ...prev, documentType: e.target.value as 'multiple' | 'multiple-dietas' }))}
           >
-            <MenuItem value="nomina">Nómina</MenuItem>
-            <MenuItem value="dieta">Dieta</MenuItem>
+            <MenuItem value="multiple">
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <AutoAwesome sx={{ fontSize: 16 }} />
+                Nóminas (Procesamiento Automático)
+              </Box>
+            </MenuItem>
+            <MenuItem value="multiple-dietas">
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <AutoAwesome sx={{ fontSize: 16 }} />
+                Dietas (Procesamiento Automático)
+              </Box>
+            </MenuItem>
           </Select>
         </FormControl>
 
@@ -311,20 +464,21 @@ const PDFUploadComponent: React.FC = () => {
           </Select>
         </FormControl>
 
-        <FormControl fullWidth required>
-          <InputLabel>Año</InputLabel>
-          <Select
-            value={uploadState.year}
-            label="Año"
-            onChange={(e) => setUploadState(prev => ({ ...prev, year: e.target.value }))}
-          >
-            {years.map((year) => (
-              <MenuItem key={year} value={year.toString()}>
-                {year}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
+        <TextField
+          fullWidth
+          required
+          label="Año"
+          type="number"
+          value={uploadState.year}
+          onChange={(e) => setUploadState(prev => ({ ...prev, year: e.target.value }))}
+          placeholder={new Date().getFullYear().toString()}
+          inputProps={{
+            min: 1900,
+            max: 2100,
+            step: 1
+          }}
+          helperText="Ingrese el año (ej: 2025)"
+        />
       </Box>
 
       {/* Mensajes de error y éxito */}
@@ -405,36 +559,253 @@ const PDFUploadComponent: React.FC = () => {
             },
           }}
         >
-          {uploadState.isUploading ? 'Subiendo...' : 'Subir Documento'}
+          {uploadState.isUploading ? 'Procesando...' : (uploadState.documentType === 'multiple' ? 'Procesar Nóminas' : 'Subir Documento')}
         </Button>
       </Box>
+
+      {/* Dialog de resultados del procesamiento */}
+      <Dialog 
+        open={showResultDialog} 
+        onClose={() => setShowResultDialog(false)}
+        maxWidth="lg"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 2,
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.12)',
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          background: 'linear-gradient(135deg, #1976d2 0%, #1565c0 100%)',
+          color: 'white',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          py: 2
+        }}>
+          <AssignmentTurnedIn sx={{ fontSize: 28 }} />
+          <Typography variant="h6" component="div" sx={{ fontWeight: 600 }}>
+            Resultados del Procesamiento de {currentProcessingType === 'nominas' ? 'Nóminas' : 'Dietas'}
+          </Typography>
+        </DialogTitle>
+        
+        <DialogContent sx={{ p: 3, backgroundColor: '#f8fafc' }}>
+          {processingResult && (
+            <Box sx={{ mt: 1 }}>
+              {/* Estadísticas generales */}
+              <Box sx={{ 
+                display: 'grid', 
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', md: 'repeat(4, 1fr)' }, 
+                gap: 2, 
+                mb: 3 
+              }}>
+                <Paper sx={{ 
+                  p: 2.5, 
+                  textAlign: 'center',
+                  borderRadius: 2,
+                  border: '1px solid #e3f2fd',
+                  background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+                }}>
+                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#1976d2' }}>
+                    {processingResult.stats.total_pages}
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 500 }}>
+                    Páginas Totales
+                  </Typography>
+                </Paper>
+                
+                <Paper sx={{ 
+                  p: 2.5, 
+                  textAlign: 'center',
+                  borderRadius: 2,
+                  border: '1px solid #e8f5e8',
+                  background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+                }}>
+                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#4caf50' }}>
+                    {processingResult.stats.successful}
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 500 }}>
+                    Exitosas
+                  </Typography>
+                </Paper>
+                
+                <Paper sx={{ 
+                  p: 2.5, 
+                  textAlign: 'center',
+                  borderRadius: 2,
+                  border: '1px solid #ffebee',
+                  background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+                }}>
+                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#f44336' }}>
+                    {processingResult.stats.failed}
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 500 }}>
+                    Fallidas
+                  </Typography>
+                </Paper>
+                
+                <Paper sx={{ 
+                  p: 2.5, 
+                  textAlign: 'center',
+                  borderRadius: 2,
+                  border: '1px solid #f3e5f5',
+                  background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+                  boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+                }}>
+                  <Typography variant="h5" sx={{ fontWeight: 700, color: '#9c27b0' }}>
+                    {processingResult.stats.success_rate}%
+                  </Typography>
+                  <Typography variant="body2" color="textSecondary" sx={{ fontWeight: 500 }}>
+                    Tasa de Éxito
+                  </Typography>
+                </Paper>
+              </Box>
+
+              {/* Detalles por página */}
+              <Typography variant="h6" gutterBottom sx={{ 
+                mb: 2, 
+                fontWeight: 600, 
+                color: '#1565c0',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 1
+              }}>
+                📄 Detalle por Página
+              </Typography>
+              
+              <Box sx={{ 
+                maxHeight: 350, 
+                overflow: 'auto',
+                border: '1px solid #e3f2fd',
+                borderRadius: 2,
+                backgroundColor: 'white',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.05)'
+              }}>
+                {processingResult.details.map((detail, index) => (
+                  <Box key={index} sx={{ 
+                    p: 3,
+                    borderBottom: index < processingResult.details.length - 1 ? '1px solid #f5f5f5' : 'none',
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: 2.5,
+                    '&:hover': {
+                      backgroundColor: '#f8fafc',
+                      transition: 'background-color 0.2s ease'
+                    }
+                  }}>
+                    <Box sx={{ mt: 0.5 }}>
+                      {detail.success ? (
+                        <CheckCircle sx={{ fontSize: 24, color: '#4caf50' }} />
+                      ) : (
+                        <Error sx={{ fontSize: 24, color: '#f44336' }} />
+                      )}
+                    </Box>
+                    <Box sx={{ flex: 1 }}>
+                      <Typography variant="body1" sx={{ fontWeight: 700, mb: 1, color: '#1565c0' }}>
+                        Página {detail.page_number}: {detail.dni_nie_found || 'DNI/NIE no encontrado'}
+                      </Typography>
+                      <Typography variant="body2" color="textSecondary" sx={{ lineHeight: 1.6 }}>
+                        {detail.success 
+                          ? `✅ Guardado en: ${detail.saved_path}`
+                          : `❌ ${detail.error_message}`
+                        }
+                      </Typography>
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+
+              {/* Errores generales */}
+              {processingResult.errors && processingResult.errors.length > 0 && (
+                <Box sx={{ mt: 3 }}>
+                  <Typography variant="h6" gutterBottom sx={{ 
+                    fontWeight: 600, 
+                    color: '#d32f2f',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1
+                  }}>
+                    ⚠️ Errores Generales
+                  </Typography>
+                  {processingResult.errors.map((error, index) => (
+                    <Alert key={index} severity="error" sx={{ 
+                      mb: 1.5,
+                      borderRadius: 2,
+                      '& .MuiAlert-message': {
+                        fontWeight: 500
+                      }
+                    }}>
+                      {error}
+                    </Alert>
+                  ))}
+                </Box>
+              )}
+            </Box>
+          )}
+        </DialogContent>
+
+        <DialogActions sx={{ 
+          p: 3, 
+          backgroundColor: '#f8fafc',
+          borderTop: '1px solid #e3f2fd',
+          gap: 2
+        }}>
+          <Button 
+            onClick={() => {
+              setShowResultDialog(false);
+              setCurrentProcessingType(null);
+            }}
+            variant="outlined"
+            sx={{ 
+              borderRadius: 2,
+              px: 3,
+              py: 1,
+              fontWeight: 600,
+              borderColor: '#1976d2',
+              color: '#1976d2',
+              '&:hover': {
+                borderColor: '#1565c0',
+                backgroundColor: '#f3f9ff'
+              }
+            }}
+          >
+            Aceptar
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Card>
   );
 };
 
-const UploadHistoryComponent: React.FC = () => {
-  // Historial de uploads
-  const [uploadHistory] = useState<UploadHistoryItem[]>([]);
+interface UploadHistoryComponentProps {
+  uploadHistory: UploadHistoryItem[];
+}
 
+const UploadHistoryComponent: React.FC<UploadHistoryComponentProps> = ({ uploadHistory }) => {
   // Estados para los filtros
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'nomina' | 'dieta'>('all');
+  const [filterType, setFilterType] = useState<'all' | 'nominas' | 'dietas'>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'completed' | 'processing' | 'error'>('all');
   const [filterUser, setFilterUser] = useState('all');
 
   // Datos filtrados
   const filteredData = uploadHistory.filter((item) => {
-    const matchesSearch = item.fileName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.user.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType = filterType === 'all' || item.documentType === filterType;
+    const matchesSearch = item.file_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         item.user_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         item.user_dni?.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesType = filterType === 'all' || item.document_type === filterType;
     const matchesStatus = filterStatus === 'all' || item.status === filterStatus;
-    const matchesUser = filterUser === 'all' || item.user === filterUser;
+    const matchesUser = filterUser === 'all' || item.user_name === filterUser || item.user_dni === filterUser;
     
     return matchesSearch && matchesType && matchesStatus && matchesUser;
   });
 
   // Obtener usuarios únicos para el filtro
-  const uniqueUsers = [...new Set(uploadHistory.map(item => item.user))];
+  const uniqueUsers = [...new Set(uploadHistory.map(item => item.user_name))];
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -525,12 +896,12 @@ const UploadHistoryComponent: React.FC = () => {
             <Select
               value={filterType}
               label="Tipo"
-              onChange={(e) => setFilterType(e.target.value as 'all' | 'nomina' | 'dieta')}
+              onChange={(e) => setFilterType(e.target.value as 'all' | 'nominas' | 'dietas')}
               sx={{ borderRadius: '12px' }}
             >
               <MenuItem value="all">Todos</MenuItem>
-              <MenuItem value="nomina">Nómina</MenuItem>
-              <MenuItem value="dieta">Dieta</MenuItem>
+              <MenuItem value="nominas">Nóminas</MenuItem>
+              <MenuItem value="dietas">Dietas</MenuItem>
             </Select>
           </FormControl>
 
@@ -603,7 +974,7 @@ const UploadHistoryComponent: React.FC = () => {
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 100px',
+              gridTemplateColumns: '3fr 2fr 120px 140px 120px 120px',
               gap: 2,
               p: 2,
               borderBottom: '2px solid rgba(114, 47, 55, 0.1)',
@@ -625,7 +996,7 @@ const UploadHistoryComponent: React.FC = () => {
             <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#722F37' }}>
               Páginas
             </Typography>
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#722F37' }}>
+            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#722F37', textAlign: 'center' }}>
               Estado
             </Typography>
           </Box>
@@ -637,7 +1008,7 @@ const UploadHistoryComponent: React.FC = () => {
                 key={item.id}
                 sx={{
                   display: 'grid',
-                  gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 100px',
+                  gridTemplateColumns: '3fr 2fr 120px 140px 120px 120px',
                   gap: 2,
                   p: 2,
                   borderBottom: '1px solid rgba(114, 47, 55, 0.05)',
@@ -648,40 +1019,50 @@ const UploadHistoryComponent: React.FC = () => {
                 }}
               >
                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                  {item.fileName}
+                  {item.file_name}
                 </Typography>
                 
                 <Typography variant="body2" sx={{ color: '#6c757d' }}>
-                  {item.user}
+                  {item.user_name} ({item.user_dni})
                 </Typography>
                 
                 <Typography variant="body2" sx={{ color: '#6c757d' }}>
-                  {new Date(item.uploadDate).toLocaleDateString()}
+                  {new Date(item.upload_date).toLocaleDateString()}
                 </Typography>
                 
                 <Box>
                   <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                    {item.documentType === 'nomina' ? 'Nómina' : 'Dieta'}
+                    {item.document_type === 'nominas' ? 'Nóminas' : 'Dietas'}
                   </Typography>
                   <Typography variant="caption" sx={{ color: '#6c757d' }}>
                     {getMonthName(item.month)} {item.year}
                   </Typography>
                 </Box>
                 
-                <Typography variant="body2" sx={{ color: '#6c757d' }}>
-                  {item.processedPages}/{item.totalPages}
-                </Typography>
+                <Box>
+                  <Typography variant="body2" sx={{ color: '#6c757d' }}>
+                    Total: {item.total_pages}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#4caf50' }}>
+                    Exitosas: {item.successful_pages}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: '#f44336' }}>
+                    Fallidas: {item.failed_pages}
+                  </Typography>
+                </Box>
                 
-                <Chip
-                  label={getStatusText(item.status)}
-                  size="small"
-                  sx={{
-                    backgroundColor: getStatusColor(item.status),
-                    color: 'white',
-                    fontWeight: 600,
-                    fontSize: '0.7rem',
-                  }}
-                />
+                <Box sx={{ display: 'flex', justifyContent: 'flex-start', alignItems: 'center', width: '100%', paddingLeft: 1 }}>
+                  <Chip
+                    label={getStatusText(item.status)}
+                    size="small"
+                    sx={{
+                      backgroundColor: getStatusColor(item.status),
+                      color: 'white',
+                      fontWeight: 600,
+                      fontSize: '0.7rem',
+                    }}
+                  />
+                </Box>
               </Box>
             ))
           ) : (
@@ -698,21 +1079,61 @@ const UploadHistoryComponent: React.FC = () => {
 };
 
 export const Dashboard: React.FC = () => {
+  // Estado para el historial desde la API
+  const [uploadHistory, setUploadHistory] = useState<UploadHistoryItem[]>([]);
+  const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+
+  // Cargar historial desde la API
+  const loadUploadHistory = async () => {
+    try {
+      const response = await userFilesAPI.getUploadHistory({
+        limit: 100,
+        skip: 0
+      });
+      setUploadHistory(response.items);
+    } catch (error) {
+      console.error('Error loading upload history:', error);
+      setAlert({ 
+        type: 'error', 
+        message: 'Error al cargar el historial de subidas' 
+      });
+    }
+  };
+
+  // Cargar historial al montar el componente
+  useEffect(() => {
+    loadUploadHistory();
+  }, []);
+
+  // Limpiar alerta después de 5 segundos
+  useEffect(() => {
+    if (alert) {
+      const timer = setTimeout(() => setAlert(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [alert]);
+
   return (
-    <Box sx={{ 
-      width: '100%', 
-      maxWidth: { xs: '100%', sm: '100%', md: '1200px', lg: '1400px' },
-      mx: 'auto',
-      px: { xs: 0, sm: 1, md: 2 }
-    }}>
+    <Box sx={{ p: 3 }}>
+      {/* Mostrar alerta si existe */}
+      {alert && (
+        <Alert severity={alert.type} sx={{ mb: 2 }}>
+          {alert.message}
+        </Alert>
+      )}
+
       {/* Componente de subida de PDFs */}
       <Box sx={{ mb: 4 }}>
-        <PDFUploadComponent />
+        <PDFUploadComponent 
+          setUploadHistory={setUploadHistory}
+        />
       </Box>
 
       {/* Historial de Subidas */}
       <Box sx={{ mb: 4 }}>
-        <UploadHistoryComponent />
+        <UploadHistoryComponent 
+          uploadHistory={uploadHistory} 
+        />
       </Box>
     </Box>
   );

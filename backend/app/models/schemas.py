@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict, Any
 from datetime import datetime
 
 class DashboardStats(BaseModel):
@@ -95,3 +95,52 @@ class OrderDocument(BaseModel):
     file_type: str
     uploaded_date: Optional[datetime] = None
     email_attachment_name: str
+
+class PayrollProcessingResult(BaseModel):
+    """Resultado del procesamiento de un PDF con múltiples nóminas"""
+    page_number: int
+    dni_nie_found: Optional[str] = None
+    user_folder_exists: bool = False
+    pdf_saved: bool = False
+    saved_path: Optional[str] = None
+    success: bool = False
+    error_message: Optional[str] = None
+
+class PayrollProcessingSummary(BaseModel):
+    """Resumen del procesamiento de nóminas múltiples"""
+    processed_pages: int
+    successful_assignments: int
+    failed_assignments: int
+    assignment_details: List[PayrollProcessingResult]
+    errors: List[str]
+    filename: str
+    month_year: str
+    processed_at: datetime
+
+class UserFolderStatus(BaseModel):
+    """Estado de la carpeta de un usuario"""
+    dni_nie: str
+    has_nominas_folder: bool
+    nominas_count: int
+
+class UploadHistoryItem(BaseModel):
+    """Item del historial de subidas"""
+    id: Optional[int] = None
+    file_name: str
+    upload_date: datetime
+    user_dni: str
+    user_name: str
+    document_type: str  # 'nominas' | 'dietas'
+    month: str
+    year: str
+    total_pages: int
+    successful_pages: int
+    failed_pages: int
+    status: str  # 'processing' | 'completed' | 'error'
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+class UploadHistoryResponse(BaseModel):
+    """Respuesta del historial de subidas"""
+    items: List[UploadHistoryItem]
+    total: int

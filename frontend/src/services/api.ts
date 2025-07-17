@@ -10,6 +10,15 @@ const api = axios.create({
   },
 });
 
+// Interceptor para agregar el token de autenticación
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('access_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 export const dashboardAPI = {
   getStats: (): Promise<DashboardStats> => 
     api.get('/api/dashboard/stats').then(res => res.data),
@@ -134,7 +143,37 @@ export const payrollAPI = {
       return api.post('/api/payroll/admin/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       }).then(res => res.data);
+    },
+
+    // Procesar PDF con múltiples nóminas (solo admin)
+    processMultiplePayrolls: (file: File, monthYear: string) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('month_year', monthYear);
+      return api.post('/api/payroll/process-multiple-payrolls', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      }).then(res => res.data);
     }
+  },
+
+  // Procesar PDF con múltiples nóminas desde el dashboard (solo admin)
+  processPayrollPDF: (file: File, monthYear: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('month_year', monthYear);
+    return api.post('/api/dashboard/process-payroll-pdf', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }).then(res => res.data);
+  },
+
+  // Procesar PDF con múltiples dietas desde el dashboard (solo admin)
+  processDietasPDF: (file: File, monthYear: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('month_year', monthYear);
+    return api.post('/api/payroll/process-multiple-dietas', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }).then(res => res.data);
   }
 };
 
@@ -307,4 +346,81 @@ export const usersAPI = {
   // Obtener estadísticas de usuarios
   getUserStats: () => 
     api.get('/api/users/stats').then(res => res.data),
+};
+
+// API para archivos de usuario
+export const userFilesAPI = {
+  // Obtener documentos de una carpeta específica
+  getUserDocuments: (folderType: string) => 
+    api.get(`/api/user-files/user-documents/${folderType}`).then(res => res.data),
+    
+  // Descargar un archivo
+  downloadFile: (dniNie: string, folderType: string, filename: string) => 
+    `${API_BASE_URL}/api/user-files/download/${dniNie}/${folderType}/${filename}`,
+
+  // Descarga directa de archivo con autenticación
+  downloadFileBlob: async (downloadUrl: string): Promise<Blob> => {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      throw new Error('Token de autenticación no encontrado');
+    }
+
+    const response = await fetch(`${API_BASE_URL}${downloadUrl}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Error al descargar el archivo');
+    }
+
+    return response.blob();
+  },
+    
+  // Subir un archivo
+  uploadFile: (folderType: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post(`/api/user-files/upload/${folderType}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }).then(res => res.data);
+  },
+  
+  // Eliminar un archivo
+  deleteFile: (folderType: string, filename: string) => 
+    api.delete(`/api/user-files/delete/${folderType}/${filename}`).then(res => res.data),
+    
+  // Obtener estadísticas de carpetas
+  getFolderStats: () => 
+    api.get('/api/user-files/folder-stats').then(res => res.data),
+
+  // Historial de subidas
+  getUploadHistory: (params?: {
+    skip?: number;
+    limit?: number;
+    document_type?: string;
+    status?: string;
+    year?: string;
+  }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.skip) searchParams.append('skip', params.skip.toString());
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    if (params?.document_type) searchParams.append('document_type', params.document_type);
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.year) searchParams.append('year', params.year);
+    
+    return api.get(`/api/user-files/upload-history?${searchParams.toString()}`).then(res => res.data);
+  },
+
+  createUploadHistory: (historyItem: any) => 
+    api.post('/api/user-files/upload-history', historyItem).then(res => res.data),
+
+  updateUploadHistory: (historyId: number, status: string, successfulPages?: number, failedPages?: number) => {
+    const data: any = { status };
+    if (successfulPages !== undefined) data.successful_pages = successfulPages;
+    if (failedPages !== undefined) data.failed_pages = failedPages;
+    return api.put(`/api/user-files/upload-history/${historyId}`, data).then(res => res.data);
+  },
 };

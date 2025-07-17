@@ -117,3 +117,38 @@ class User(Base):
         except Exception as e:
             print(f"Error eliminando carpeta del usuario {self.dni_nie}: {str(e)}")
             return False
+
+class UploadHistory(Base):
+    """
+    Modelo para el historial de subidas de documentos.
+    Registra cada procesamiento de archivos PDF (nóminas/dietas).
+    """
+    __tablename__ = "upload_history"
+    
+    # Identificador
+    id = Column(Integer, primary_key=True, index=True)
+    
+    # Información del archivo
+    file_name = Column(String(255), nullable=False, comment="Nombre del archivo subido")
+    upload_date = Column(DateTime, nullable=False, comment="Fecha y hora de subida")
+    
+    # Información del usuario
+    user_dni = Column(String(20), nullable=False, index=True, comment="DNI/NIE del usuario que subió")
+    user_name = Column(String(200), nullable=False, comment="Nombre completo del usuario")
+    
+    # Información del documento
+    document_type = Column(String(20), nullable=False, comment="Tipo de documento: nominas/dietas")
+    month = Column(String(2), nullable=False, comment="Mes del documento")
+    year = Column(String(4), nullable=False, comment="Año del documento")
+    
+    # Estadísticas del procesamiento
+    total_pages = Column(Integer, nullable=False, default=0, comment="Total de páginas procesadas")
+    successful_pages = Column(Integer, nullable=False, default=0, comment="Páginas procesadas exitosamente")
+    failed_pages = Column(Integer, nullable=False, default=0, comment="Páginas que fallaron")
+    
+    # Estado del procesamiento
+    status = Column(String(20), nullable=False, default="processing", comment="Estado: processing/completed/error")
+    
+    # Timestamps
+    created_at = Column(DateTime, nullable=False, default=func.now(), comment="Fecha de creación")
+    updated_at = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now(), comment="Fecha de actualización")

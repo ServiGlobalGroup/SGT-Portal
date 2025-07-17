@@ -181,7 +181,7 @@ class UserService:
         
         # Hashear la nueva contraseña
         hashed_password = UserService.hash_password(new_password)
-        db_user.password_hash = hashed_password
+        db_user.hashed_password = hashed_password
         
         try:
             db.commit()

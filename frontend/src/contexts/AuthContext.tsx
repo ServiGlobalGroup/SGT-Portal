@@ -38,7 +38,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     
     // Opcional: llamar al endpoint de logout del servidor
     if (token) {
-      fetch('http://localhost:8000/api/auth/logout', {
+      fetch('http://127.0.0.1:8000/api/auth/logout', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -75,7 +75,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const verifyToken = async (tokenToVerify: string): Promise<boolean> => {
     try {
-      const response = await fetch('http://localhost:8000/api/auth/verify-token', {
+      const response = await fetch('http://127.0.0.1:8000/api/auth/verify-token', {
         headers: {
           'Authorization': `Bearer ${tokenToVerify}`,
         },
@@ -96,7 +96,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       formData.append('username', username);
       formData.append('password', password);
 
-      const response = await fetch('http://localhost:8000/api/auth/login', {
+      const response = await fetch('http://127.0.0.1:8000/api/auth/login', {
         method: 'POST',
         body: formData,
       });

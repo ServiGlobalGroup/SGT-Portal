@@ -47,3 +47,66 @@ files/temp/
 
 # Cache de TypeScript
 *.tsbuildinfo
+
+# Archivos PDF y documentos
+*.pdf
+*.doc
+*.docx
+*.xls
+*.xlsx
+*.ppt
+*.pptx
+
+# Archivos de usuario subidos
+user_files/
+backend/files/
+uploads/
+
+# Archivos de base de datos locales
+*.db
+*.sqlite
+*.sqlite3
+
+# Archivos de backup
+*.bak
+*.backup
+
+# Archivos comprimidos
+*.zip
+*.rar
+*.7z
+*.tar
+*.gz
+
+# Archivos de imágenes grandes
+*.tiff
+*.tif
+*.bmp
+*.psd
+
+# Archivos de video
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.flv
+*.wmv
+
+# Archivos de audio
+*.mp3
+*.wav
+*.flac
+*.aac
+
+# Certificados y claves
+*.key
+*.pem
+*.crt
+*.cert
+*.p12
+*.pfx
+
+# Archivos de configuración sensibles
+config.local.*
+settings.local.*
+secrets.*
