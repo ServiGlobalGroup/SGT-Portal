@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     
     # File Storage
     user_files_base_path: str
+    traffic_files_base_path: str
     upload_max_size: int = 10485760  # 10MB
     allowed_extensions: List[str] = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".jpg", ".jpeg", ".png"]
     
@@ -34,3 +35,6 @@ settings = Settings()
 
 # Crear directorio base para archivos de usuarios si no existe
 os.makedirs(settings.user_files_base_path, exist_ok=True)
+
+# Crear directorio base para archivos de tráfico si no existe  
+os.makedirs(settings.traffic_files_base_path, exist_ok=True)
