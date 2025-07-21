@@ -83,7 +83,8 @@ async def download_file(
     """
     
     # Verificar permisos
-    if current_user.role != "ADMIN" and current_user.dni_nie != dni_nie:
+    user_role = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+    if user_role != "ADMIN" and current_user.dni_nie != dni_nie:
         raise HTTPException(status_code=403, detail="No tienes permisos para acceder a estos archivos")
     
     # Validar tipo de carpeta - solo nóminas y dietas
@@ -444,3 +445,223 @@ async def update_upload_history(
         "id": db_history.id,
         "message": "Historial actualizado correctamente"
     }
+
+# Nuevos endpoints para administradores
+@router.get("/admin/all-users-documents")
+async def get_all_users_documents(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Obtiene todos los usuarios y sus documentos de nóminas y dietas.
+    Solo para administradores.
+    """
+    try:
+        # Log para depuración
+        print(f"Current user: {current_user.email}, Role: {current_user.role}")
+        
+        # Verificar permisos de administrador de manera más robusta
+        is_admin = False
+        if hasattr(current_user.role, 'value'):
+            is_admin = current_user.role.value == "ADMIN"
+        else:
+            is_admin = str(current_user.role) == "ADMIN"
+        
+        print(f"Is admin: {is_admin}")
+        
+        if not is_admin:
+            raise HTTPException(status_code=403, detail="No tienes permisos para acceder a esta información")
+        
+        # Escanear carpetas físicas de usuarios en lugar de solo la base de datos
+        user_files_path = Path(settings.user_files_base_path)
+        users_with_documents = []
+        total_documents = 0
+        total_size = 0
+        
+        if not user_files_path.exists():
+            return {
+                "users": [],
+                "statistics": {
+                    "total_users": 0,
+                    "active_users": 0,
+                    "total_documents": 0,
+                    "users_with_documents": 0,
+                    "total_size": 0
+                }
+            }
+        
+        # Obtener todas las carpetas de usuarios que existen físicamente
+        user_folders = [folder for folder in user_files_path.iterdir() 
+                       if folder.is_dir() and folder.name != "traffic"]
+        print(f"Found {len(user_folders)} user folders: {[f.name for f in user_folders]}")
+        
+        for user_folder in user_folders:
+            dni_nie = user_folder.name
+            
+            # Buscar información del usuario en la base de datos
+            user = db.query(User).filter(User.dni_nie == dni_nie).first()
+            
+            # Crear datos del usuario (con datos de BD si existe, o datos básicos si no)
+            if user:
+                user_data = {
+                    "id": user.id,
+                    "name": user.full_name,
+                    "email": user.email,
+                    "dni_nie": user.dni_nie,
+                    "role": user.role.value if hasattr(user.role, 'value') else str(user.role),
+                    "department": getattr(user, 'department', 'General'),
+                    "is_active": user.is_active,
+                    "documents": {
+                        "nominas": [],
+                        "dietas": []
+                    },
+                    "total_documents": 0,
+                    "total_size": 0
+                }
+            else:
+                # Usuario no encontrado en BD, usar datos básicos
+                user_data = {
+                    "id": f"file_{dni_nie}",
+                    "name": f"Usuario {dni_nie}",
+                    "email": "No disponible",
+                    "dni_nie": dni_nie,
+                    "role": "UNKNOWN",
+                    "department": "No asignado",
+                    "is_active": False,
+                    "documents": {
+                        "nominas": [],
+                        "dietas": []
+                    },
+                    "total_documents": 0,
+                    "total_size": 0
+                }
+            
+            # Verificar carpetas de documentos del usuario
+            user_base_path = user_folder
+            
+            for folder_type in ["nominas", "dietas"]:
+                folder_path = user_base_path / folder_type
+                
+                if folder_path.exists() and folder_path.is_dir():
+                    documents = []
+                    
+                    try:
+                        for file_path in folder_path.iterdir():
+                            if file_path.is_file():
+                                file_stat = file_path.stat()
+                                file_size = file_stat.st_size
+                                
+                                document = {
+                                    "id": f"{dni_nie}_{folder_type}_{len(documents) + 1}",
+                                    "name": file_path.name,
+                                    "size": file_size,
+                                    "type": file_path.suffix.lower(),
+                                    "created_date": datetime.fromtimestamp(file_stat.st_ctime).isoformat(),
+                                    "modified_date": datetime.fromtimestamp(file_stat.st_mtime).isoformat(),
+                                    "download_url": f"/api/user-files/download/{dni_nie}/{folder_type}/{file_path.name}"
+                                }
+                                
+                                documents.append(document)
+                                user_data["total_size"] += file_size
+                                total_size += file_size
+                                
+                    except Exception as e:
+                        # Si hay error leyendo la carpeta, continuar con el siguiente usuario
+                        continue
+                    
+                    user_data["documents"][folder_type] = documents
+                    user_data["total_documents"] += len(documents)
+                    total_documents += len(documents)
+            
+            users_with_documents.append(user_data)
+            print(f"Added user: ID={user_data['id']}, DNI={user_data['dni_nie']}, Name={user_data['name']}")
+    
+        print(f"Final users_with_documents: {len(users_with_documents)} users")
+        for i, user in enumerate(users_with_documents):
+            print(f"User {i}: ID={user['id']}, DNI={user['dni_nie']}, Name={user['name']}")
+    
+        return {
+            "users": users_with_documents,
+            "statistics": {
+                "total_users": len(users_with_documents),
+                "active_users": len([u for u in users_with_documents if u["is_active"]]),
+                "total_documents": total_documents,
+                "users_with_documents": len([u for u in users_with_documents if u["total_documents"] > 0]),
+                "total_size": total_size
+            }
+        }
+    
+    except Exception as e:
+        print(f"Error in get_all_users_documents: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error interno del servidor: {str(e)}")
+
+@router.get("/admin/user/{dni_nie}/documents")
+async def get_user_documents_admin(
+    dni_nie: str,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Obtiene los documentos de un usuario específico.
+    Solo para administradores.
+    """
+    # Verificar permisos de administrador
+    user_role = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+    if user_role != "ADMIN":
+        raise HTTPException(status_code=403, detail="No tienes permisos para acceder a esta información")
+    
+    # Verificar que el usuario existe
+    user = db.query(User).filter(User.dni_nie == dni_nie).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    user_base_path = Path(settings.user_files_base_path) / dni_nie
+    user_documents = {
+        "user": {
+            "id": user.id,
+            "name": user.name,
+            "email": user.email,
+            "dni_nie": user.dni_nie,
+            "role": user.role.value,
+            "is_active": user.is_active
+        },
+        "documents": {
+            "nominas": [],
+            "dietas": []
+        },
+        "total_documents": 0,
+        "total_size": 0
+    }
+    
+    for folder_type in ["nominas", "dietas"]:
+        folder_path = user_base_path / folder_type
+        
+        if folder_path.exists() and folder_path.is_dir():
+            documents = []
+            
+            try:
+                for file_path in folder_path.iterdir():
+                    if file_path.is_file():
+                        file_stat = file_path.stat()
+                        file_size = file_stat.st_size
+                        
+                        document = {
+                            "id": f"{dni_nie}_{folder_type}_{len(documents) + 1}",
+                            "name": file_path.name,
+                            "size": file_size,
+                            "type": file_path.suffix.lower(),
+                            "created_date": datetime.fromtimestamp(file_stat.st_ctime).isoformat(),
+                            "modified_date": datetime.fromtimestamp(file_stat.st_mtime).isoformat(),
+                            "download_url": f"/api/user-files/download/{dni_nie}/{folder_type}/{file_path.name}"
+                        }
+                        
+                        documents.append(document)
+                        user_documents["total_size"] += file_size
+            except Exception as e:
+                # Si hay error leyendo la carpeta, devolver lista vacía
+                pass
+            
+            user_documents["documents"][folder_type] = documents
+            user_documents["total_documents"] += len(documents)
+    
+    return user_documents

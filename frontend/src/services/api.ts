@@ -423,4 +423,15 @@ export const userFilesAPI = {
     if (failedPages !== undefined) data.failed_pages = failedPages;
     return api.put(`/api/user-files/upload-history/${historyId}`, data).then(res => res.data);
   },
+
+  // APIs de administrador
+  admin: {
+    // Obtener todos los usuarios y sus documentos
+    getAllUsersDocuments: () => 
+      api.get('/api/user-files/admin/all-users-documents').then(res => res.data),
+    
+    // Obtener documentos de un usuario específico
+    getUserDocuments: (dniNie: string) => 
+      api.get(`/api/user-files/admin/user/${dniNie}/documents`).then(res => res.data),
+  }
 };
