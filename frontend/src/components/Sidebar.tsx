@@ -306,9 +306,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   textTransform: 'capitalize',
                 }}
               >
-                {user?.role === 'ADMIN' ? 'Administrador' : 
-                 user?.role === 'MANAGER' ? 'Gestor' : 
-                 user?.role === 'EMPLOYEE' ? 'Empleado' : 'Usuario'}
+                {user?.role === 'ADMINISTRADOR' ? 'Administrador' : 
+                 user?.role === 'TRAFICO' ? 'Tráfico' : 
+                 user?.role === 'TRABAJADOR' ? 'Trabajador' : 'Usuario'}
               </Typography>
             </Box>
           )}

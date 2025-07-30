@@ -35,7 +35,7 @@ interface User {
   last_name: string;
   email: string;
   phone?: string;
-  role: 'ADMIN' | 'MANAGER' | 'EMPLOYEE';
+  role: 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR';
   department: string;
   position?: string;
   is_active: boolean;
@@ -151,18 +151,18 @@ export const Users: React.FC = () => {
   // Funciones auxiliares
   const getRoleColor = (role: string): 'error' | 'warning' | 'info' | 'default' => {
     switch (role) {
-      case 'ADMIN': return 'error';
-      case 'MANAGER': return 'warning';
-      case 'EMPLOYEE': return 'info';
+      case 'ADMINISTRADOR': return 'error';
+      case 'TRAFICO': return 'warning';
+      case 'TRABAJADOR': return 'info';
       default: return 'default';
     }
   };
 
   const getRoleText = (role: string) => {
     switch (role) {
-      case 'ADMIN': return 'Administrador';
-      case 'MANAGER': return 'Gerente';
-      case 'EMPLOYEE': return 'Empleado';
+      case 'ADMINISTRADOR': return 'Administrador';
+      case 'TRAFICO': return 'Tráfico';
+      case 'TRABAJADOR': return 'Trabajador';
       default: return role;
     }
   };

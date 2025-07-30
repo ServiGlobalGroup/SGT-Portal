@@ -291,7 +291,7 @@ export const usersAPI = {
     last_name: string;
     email: string;
     phone?: string;
-    role: 'ADMIN' | 'MANAGER' | 'EMPLOYEE';
+    role: 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR';
     department: string;
     position?: string;
     hire_date?: string;

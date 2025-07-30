@@ -84,7 +84,7 @@ async def download_file(
     
     # Verificar permisos
     user_role = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
-    if user_role != "ADMIN" and current_user.dni_nie != dni_nie:
+    if user_role != "ADMINISTRADOR" and current_user.dni_nie != dni_nie:
         raise HTTPException(status_code=403, detail="No tienes permisos para acceder a estos archivos")
     
     # Validar tipo de carpeta - solo nóminas y dietas
@@ -364,7 +364,7 @@ async def get_upload_history(
     query = db.query(UploadHistory)
     
     # Si no es admin, solo mostrar sus propios registros
-    if current_user.role.value != "ADMIN":
+    if current_user.role.value != "ADMINISTRADOR":
         query = query.filter(UploadHistory.user_dni == current_user.dni_nie)
     
     # Aplicar filtros opcionales
@@ -428,7 +428,7 @@ async def update_upload_history(
         raise HTTPException(status_code=404, detail="Registro de historial no encontrado")
     
     # Verificar permisos (solo el propietario o admin)
-    if current_user.role.value != "ADMIN" and db_history.user_dni != current_user.dni_nie:
+    if current_user.role.value != "ADMINISTRADOR" and db_history.user_dni != current_user.dni_nie:
         raise HTTPException(status_code=403, detail="Sin permisos para modificar este registro")
     
     # Actualizar campos
@@ -463,9 +463,9 @@ async def get_all_users_documents(
         # Verificar permisos de administrador de manera más robusta
         is_admin = False
         if hasattr(current_user.role, 'value'):
-            is_admin = current_user.role.value == "ADMIN"
+            is_admin = current_user.role.value == "ADMINISTRADOR"
         else:
-            is_admin = str(current_user.role) == "ADMIN"
+            is_admin = str(current_user.role) == "ADMINISTRADOR"
         
         print(f"Is admin: {is_admin}")
         

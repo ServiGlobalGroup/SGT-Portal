@@ -13,7 +13,7 @@ class UserBase(BaseModel):
     phone: Optional[str] = Field(None, max_length=20, description="Teléfono")
     department: str = Field(..., min_length=2, max_length=100, description="Departamento")
     position: Optional[str] = Field(None, max_length=100, description="Puesto de trabajo")
-    role: UserRole = Field(default=UserRole.EMPLOYEE, description="Rol del usuario")
+    role: UserRole = Field(default=UserRole.TRABAJADOR, description="Rol del usuario")
 
 # Esquemas para creación
 class UserCreate(UserBase):

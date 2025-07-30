@@ -80,7 +80,7 @@ export interface User {
   last_name: string;
   email: string;
   phone?: string;
-  role: 'ADMIN' | 'MANAGER' | 'EMPLOYEE';
+  role: 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR';
   department: string;
   position?: string;
   hire_date?: string;
@@ -108,7 +108,7 @@ export interface UserProfile {
   last_name: string;
   email: string;
   phone: string;
-  role: 'admin' | 'manager' | 'employee';
+  role: 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR';
   department: string;
   position: string;
   hire_date: string;

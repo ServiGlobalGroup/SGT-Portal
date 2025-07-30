@@ -5,9 +5,9 @@ import enum
 import os
 
 class UserRole(enum.Enum):
-    ADMIN = "ADMIN"
-    MANAGER = "MANAGER"
-    EMPLOYEE = "EMPLOYEE"
+    ADMINISTRADOR = "ADMINISTRADOR"
+    TRAFICO = "TRAFICO"
+    TRABAJADOR = "TRABAJADOR"
 
 class User(Base):
     """
@@ -27,7 +27,7 @@ class User(Base):
     phone = Column(String(20), nullable=True, comment="Teléfono")
     
     # Datos profesionales
-    role = Column(Enum(UserRole), nullable=False, default=UserRole.EMPLOYEE, comment="Rol en el sistema")
+    role = Column(Enum(UserRole), nullable=False, default=UserRole.TRABAJADOR, comment="Rol en el sistema")
     department = Column(String(100), nullable=False, comment="Departamento")
     position = Column(String(100), nullable=True, comment="Puesto de trabajo")
     

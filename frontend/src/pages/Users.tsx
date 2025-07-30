@@ -50,7 +50,7 @@ interface User {
   last_name: string;
   email: string;
   phone?: string;
-  role: 'ADMIN' | 'MANAGER' | 'EMPLOYEE';
+  role: 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR';
   department: string;
   position?: string;
   is_active: boolean;
@@ -67,7 +67,7 @@ export const Users: React.FC = () => {
   // Estados para filtros
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
-  const [roleFilter, setRoleFilter] = useState<'all' | 'ADMIN' | 'MANAGER' | 'EMPLOYEE'>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR'>('all');
   
   // Estados para modal de creación de usuario
   const [openCreateModal, setOpenCreateModal] = useState(false);
@@ -77,7 +77,7 @@ export const Users: React.FC = () => {
     last_name: '',
     email: '',
     phone: '',
-    role: 'EMPLOYEE' as 'ADMIN' | 'MANAGER' | 'EMPLOYEE',
+    role: 'TRABAJADOR' as 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR',
     department: '',
     position: '',
     password: '',
@@ -239,7 +239,7 @@ export const Users: React.FC = () => {
       last_name: '',
       email: '',
       phone: '',
-      role: 'EMPLOYEE',
+      role: 'TRABAJADOR',
       department: '',
       position: '',
       password: '',
@@ -370,18 +370,18 @@ export const Users: React.FC = () => {
   // Funciones auxiliares
   const getRoleColor = (role: string): 'error' | 'warning' | 'info' | 'default' => {
     switch (role) {
-      case 'ADMIN': return 'error';
-      case 'MANAGER': return 'warning';
-      case 'EMPLOYEE': return 'info';
+      case 'ADMINISTRADOR': return 'error';
+      case 'TRAFICO': return 'warning';
+      case 'TRABAJADOR': return 'info';
       default: return 'default';
     }
   };
 
   const getRoleText = (role: string) => {
     switch (role) {
-      case 'ADMIN': return 'Administrador';
-      case 'MANAGER': return 'Gerente';
-      case 'EMPLOYEE': return 'Empleado';
+      case 'ADMINISTRADOR': return 'Administrador';
+      case 'TRAFICO': return 'Tráfico';
+      case 'TRABAJADOR': return 'Trabajador';
       default: return role;
     }
   };
@@ -471,12 +471,12 @@ export const Users: React.FC = () => {
                 <Select
                   value={roleFilter}
                   label="Rol"
-                  onChange={(e: SelectChangeEvent) => setRoleFilter(e.target.value as 'all' | 'ADMIN' | 'MANAGER' | 'EMPLOYEE')}
+                  onChange={(e: SelectChangeEvent) => setRoleFilter(e.target.value as 'all' | 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR')}
                 >
                   <MenuItem value="all">Todos los roles</MenuItem>
-                  <MenuItem value="ADMIN">Administrador</MenuItem>
-                  <MenuItem value="MANAGER">Gerente</MenuItem>
-                  <MenuItem value="EMPLOYEE">Empleado</MenuItem>
+                  <MenuItem value="ADMINISTRADOR">Administrador</MenuItem>
+                  <MenuItem value="TRAFICO">Tráfico</MenuItem>
+                  <MenuItem value="TRABAJADOR">Trabajador</MenuItem>
                 </Select>
               </FormControl>
             </Box>
@@ -749,12 +749,12 @@ export const Users: React.FC = () => {
                   value={createUserData.role}
                   label="Rol"
                   onChange={(e: SelectChangeEvent) => 
-                    setCreateUserData(prev => ({ ...prev, role: e.target.value as 'ADMIN' | 'MANAGER' | 'EMPLOYEE' }))
+                    setCreateUserData(prev => ({ ...prev, role: e.target.value as 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR' }))
                   }
                 >
-                  <MenuItem value="EMPLOYEE">Empleado</MenuItem>
-                  <MenuItem value="MANAGER">Gerente</MenuItem>
-                  <MenuItem value="ADMIN">Administrador</MenuItem>
+                  <MenuItem value="TRABAJADOR">Trabajador</MenuItem>
+                  <MenuItem value="TRAFICO">Tráfico</MenuItem>
+                  <MenuItem value="ADMINISTRADOR">Administrador</MenuItem>
                 </Select>
               </FormControl>
             </Box>

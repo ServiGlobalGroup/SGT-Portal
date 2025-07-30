@@ -180,8 +180,8 @@ export const Header: React.FC<HeaderProps> = ({ isCollapsed }) => {
           >
             <Avatar
               sx={{
-                bgcolor: user?.role === 'ADMIN' ? '#d32f2f' : 
-                        user?.role === 'MANAGER' ? '#ed6c02' : '#501b36',
+                bgcolor: user?.role === 'ADMINISTRADOR' ? '#d32f2f' : 
+                        user?.role === 'TRAFICO' ? '#ed6c02' : '#501b36',
                 width: 45,
                 height: 45,
                 fontWeight: 700,

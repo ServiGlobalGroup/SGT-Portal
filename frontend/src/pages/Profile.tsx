@@ -45,7 +45,7 @@ export const Profile: React.FC = () => {
     last_name: "",
     email: "",
     phone: "",
-    role: "",
+    role: "TRABAJADOR",
     department: "",
     position: "",
     hire_date: "",

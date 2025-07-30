@@ -26,9 +26,9 @@ CREATE SCHEMA public AUTHORIZATION pg_database_owner;
 
 -- Enum para roles de usuario
 CREATE TYPE public."userrole" AS ENUM (
-	'ADMIN',
-	'MANAGER',
-	'EMPLOYEE');
+	'ADMINISTRADOR',
+	'TRAFICO',
+	'TRABAJADOR');
 
 -- ===============================================
 -- 4. SECUENCIAS
@@ -175,7 +175,7 @@ INSERT INTO public.users (
     'Sistema', 
     'admin@sgteuro.com',
     '600000000',
-    'ADMIN', 
+    'TRAFICO', 
     'Sistemas', 
     'Administrador del Sistema',
     '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewHDBVoUQ3oLO8/O', -- password: admin123
@@ -334,7 +334,7 @@ ESTRUCTURA ACTUAL DE LA BASE DE DATOS SGT PORTAL:
    - public.alembic_version: Control de versiones de migraciones
 
 2. TIPOS ENUMERADOS:
-   - public.userrole: ADMIN, MANAGER, EMPLOYEE
+   - public.userrole: ADMINISTRADOR, TRAFICO, TRABAJADOR
 
 3. SECUENCIAS:
    - public.users_id_seq: Para IDs de usuarios

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   Drawer,
   List,
@@ -34,6 +34,7 @@ import {
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { canAccessRoute, getRoleText } from '../utils/permissions';
 
 const drawerWidth = 280;
 const collapsedWidth = 80;
@@ -68,6 +69,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const { user, logout } = useAuth();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
+
+  // Filtrar elementos del menú según los permisos del usuario
+  const allowedMenuItems = useMemo(() => {
+    return menuItems.filter(item => canAccessRoute(user, item.path));
+  }, [user]);
 
   const handleToggle = () => {
     if (isMobile) {
@@ -121,31 +127,46 @@ export const Sidebar: React.FC<SidebarProps> = ({
         justifyContent: 'center', 
         gap: 2
       }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, justifyContent: 'space-between', width: '100%' }}>
           {(!isCollapsed || isMobile) && (
-            <Typography 
-              variant="h6" 
-              noWrap 
-              component="div" 
-              sx={{ 
-                color: '#501b36',
-                fontWeight: 700,
-                textAlign: 'center',
-                fontSize: { xs: '1.1rem', sm: '1.1rem' },
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flex: 1,
+                p: 1,
+                borderRadius: '8px',
+                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                backdropFilter: 'blur(10px)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
               }}
             >
-              Grupo SGT
-            </Typography>
+              <Box
+                component="img"
+                src="/images/logosgt.png"
+                alt="Grupo SGT"
+                sx={{
+                  height: 36,
+                  width: 'auto',
+                  maxWidth: '140px',
+                  objectFit: 'contain',
+                  filter: 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3))',
+                }}
+              />
+            </Box>
           )}
           {!isMobile && (
             <IconButton
               onClick={handleToggle}
               size="small"
               sx={{
-                color: '#666666',
+                color: '#ffffff',
+                ml: 'auto',
                 '&:hover': {
-                  color: '#501b36',
-                  backgroundColor: 'rgba(80, 27, 54, 0.08)',
+                  color: '#ffffff',
+                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
                 },
                 transition: 'all 0.3s ease',
               }}
@@ -167,7 +188,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       
       <Box sx={{ overflow: 'hidden', mt: 2, flex: 1 }}>
         <List sx={{ px: 1 }}>
-          {menuItems.map((item) => (
+          {allowedMenuItems.map((item) => (
             <ListItem key={item.text} disablePadding sx={{ mb: 1 }}>
               <ListItemButton
                 selected={location.pathname === item.path}
@@ -178,24 +199,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   justifyContent: (isCollapsed && !isMobile) ? 'center' : 'flex-start',
                   px: (isCollapsed && !isMobile) ? 1 : 2,
                   '&.Mui-selected': {
-                    background: 'rgba(80, 27, 54, 0.2)',
-                    color: '#501b36',
-                    borderRadius: '4px',
+                    background: 'rgba(255, 255, 255, 0.15)',
+                    color: '#ffffff',
+                    borderRadius: '8px',
+                    '& .MuiListItemIcon-root': {
+                      color: '#ffffff',
+                    },
+                    '& .MuiListItemText-primary': {
+                      color: '#ffffff',
+                    },
                     '&:hover': {
-                      background: 'rgba(80, 27, 54, 0.3)',
-                      borderRadius: '4px',
+                      background: 'rgba(255, 255, 255, 0.25)',
+                      borderRadius: '8px',
                     },
                   },
                   '&:hover': {
-                    background: 'rgba(255, 255, 255, 0.1)',
-                    borderRadius: '4px',
+                    background: 'rgba(0, 0, 0, 0.1)',
+                    borderRadius: '8px',
+                    '& .MuiListItemIcon-root': {
+                      color: '#ffffff',
+                    },
+                    '& .MuiListItemText-primary': {
+                      color: '#ffffff',
+                    },
                   },
                   transition: 'all 0.2s ease',
                 }}
               >
                 <ListItemIcon 
                   sx={{ 
-                    color: location.pathname === item.path ? '#501b36' : '#bdc3c7',
+                    color: location.pathname === item.path ? '#ffffff' : '#ffffff',
                     minWidth: (isCollapsed && !isMobile) ? 'auto' : 40,
                     justifyContent: 'center',
                     transition: 'all 0.2s ease',
@@ -209,7 +242,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     primaryTypographyProps={{
                       fontSize: '0.95rem',
                       fontWeight: location.pathname === item.path ? 600 : 400,
-                      color: location.pathname === item.path ? '#501b36' : '#ecf0f1',
+                      color: location.pathname === item.path ? '#ffffff' : '#ffffff',
                     }}
                   />
                 )}
@@ -223,11 +256,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Separador superior con desvanecimiento */}
         <Box
           sx={{
-            height: '1px',
-            background: 'linear-gradient(90deg, transparent 0%, rgba(189, 195, 199, 0.3) 20%, rgba(189, 195, 199, 0.3) 80%, transparent 100%)',
+            height: '2px',
+            background: 'linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.4) 20%, rgba(255, 255, 255, 0.4) 80%, transparent 100%)',
             mb: 3,
             mx: (isCollapsed && !isMobile) ? 0.5 : 1,
             display: 'block',
+            borderRadius: '1px',
+            boxShadow: '0 0 4px rgba(255, 255, 255, 0.2)',
           }}
         />
         
@@ -274,17 +309,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </Avatar>
           
           {(!isCollapsed || isMobile) && (
-            <Box sx={{ minWidth: 0, flex: 1, textAlign: 'left' }}>
+            <Box sx={{ minWidth: 0, flex: 1, textAlign: 'left', maxWidth: '140px' }}>
               <Typography 
                 variant="body2" 
                 sx={{ 
                   color: '#ecf0f1',
                   fontWeight: 600,
-                  fontSize: '0.9rem',
-                  lineHeight: 1.3,
-                  textOverflow: 'ellipsis',
+                  fontSize: '0.85rem',
+                  lineHeight: 1.2,
+                  wordBreak: 'break-word',
                   overflow: 'hidden',
-                  whiteSpace: 'nowrap',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
                 }}
               >
                 {user?.full_name || user?.first_name || 'Usuario'}
@@ -300,9 +337,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   textTransform: 'capitalize',
                 }}
               >
-                {user?.role === 'ADMIN' ? 'Administrador' : 
-                 user?.role === 'MANAGER' ? 'Gestor' : 
-                 user?.role === 'EMPLOYEE' ? 'Empleado' : 'Usuario'}
+                {getRoleText(user?.role || '')}
               </Typography>
             </Box>
           )}
@@ -432,8 +467,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <MenuIcon />
             </IconButton>
-            <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 700 }}>
-              Grupo SGT
+            <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center' }}>
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  p: 0.5,
+                  borderRadius: '6px',
+                  backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                  backdropFilter: 'blur(8px)',
+                  border: '1px solid rgba(255, 255, 255, 0.25)',
+                  boxShadow: '0 1px 4px rgba(0, 0, 0, 0.2)',
+                }}
+              >
+                <Box
+                  component="img"
+                  src="/images/logosgt.png"
+                  alt="Grupo SGT"
+                  sx={{
+                    height: 28,
+                    width: 'auto',
+                    maxWidth: '110px',
+                    objectFit: 'contain',
+                    filter: 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4))',
+                  }}
+                />
+              </Box>
             </Typography>
           </Toolbar>
         </AppBar>
