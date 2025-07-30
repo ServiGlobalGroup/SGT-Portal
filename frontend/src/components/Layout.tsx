@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Box, useMediaQuery, useTheme } from '@mui/material';
-import { Sidebar } from './Sidebar_new';
+import { Sidebar } from './Sidebar';
 
 const drawerWidth = 280;
 const collapsedWidth = 80;
