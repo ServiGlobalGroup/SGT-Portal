@@ -455,7 +455,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             '& .MuiDrawer-paper': {
               width: drawerWidth,
               boxSizing: 'border-box',
-              background: 'linear-gradient(180deg, #501b36 0%, #6b2448 100%)',
+              background: 'linear-gradient(45deg, #501b36 0%, #ffb347 100%)',
               color: 'white',
               border: 'none',
               boxShadow: '2px 0 10px rgba(0,0,0,0.15)',
@@ -481,7 +481,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         '& .MuiDrawer-paper': {
           width: isCollapsed ? collapsedWidth : drawerWidth,
           boxSizing: 'border-box',
-          background: 'linear-gradient(180deg, #501b36 0%, #6b2448 100%)',
+          background: 'linear-gradient(45deg, #501b36 0%, #ffb347 100%)',
           color: 'white',
           border: 'none',
           boxShadow: '2px 0 10px rgba(0,0,0,0.15)',

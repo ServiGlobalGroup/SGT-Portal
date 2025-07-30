@@ -136,11 +136,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 justifyContent: 'center',
                 flex: 1,
                 p: 1,
-                borderRadius: '8px',
-                backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                backdropFilter: 'blur(10px)',
-                border: '1px solid rgba(255, 255, 255, 0.2)',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
               }}
             >
               <Box
@@ -290,7 +285,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             sx={{
               width: (isCollapsed && !isMobile) ? 36 : 42,
               height: (isCollapsed && !isMobile) ? 36 : 42,
-              background: 'linear-gradient(135deg, #501b36 0%, #6b2448 100%)',
+              background: 'linear-gradient(45deg, #501b36 0%, #7d2d52 50%, #ffb347 100%)',
               color: '#ffffff',
               fontWeight: 700,
               fontSize: (isCollapsed && !isMobile) ? '0.9rem' : '1rem',
@@ -474,11 +469,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   alignItems: 'center',
                   justifyContent: 'center',
                   p: 0.5,
-                  borderRadius: '6px',
-                  backgroundColor: 'rgba(255, 255, 255, 0.15)',
-                  backdropFilter: 'blur(8px)',
-                  border: '1px solid rgba(255, 255, 255, 0.25)',
-                  boxShadow: '0 1px 4px rgba(0, 0, 0, 0.2)',
                 }}
               >
                 <Box
@@ -509,7 +499,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             '& .MuiDrawer-paper': {
               width: drawerWidth,
               boxSizing: 'border-box',
-              background: 'linear-gradient(180deg, #501b36 0%, #6b2448 100%)',
+              background: 'linear-gradient(45deg, #501b36 0%, #7d2d52 50%, #ffb347 100%)',
               color: 'white',
               border: 'none',
               boxShadow: '2px 0 10px rgba(0,0,0,0.15)',
@@ -535,7 +525,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         '& .MuiDrawer-paper': {
           width: isCollapsed ? collapsedWidth : drawerWidth,
           boxSizing: 'border-box',
-          background: 'linear-gradient(180deg, #501b36 0%, #6b2448 100%)',
+          background: 'linear-gradient(45deg, #501b36 0%, #7d2d52 50%, #ffb347 100%)',
           color: 'white',
           border: 'none',
           boxShadow: '2px 0 10px rgba(0,0,0,0.15)',
