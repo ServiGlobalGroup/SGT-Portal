@@ -119,7 +119,7 @@ export const Orders: React.FC = () => {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'pending': return <Pending sx={{ color: '#ed6c02' }} />;
-      case 'processing': return <HourglassTop sx={{ color: '#1976d2' }} />;
+      case 'processing': return <HourglassTop sx={{ color: '#501b36' }} />;
       case 'completed': return <CheckCircle sx={{ color: '#2e7d32' }} />;
       case 'cancelled': return <Cancel sx={{ color: '#d32f2f' }} />;
       default: return <Pending sx={{ color: '#757575' }} />;
@@ -226,7 +226,7 @@ export const Orders: React.FC = () => {
     }}>
       <Typography variant="h4" gutterBottom sx={{ 
         fontWeight: 700, 
-        color: '#1565C0',
+        color: '#501b36',
         fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' },
         mb: { xs: 2, sm: 3 }
       }}>
@@ -321,8 +321,8 @@ export const Orders: React.FC = () => {
               onClick={simulateNewEmail}
               disabled={loading}
               sx={{ 
-                bgcolor: '#1976d2',
-                '&:hover': { bgcolor: '#1565c0' },
+                bgcolor: '#501b36',
+                '&:hover': { bgcolor: '#3d1429' },
                 width: { xs: '100%', sm: 'auto' }
               }}
             >
@@ -379,7 +379,7 @@ export const Orders: React.FC = () => {
                     </TableCell>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Business sx={{ color: '#1565C0', fontSize: 20 }} />
+                        <Business sx={{ color: '#501b36', fontSize: 20 }} />
                         <Box>
                           <Typography variant="body2" sx={{ fontWeight: 500 }}>
                             {order.company_name}
@@ -491,7 +491,7 @@ export const Orders: React.FC = () => {
               {/* Información de la empresa */}
               <Box sx={{ mb: 2 }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                  <Business sx={{ color: '#1565C0', fontSize: 20 }} />
+                  <Business sx={{ color: '#501b36', fontSize: 20 }} />
                   <Typography variant="subtitle1" fontWeight={500}>
                     {order.company_name}
                   </Typography>

@@ -181,7 +181,7 @@ export const Header: React.FC<HeaderProps> = ({ isCollapsed }) => {
             <Avatar
               sx={{
                 bgcolor: user?.role === 'ADMIN' ? '#d32f2f' : 
-                        user?.role === 'MANAGER' ? '#ed6c02' : '#1976d2',
+                        user?.role === 'MANAGER' ? '#ed6c02' : '#501b36',
                 width: 45,
                 height: 45,
                 fontWeight: 700,
@@ -209,8 +209,8 @@ export const Header: React.FC<HeaderProps> = ({ isCollapsed }) => {
               '& .MuiPaper-root': {
                 borderRadius: '12px',
                 minWidth: 200,
-                boxShadow: '0 8px 32px rgba(114, 47, 55, 0.2)',
-                border: '1px solid rgba(114, 47, 55, 0.1)',
+                boxShadow: '0 8px 32px rgba(80, 27, 54, 0.2)',
+                border: '1px solid rgba(80, 27, 54, 0.1)',
                 mt: 1,
               },
             }}
@@ -220,12 +220,12 @@ export const Header: React.FC<HeaderProps> = ({ isCollapsed }) => {
               sx={{
                 py: 1.5,
                 '&:hover': {
-                  backgroundColor: 'rgba(114, 47, 55, 0.05)',
+                  backgroundColor: 'rgba(80, 27, 54, 0.05)',
                 },
               }}
             >
               <ListItemIcon>
-                <AccountCircle sx={{ color: '#722F37' }} />
+                <AccountCircle sx={{ color: '#501b36' }} />
               </ListItemIcon>
               <ListItemText 
                 primary="Mi Perfil" 
@@ -241,12 +241,12 @@ export const Header: React.FC<HeaderProps> = ({ isCollapsed }) => {
               sx={{
                 py: 1.5,
                 '&:hover': {
-                  backgroundColor: 'rgba(114, 47, 55, 0.05)',
+                  backgroundColor: 'rgba(80, 27, 54, 0.05)',
                 },
               }}
             >
               <ListItemIcon>
-                <Settings sx={{ color: '#722F37' }} />
+                <Settings sx={{ color: '#501b36' }} />
               </ListItemIcon>
               <ListItemText 
                 primary="Configuración" 

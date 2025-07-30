@@ -227,7 +227,7 @@ export const Users: React.FC = () => {
                           width: 40,
                           height: 40,
                           borderRadius: '50%',
-                          bgcolor: '#1565C0',
+                          bgcolor: '#501b36',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',

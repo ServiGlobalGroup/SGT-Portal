@@ -253,7 +253,7 @@ export const Gestor: React.FC = () => {
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom sx={{ fontWeight: 700, color: '#1565C0' }}>
+      <Typography variant="h4" gutterBottom sx={{ fontWeight: 700, color: '#501b36' }}>
         Panel de Documentación
       </Typography>
 

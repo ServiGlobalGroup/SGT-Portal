@@ -349,7 +349,7 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
               sx={{ 
                 mb: 2,
                 '& .MuiLinearProgress-bar': {
-                  backgroundColor: '#1976d2',
+                  backgroundColor: '#501b36',
                 },
               }} 
             />

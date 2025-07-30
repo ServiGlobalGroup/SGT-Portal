@@ -101,11 +101,11 @@ html {
 
 /* Selección de texto personalizada */
 ::selection {
-  background-color: #1976d2;
+  background-color: #501b36;
   color: white;
 }
 
 ::-moz-selection {
-  background-color: #1976d2;
+  background-color: #501b36;
   color: white;
 }

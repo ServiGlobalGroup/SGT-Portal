@@ -538,7 +538,7 @@ export const Users: React.FC = () => {
                           width: 40,
                           height: 40,
                           borderRadius: '50%',
-                          bgcolor: '#1565C0',
+                          bgcolor: '#501b36',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
@@ -658,7 +658,7 @@ export const Users: React.FC = () => {
         }}
       >
         <Box sx={{ 
-          bgcolor: '#1976d2', 
+          bgcolor: '#501b36', 
           color: 'white', 
           p: 3,
           display: 'flex',

@@ -18,6 +18,7 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  Pagination,
 } from '@mui/material';
 import {
   CloudUpload,
@@ -87,10 +88,10 @@ interface ProcessingResponse {
 }
 
 interface PDFUploadComponentProps {
-  setUploadHistory: React.Dispatch<React.SetStateAction<UploadHistoryItem[]>>;
+  onUploadSuccess: () => void;
 }
 
-const PDFUploadComponent: React.FC<PDFUploadComponentProps> = ({ setUploadHistory }) => {
+const PDFUploadComponent: React.FC<PDFUploadComponentProps> = ({ onUploadSuccess }) => {
   const [uploadState, setUploadState] = useState<UploadState>({
     isDragOver: false,
     isUploading: false,
@@ -132,27 +133,12 @@ const PDFUploadComponent: React.FC<PDFUploadComponentProps> = ({ setUploadHistor
       // Crear el registro en la base de datos
       await userFilesAPI.createUploadHistory(historyItem);
       
-      // Recargar el historial desde la API
-      const response = await userFilesAPI.getUploadHistory({ limit: 100, skip: 0 });
-      setUploadHistory(response.items);
+      // Llamar al callback para recargar el historial
+      onUploadSuccess();
     } catch (error) {
       console.error('Error saving upload history:', error);
-      // Si falla, al menos agregar localmente como fallback
-      const newHistoryItem: UploadHistoryItem = {
-        id: Date.now(),
-        file_name: filename,
-        upload_date: new Date().toISOString(),
-        user_dni: 'CURRENT_USER',
-        user_name: 'Admin',
-        document_type: documentType,
-        month: uploadState.month,
-        year: uploadState.year,
-        total_pages: result.stats.total_pages,
-        successful_pages: result.stats.successful,
-        failed_pages: result.stats.failed,
-        status: result.stats.failed === result.stats.total_pages ? 'error' : 'completed',
-      };
-      setUploadHistory(prev => [newHistoryItem, ...prev]);
+      // Si falla, mostrar error pero aun así llamar al callback
+      onUploadSuccess();
     }
   };
 
@@ -783,29 +769,39 @@ const PDFUploadComponent: React.FC<PDFUploadComponentProps> = ({ setUploadHistor
 
 interface UploadHistoryComponentProps {
   uploadHistory: UploadHistoryItem[];
+  totalItems: number;
+  currentPage: number;
+  pageSize: number;
+  onPageChange: (page: number) => void;
+  loading: boolean;
 }
 
-const UploadHistoryComponent: React.FC<UploadHistoryComponentProps> = ({ uploadHistory }) => {
+const UploadHistoryComponent: React.FC<UploadHistoryComponentProps> = ({ 
+  uploadHistory, 
+  totalItems, 
+  currentPage, 
+  pageSize, 
+  onPageChange, 
+  loading 
+}) => {
   // Estados para los filtros
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'nominas' | 'dietas'>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | 'completed' | 'processing' | 'error'>('all');
-  const [filterUser, setFilterUser] = useState('all');
 
-  // Datos filtrados
+  // Datos filtrados (ahora se filtran en el servidor, pero mantenemos funcionalidad local)
   const filteredData = uploadHistory.filter((item) => {
     const matchesSearch = item.file_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          item.user_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
                          item.user_dni?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = filterType === 'all' || item.document_type === filterType;
     const matchesStatus = filterStatus === 'all' || item.status === filterStatus;
-    const matchesUser = filterUser === 'all' || item.user_name === filterUser || item.user_dni === filterUser;
     
-    return matchesSearch && matchesType && matchesStatus && matchesUser;
+    return matchesSearch && matchesType && matchesStatus;
   });
 
-  // Obtener usuarios únicos para el filtro
-  const uniqueUsers = [...new Set(uploadHistory.map(item => item.user_name))];
+  // Calcular el total de páginas
+  const totalPages = Math.ceil(totalItems / pageSize);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -837,7 +833,6 @@ const UploadHistoryComponent: React.FC<UploadHistoryComponentProps> = ({ uploadH
     setSearchTerm('');
     setFilterType('all');
     setFilterStatus('all');
-    setFilterUser('all');
   };
 
   return (
@@ -868,7 +863,7 @@ const UploadHistoryComponent: React.FC<UploadHistoryComponentProps> = ({ uploadH
             gridTemplateColumns: {
               xs: '1fr',
               sm: 'repeat(2, 1fr)',
-              md: '2fr 1fr 1fr 1fr 1fr',
+              md: '2fr 1fr 1fr 1fr',
             },
             gap: 2,
             alignItems: 'center',
@@ -920,23 +915,6 @@ const UploadHistoryComponent: React.FC<UploadHistoryComponentProps> = ({ uploadH
             </Select>
           </FormControl>
 
-          <FormControl fullWidth size="small">
-            <InputLabel>Usuario</InputLabel>
-            <Select
-              value={filterUser}
-              label="Usuario"
-              onChange={(e) => setFilterUser(e.target.value)}
-              sx={{ borderRadius: '12px' }}
-            >
-              <MenuItem value="all">Todos</MenuItem>
-              {uniqueUsers.map((user) => (
-                <MenuItem key={user} value={user}>
-                  {user}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
           <Button
             variant="outlined"
             onClick={clearFilters}
@@ -954,9 +932,9 @@ const UploadHistoryComponent: React.FC<UploadHistoryComponentProps> = ({ uploadH
         {/* Contador de resultados */}
         <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Typography variant="body2" sx={{ color: '#6c757d' }}>
-            Mostrando {filteredData.length} de {uploadHistory.length} documentos
+            Mostrando {filteredData.length} de {totalItems} documentos (Página {currentPage} de {totalPages})
           </Typography>
-          {(searchTerm || filterType !== 'all' || filterStatus !== 'all' || filterUser !== 'all') && (
+          {(searchTerm || filterType !== 'all' || filterStatus !== 'all') && (
             <Chip
               label="Filtros activos"
               size="small"
@@ -1002,7 +980,14 @@ const UploadHistoryComponent: React.FC<UploadHistoryComponentProps> = ({ uploadH
           </Box>
 
           {/* Rows */}
-          {filteredData.length > 0 ? (
+          {loading ? (
+            <Box sx={{ textAlign: 'center', py: 4 }}>
+              <CircularProgress size={32} />
+              <Typography variant="body2" sx={{ color: '#6c757d', mt: 2 }}>
+                Cargando historial...
+              </Typography>
+            </Box>
+          ) : filteredData.length > 0 ? (
             filteredData.map((item) => (
               <Box
                 key={item.id}
@@ -1074,6 +1059,34 @@ const UploadHistoryComponent: React.FC<UploadHistoryComponentProps> = ({ uploadH
           )}
         </Box>
       </Box>
+
+      {/* Paginación */}
+      {totalPages > 1 && (
+        <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3, mb: 1 }}>
+          <Pagination
+            count={totalPages}
+            page={currentPage}
+            onChange={(_, page) => onPageChange(page)}
+            color="primary"
+            size="large"
+            showFirstButton
+            showLastButton
+            sx={{
+              '& .MuiPaginationItem-root': {
+                borderRadius: '8px',
+                fontWeight: 500,
+              },
+              '& .Mui-selected': {
+                backgroundColor: '#501b36 !important',
+                color: '#ffffff',
+                '&:hover': {
+                  backgroundColor: '#3d1429 !important',
+                },
+              },
+            }}
+          />
+        </Box>
+      )}
     </Paper>
   );
 };
@@ -1082,22 +1095,36 @@ export const Dashboard: React.FC = () => {
   // Estado para el historial desde la API
   const [uploadHistory, setUploadHistory] = useState<UploadHistoryItem[]>([]);
   const [alert, setAlert] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [totalItems, setTotalItems] = useState(0);
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 15; // 15 elementos por página
 
   // Cargar historial desde la API
-  const loadUploadHistory = async () => {
+  const loadUploadHistory = async (page: number = 1) => {
+    setLoading(true);
     try {
       const response = await userFilesAPI.getUploadHistory({
-        limit: 100,
-        skip: 0
+        limit: pageSize,
+        skip: (page - 1) * pageSize
       });
       setUploadHistory(response.items);
+      setTotalItems(response.total || response.items.length);
     } catch (error) {
       console.error('Error loading upload history:', error);
       setAlert({ 
         type: 'error', 
         message: 'Error al cargar el historial de subidas' 
       });
+    } finally {
+      setLoading(false);
     }
+  };
+
+  // Manejar cambio de página
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    loadUploadHistory(page);
   };
 
   // Cargar historial al montar el componente
@@ -1125,14 +1152,19 @@ export const Dashboard: React.FC = () => {
       {/* Componente de subida de PDFs */}
       <Box sx={{ mb: 4 }}>
         <PDFUploadComponent 
-          setUploadHistory={setUploadHistory}
+          onUploadSuccess={() => loadUploadHistory(currentPage)}
         />
       </Box>
 
       {/* Historial de Subidas */}
       <Box sx={{ mb: 4 }}>
         <UploadHistoryComponent 
-          uploadHistory={uploadHistory} 
+          uploadHistory={uploadHistory}
+          totalItems={totalItems}
+          currentPage={currentPage}
+          pageSize={pageSize}
+          onPageChange={handlePageChange}
+          loading={loading}
         />
       </Box>
     </Box>

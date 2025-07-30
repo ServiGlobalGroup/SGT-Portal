@@ -263,7 +263,7 @@ export const Vacations: React.FC = () => {
                   <TableRow key={request.id} hover>
                     <TableCell>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Business sx={{ color: '#1565C0', fontSize: 20 }} />
+                        <Business sx={{ color: '#501b36', fontSize: 20 }} />
                         {request.employeeName}
                       </Box>
                     </TableCell>
@@ -371,7 +371,7 @@ export const Vacations: React.FC = () => {
                 gap: 1
               }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Business sx={{ color: '#1565C0', fontSize: 20 }} />
+                  <Business sx={{ color: '#501b36', fontSize: 20 }} />
                   <Typography variant="subtitle1" fontWeight={600}>
                     {request.employeeName}
                   </Typography>

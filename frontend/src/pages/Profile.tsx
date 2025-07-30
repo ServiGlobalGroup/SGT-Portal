@@ -196,7 +196,7 @@ export const Profile: React.FC = () => {
                   size="small"
                   onClick={handleAvatarChange}
                   sx={{
-                    bgcolor: '#1565C0',
+                    bgcolor: '#501b36',
                     color: 'white',
                     '&:hover': { bgcolor: '#0d47a1' },
                     width: { xs: 28, sm: 32 },
@@ -209,7 +209,7 @@ export const Profile: React.FC = () => {
             >
               <Avatar
                 sx={{
-                  bgcolor: '#1565C0',
+                  bgcolor: '#501b36',
                   width: { xs: 80, sm: 120 },
                   height: { xs: 80, sm: 120 },
                   fontSize: { xs: '1.5rem', sm: '2.5rem' },
@@ -224,7 +224,7 @@ export const Profile: React.FC = () => {
             <Box>
               <Typography variant="h4" sx={{ 
                 fontWeight: 'bold', 
-                color: '#1565C0', 
+                color: '#501b36', 
                 mb: 1,
                 fontSize: { xs: '1.5rem', sm: '2.125rem' }
               }}>

@@ -282,7 +282,7 @@ const Settings: React.FC = () => {
   const [appearanceConfig, setAppearanceConfig] = useState({
     theme: 'light',
     autoTheme: false,
-    primaryColor: '#1565C0',
+    primaryColor: '#501b36',
     secondaryColor: '#FFA726',
     accentColor: '#4CAF50',
     errorColor: '#F44336',
@@ -572,9 +572,9 @@ const Settings: React.FC = () => {
       {/* Header con métricas del sistema */}
       <Paper sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-          <SettingsIcon sx={{ fontSize: 40, color: '#1565C0' }} />
+          <SettingsIcon sx={{ fontSize: 40, color: '#501b36' }} />
           <Box sx={{ flex: 1 }}>
-            <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#1565C0' }}>
+            <Typography variant="h4" sx={{ fontWeight: 'bold', color: '#501b36' }}>
               Configuración Avanzada del Sistema
             </Typography>
             <Typography variant="body2" color="textSecondary">

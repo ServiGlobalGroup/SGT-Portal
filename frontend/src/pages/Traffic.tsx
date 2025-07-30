@@ -122,7 +122,7 @@ export const Traffic: React.FC = () => {
 
   const getTypeIcon = (type: 'folder' | 'company' | 'vehicle_type' | 'vehicle') => {
     switch (type) {
-      case 'company': return <FolderOpen sx={{ color: '#1565C0' }} />;
+      case 'company': return <FolderOpen sx={{ color: '#501b36' }} />;
       case 'vehicle_type': return <Folder sx={{ color: '#43A047' }} />;
       case 'vehicle': return <Folder sx={{ color: '#FF9800' }} />;
       default: return <Folder sx={{ color: '#757575' }} />;
@@ -297,11 +297,11 @@ export const Traffic: React.FC = () => {
           mb: 3,
           flexDirection: { xs: 'column', sm: 'row' }
         }}>
-          <FolderOpen sx={{ fontSize: { xs: 30, sm: 40 }, color: '#1565C0' }} />
+          <FolderOpen sx={{ fontSize: { xs: 30, sm: 40 }, color: '#501b36' }} />
           <Box>
             <Typography variant="h4" sx={{ 
               fontWeight: 'bold', 
-              color: '#1565C0',
+              color: '#501b36',
               fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' }
             }}>
               Gestor de Archivos de Tráfico

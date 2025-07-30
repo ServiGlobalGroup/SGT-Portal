@@ -121,7 +121,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         justifyContent: 'center', 
         gap: 2
       }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           {(!isCollapsed || isMobile) && (
             <Typography 
               variant="h6" 
@@ -142,17 +142,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               onClick={handleToggle}
               size="small"
               sx={{
-                color: '#ffffff',
-                backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                backdropFilter: 'blur(10px)',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-                marginLeft: 'auto',
-                marginRight: '8px',
+                color: '#666666',
                 '&:hover': {
-                  color: '#ffffff',
-                  backgroundColor: 'rgba(255, 255, 255, 0.2)',
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
-                  transform: 'translateY(-1px)',
+                  color: '#501b36',
+                  backgroundColor: 'rgba(80, 27, 54, 0.08)',
                 },
                 transition: 'all 0.3s ease',
               }}
@@ -180,28 +173,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 selected={location.pathname === item.path}
                 onClick={() => handleNavigation(item.path)}
                 sx={{
-                  borderRadius: '8px',
+                  borderRadius: 0,
                   minHeight: 48,
                   justifyContent: (isCollapsed && !isMobile) ? 'center' : 'flex-start',
                   px: (isCollapsed && !isMobile) ? 1 : 2,
-                  mx: 1,
                   '&.Mui-selected': {
-                    background: 'rgba(255, 255, 255, 0.15)',
-                    borderRadius: '8px',
+                    background: 'rgba(80, 27, 54, 0.2)',
+                    color: '#501b36',
+                    borderRadius: '4px',
                     '&:hover': {
-                      background: 'rgba(255, 255, 255, 0.2)',
+                      background: 'rgba(80, 27, 54, 0.3)',
+                      borderRadius: '4px',
                     },
                   },
                   '&:hover': {
-                    background: 'rgba(255, 255, 255, 0.08)',
-                    borderRadius: '8px',
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    borderRadius: '4px',
                   },
                   transition: 'all 0.2s ease',
                 }}
               >
                 <ListItemIcon 
                   sx={{ 
-                    color: location.pathname === item.path ? '#ffffff' : '#bdc3c7',
+                    color: location.pathname === item.path ? '#501b36' : '#bdc3c7',
                     minWidth: (isCollapsed && !isMobile) ? 'auto' : 40,
                     justifyContent: 'center',
                     transition: 'all 0.2s ease',
@@ -215,7 +209,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     primaryTypographyProps={{
                       fontSize: '0.95rem',
                       fontWeight: location.pathname === item.path ? 600 : 400,
-                      color: location.pathname === item.path ? '#ffffff' : '#ecf0f1',
+                      color: location.pathname === item.path ? '#501b36' : '#ecf0f1',
                     }}
                   />
                 )}
