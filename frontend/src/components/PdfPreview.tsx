@@ -10,20 +10,20 @@ import {
   IconButton,
   LinearProgress,
   Alert,
-  Divider,
   useTheme,
   useMediaQuery,
   Tooltip,
+  alpha,
+  Backdrop,
+  Fade,
 } from '@mui/material';
 import {
   Close,
   Download,
-  ZoomIn,
-  ZoomOut,
-  Fullscreen,
   Print,
   PictureAsPdf,
   Refresh,
+  Fullscreen,
 } from '@mui/icons-material';
 
 interface PdfPreviewProps {
@@ -43,7 +43,6 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
 }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
-  const [zoom, setZoom] = useState(100);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const isSmall = useMediaQuery(theme.breakpoints.down('sm'));
@@ -80,18 +79,6 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
     }
   };
 
-  const handleZoomIn = () => {
-    setZoom(prev => Math.min(prev + 25, 300));
-  };
-
-  const handleZoomOut = () => {
-    setZoom(prev => Math.max(prev - 25, 25));
-  };
-
-  const handleZoomReset = () => {
-    setZoom(100);
-  };
-
   const handleFullscreen = () => {
     if (fileUrl) {
       window.open(fileUrl, '_blank');
@@ -114,13 +101,12 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
 
   const getPdfUrl = () => {
     if (!fileUrl) return '';
-    return `${fileUrl}#zoom=${zoom}&toolbar=0&navpanes=0&scrollbar=1`;
+    return fileUrl;
   };
 
   const resetState = () => {
     setLoading(true);
     setError(false);
-    setZoom(100);
   };
 
   useEffect(() => {
@@ -136,6 +122,20 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
       maxWidth="xl"
       fullWidth
       fullScreen={isMobile}
+      TransitionComponent={Fade}
+      transitionDuration={300}
+      slots={{
+        backdrop: Backdrop,
+      }}
+      slotProps={{
+        backdrop: {
+          timeout: 300,
+          sx: {
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            backdropFilter: 'blur(8px)',
+          },
+        },
+      }}
       PaperProps={{
         sx: {
           height: isMobile ? '100vh' : '95vh',
@@ -143,66 +143,117 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
           display: 'flex',
           flexDirection: 'column',
           m: isMobile ? 0 : 2,
+          borderRadius: isMobile ? 0 : 4,
+          boxShadow: isMobile 
+            ? 'none' 
+            : '0 24px 64px rgba(0, 0, 0, 0.12), 0 8px 32px rgba(0, 0, 0, 0.08)',
+          overflow: 'hidden',
         },
       }}
     >
       {/* Header */}
       <DialogTitle
         sx={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          py: 1.5,
-          px: 2,
-          backgroundColor: '#f8f9fa',
-          borderBottom: '1px solid rgba(0, 0, 0, 0.12)',
+          background: 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 50%, #d4a574 100%)',
+          color: 'white',
+          py: 3,
+          px: 3,
+          position: 'relative',
+          overflow: 'hidden',
           flexShrink: 0,
+          '&::before': {
+            content: '""',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundImage: 'url("data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%23ffffff" fill-opacity="0.1"%3E%3Cpath d="m36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
+            opacity: 0.1,
+          },
         }}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, minWidth: 0 }}>
-          <PictureAsPdf sx={{ color: '#d32f2f', fontSize: 24 }} />
-          <Box sx={{ minWidth: 0 }}>
-            <Typography 
-              variant={isSmall ? "subtitle1" : "h6"} 
-              component="div" 
-              sx={{ 
-                fontWeight: 600,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          position: 'relative',
+          zIndex: 1,
+        }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, minWidth: 0 }}>
+            <Box
+              sx={{
+                p: 1.5,
+                bgcolor: 'rgba(255, 255, 255, 0.15)',
+                borderRadius: 2.5,
+                backdropFilter: 'blur(10px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                minWidth: 48,
+                height: 48,
               }}
             >
-              {title || 'Vista previa de PDF'}
-            </Typography>
-            {!isSmall && (
-              <Typography variant="caption" color="text.secondary">
-                {fileName}
+              <PictureAsPdf sx={{ fontSize: 28, color: 'white' }} />
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography 
+                variant={isSmall ? "subtitle1" : "h5"} 
+                component="div" 
+                sx={{ 
+                  fontWeight: 700,
+                  mb: !isSmall && fileName ? 0.5 : 0,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                {title || 'Vista previa de PDF'}
               </Typography>
-            )}
+              {!isSmall && fileName && (
+                <Typography 
+                  variant="body2" 
+                  sx={{ 
+                    opacity: 0.9,
+                    fontWeight: 400,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {fileName}
+                </Typography>
+              )}
+            </Box>
           </Box>
+          
+          <IconButton
+            onClick={onClose}
+            size="small"
+            sx={{
+              color: 'white',
+              backgroundColor: 'rgba(255, 255, 255, 0.1)',
+              backdropFilter: 'blur(10px)',
+              ml: 2,
+              '&:hover': {
+                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                transform: 'scale(1.1)',
+              },
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <Close />
+          </IconButton>
         </Box>
-        <IconButton 
-          onClick={onClose} 
-          size="small"
-          sx={{
-            ml: 1,
-            backgroundColor: 'rgba(0, 0, 0, 0.04)',
-            '&:hover': {
-              backgroundColor: 'rgba(0, 0, 0, 0.08)',
-            },
-          }}
-        >
-          <Close />
-        </IconButton>
       </DialogTitle>
 
       {/* Toolbar de controles */}
       <Box
         sx={{
-          backgroundColor: '#ffffff',
-          borderBottom: '1px solid rgba(0, 0, 0, 0.12)',
-          px: 2,
-          py: 1,
+          backgroundColor: '#f8f9fa',
+          borderBottom: '1px solid rgba(0, 0, 0, 0.08)',
+          px: 3,
+          py: 2,
           flexShrink: 0,
         }}
       >
@@ -210,123 +261,132 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
           sx={{
             display: 'flex',
             alignItems: 'center',
-            gap: 1,
+            gap: 1.5,
             flexWrap: isSmall ? 'wrap' : 'nowrap',
             justifyContent: isSmall ? 'center' : 'flex-start',
           }}
         >
-          {/* Grupo 1: Acciones principales */}
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Tooltip title="Descargar PDF">
-              <Button
-                startIcon={!isSmall ? <Download /> : undefined}
-                size="small"
-                onClick={handleDownload}
-                variant="outlined"
-                disabled={!fileUrl}
-                sx={{ minWidth: isSmall ? 40 : 'auto' }}
-              >
-                {isSmall ? <Download /> : 'Descargar'}
-              </Button>
-            </Tooltip>
-            
-            <Tooltip title="Imprimir">
-              <Button
-                startIcon={!isSmall ? <Print /> : undefined}
-                size="small"
-                onClick={handlePrint}
-                variant="outlined"
-                disabled={!fileUrl}
-                sx={{ minWidth: isSmall ? 40 : 'auto' }}
-              >
-                {isSmall ? <Print /> : 'Imprimir'}
-              </Button>
-            </Tooltip>
+          <Tooltip title="Descargar PDF">
+            <Button
+              startIcon={<Download />}
+              size="medium"
+              onClick={handleDownload}
+              variant="contained"
+              disabled={!fileUrl}
+              sx={{
+                backgroundColor: '#501b36',
+                color: 'white',
+                fontWeight: 600,
+                px: 3,
+                py: 1,
+                borderRadius: 2.5,
+                textTransform: 'none',
+                minWidth: isSmall ? 40 : 120,
+                '&:hover': {
+                  backgroundColor: '#501b36dd',
+                  transform: 'translateY(-1px)',
+                  boxShadow: '0 6px 20px rgba(80, 27, 54, 0.3)',
+                },
+                '&:active': {
+                  transform: 'translateY(0)',
+                },
+                transition: 'all 0.2s ease',
+              }}
+            >
+              {!isSmall && 'Descargar'}
+            </Button>
+          </Tooltip>
+          
+          <Tooltip title="Imprimir">
+            <Button
+              startIcon={<Print />}
+              size="medium"
+              onClick={handlePrint}
+              variant="outlined"
+              disabled={!fileUrl}
+              sx={{
+                borderColor: '#501b36',
+                color: '#501b36',
+                fontWeight: 600,
+                px: 3,
+                py: 1,
+                borderRadius: 2.5,
+                textTransform: 'none',
+                minWidth: isSmall ? 40 : 100,
+                '&:hover': {
+                  backgroundColor: alpha('#501b36', 0.08),
+                  borderColor: '#501b36dd',
+                  transform: 'translateY(-1px)',
+                },
+                '&:active': {
+                  transform: 'translateY(0)',
+                },
+                transition: 'all 0.2s ease',
+              }}
+            >
+              {!isSmall && 'Imprimir'}
+            </Button>
+          </Tooltip>
 
-            <Tooltip title="Recargar">
-              <Button
-                startIcon={!isSmall ? <Refresh /> : undefined}
-                size="small"
-                onClick={handleRefresh}
-                variant="outlined"
-                disabled={!fileUrl}
-                sx={{ minWidth: isSmall ? 40 : 'auto' }}
-              >
-                {isSmall ? <Refresh /> : 'Recargar'}
-              </Button>
-            </Tooltip>
-          </Box>
+          <Tooltip title="Recargar">
+            <Button
+              startIcon={<Refresh />}
+              size="medium"
+              onClick={handleRefresh}
+              variant="outlined"
+              disabled={!fileUrl}
+              sx={{
+                borderColor: '#501b36',
+                color: '#501b36',
+                fontWeight: 600,
+                px: 3,
+                py: 1,
+                borderRadius: 2.5,
+                textTransform: 'none',
+                minWidth: isSmall ? 40 : 100,
+                '&:hover': {
+                  backgroundColor: alpha('#501b36', 0.08),
+                  borderColor: '#501b36dd',
+                  transform: 'translateY(-1px)',
+                },
+                '&:active': {
+                  transform: 'translateY(0)',
+                },
+                transition: 'all 0.2s ease',
+              }}
+            >
+              {!isSmall && 'Recargar'}
+            </Button>
+          </Tooltip>
 
-          {!isSmall && (
-            <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
-          )}
-
-          {/* Grupo 2: Controles de zoom */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Tooltip title="Reducir zoom">
-              <IconButton 
-                size="small" 
-                onClick={handleZoomOut} 
-                disabled={zoom <= 25 || !fileUrl}
-                sx={{
-                  border: '1px solid rgba(0, 0, 0, 0.23)',
-                  '&:disabled': {
-                    border: '1px solid rgba(0, 0, 0, 0.12)',
-                  },
-                }}
-              >
-                <ZoomOut />
-              </IconButton>
-            </Tooltip>
-            
-            <Tooltip title="Resetear zoom">
-              <Button
-                variant="outlined"
-                size="small"
-                onClick={handleZoomReset}
-                disabled={!fileUrl}
-                sx={{
-                  minWidth: 70,
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
-                }}
-              >
-                {zoom}%
-              </Button>
-            </Tooltip>
-            
-            <Tooltip title="Aumentar zoom">
-              <IconButton 
-                size="small" 
-                onClick={handleZoomIn} 
-                disabled={zoom >= 300 || !fileUrl}
-                sx={{
-                  border: '1px solid rgba(0, 0, 0, 0.23)',
-                  '&:disabled': {
-                    border: '1px solid rgba(0, 0, 0, 0.12)',
-                  },
-                }}
-              >
-                <ZoomIn />
-              </IconButton>
-            </Tooltip>
-          </Box>
-
-          {!isSmall && (
-            <Divider orientation="vertical" flexItem sx={{ mx: 1 }} />
-          )}
-
-          {/* Grupo 3: Pantalla completa */}
           <Tooltip title="Abrir en nueva ventana">
             <Button
-              startIcon={!isSmall ? <Fullscreen /> : undefined}
-              size="small"
+              startIcon={<Fullscreen />}
+              size="medium"
               onClick={handleFullscreen}
               variant="outlined"
               disabled={!fileUrl}
-              sx={{ minWidth: isSmall ? 40 : 'auto' }}
+              sx={{
+                borderColor: '#501b36',
+                color: '#501b36',
+                fontWeight: 600,
+                px: 3,
+                py: 1,
+                borderRadius: 2.5,
+                textTransform: 'none',
+                minWidth: isSmall ? 40 : 140,
+                '&:hover': {
+                  backgroundColor: alpha('#501b36', 0.08),
+                  borderColor: '#501b36dd',
+                  transform: 'translateY(-1px)',
+                },
+                '&:active': {
+                  transform: 'translateY(0)',
+                },
+                transition: 'all 0.2s ease',
+              }}
             >
-              {isSmall ? <Fullscreen /> : 'Pantalla completa'}
+              {!isSmall && 'Nueva ventana'}
             </Button>
           </Tooltip>
         </Box>
@@ -340,22 +400,29 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
           flexDirection: 'column',
           flex: 1,
           overflow: 'hidden',
-          backgroundColor: '#f5f5f5',
+          backgroundColor: alpha('#501b36', 0.02),
         }}
       >
         {loading && fileUrl && (
-          <Box sx={{ p: 3 }}>
+          <Box sx={{ p: 4 }}>
             <LinearProgress 
               sx={{ 
                 mb: 2,
+                height: 6,
+                borderRadius: 3,
+                backgroundColor: alpha('#501b36', 0.1),
                 '& .MuiLinearProgress-bar': {
                   backgroundColor: '#501b36',
+                  borderRadius: 3,
                 },
               }} 
             />
-            <Typography variant="body2" sx={{ textAlign: 'center', color: 'text.secondary' }}>
-              Cargando documento PDF...
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+              <PictureAsPdf sx={{ color: '#501b36', fontSize: 28 }} />
+              <Typography variant="body1" sx={{ color: '#501b36', fontWeight: 600 }}>
+                Cargando documento PDF...
+              </Typography>
+            </Box>
           </Box>
         )}
 
@@ -369,12 +436,31 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
               alignItems: 'center', 
               justifyContent: 'center',
               flexDirection: 'column',
-              gap: 2,
+              gap: 3,
             }}
           >
-            <PictureAsPdf sx={{ fontSize: 80, color: 'text.disabled' }} />
-            <Alert severity="info" sx={{ maxWidth: 400 }}>
-              <Typography variant="body1" gutterBottom>
+            <Box
+              sx={{
+                p: 4,
+                bgcolor: alpha('#501b36', 0.1),
+                borderRadius: 4,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <PictureAsPdf sx={{ fontSize: 80, color: '#501b36' }} />
+            </Box>
+            <Alert 
+              severity="info" 
+              sx={{ 
+                maxWidth: 400,
+                '& .MuiAlert-icon': {
+                  color: '#501b36',
+                },
+              }}
+            >
+              <Typography variant="body1" gutterBottom sx={{ fontWeight: 600 }}>
                 No hay archivo disponible
               </Typography>
               <Typography variant="body2">
@@ -394,22 +480,40 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
               alignItems: 'center', 
               justifyContent: 'center',
               flexDirection: 'column',
-              gap: 2,
+              gap: 3,
             }}
           >
-            <PictureAsPdf sx={{ fontSize: 80, color: 'error.main' }} />
+            <Box
+              sx={{
+                p: 4,
+                bgcolor: alpha('#f44336', 0.1),
+                borderRadius: 4,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              <PictureAsPdf sx={{ fontSize: 80, color: '#f44336' }} />
+            </Box>
             <Alert severity="error" sx={{ maxWidth: 500 }}>
-              <Typography variant="body1" gutterBottom>
+              <Typography variant="body1" gutterBottom sx={{ fontWeight: 600 }}>
                 Error al cargar el documento
               </Typography>
-              <Typography variant="body2">
+              <Typography variant="body2" sx={{ mb: 2 }}>
                 No se pudo cargar el archivo PDF. Verifique que el archivo existe y es válido.
               </Typography>
               <Button 
                 onClick={handleRefresh} 
                 size="small" 
-                sx={{ mt: 1 }}
+                variant="outlined"
                 startIcon={<Refresh />}
+                sx={{
+                  borderColor: '#f44336',
+                  color: '#f44336',
+                  '&:hover': {
+                    backgroundColor: alpha('#f44336', 0.08),
+                  },
+                }}
               >
                 Intentar de nuevo
               </Button>
@@ -423,17 +527,17 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
               flex: 1,
               display: 'flex',
               overflow: 'hidden',
-              p: isMobile ? 1 : 2,
+              p: isMobile ? 1 : 3,
             }}
           >
             <Box
               sx={{
                 flex: 1,
                 backgroundColor: 'white',
-                borderRadius: 1,
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                borderRadius: 3,
+                boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08), 0 4px 16px rgba(0, 0, 0, 0.04)',
                 overflow: 'hidden',
-                border: '1px solid rgba(0, 0, 0, 0.12)',
+                border: '1px solid rgba(0, 0, 0, 0.08)',
               }}
             >
               <iframe
@@ -457,16 +561,16 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
       {/* Footer */}
       <DialogActions 
         sx={{ 
-          px: 2, 
-          py: 1.5, 
+          px: 3, 
+          py: 2, 
           backgroundColor: '#f8f9fa',
-          borderTop: '1px solid rgba(0, 0, 0, 0.12)',
+          borderTop: '1px solid rgba(0, 0, 0, 0.08)',
           flexShrink: 0,
           justifyContent: 'space-between',
         }}
       >
         <Typography 
-          variant="caption" 
+          variant="body2" 
           color="text.secondary" 
           sx={{ 
             flex: 1,
@@ -474,6 +578,7 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
             mr: 2,
+            fontWeight: 500,
           }}
         >
           {fileName}
@@ -481,10 +586,25 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
         <Button 
           onClick={onClose} 
           variant="contained"
-          size={isSmall ? "small" : "medium"}
+          size="medium"
           sx={{
-            minWidth: 80,
+            minWidth: 100,
             fontWeight: 600,
+            backgroundColor: '#501b36',
+            color: 'white',
+            px: 4,
+            py: 1,
+            borderRadius: 2.5,
+            textTransform: 'none',
+            '&:hover': {
+              backgroundColor: '#501b36dd',
+              transform: 'translateY(-1px)',
+              boxShadow: '0 6px 20px rgba(80, 27, 54, 0.3)',
+            },
+            '&:active': {
+              transform: 'translateY(0)',
+            },
+            transition: 'all 0.2s ease',
           }}
         >
           Cerrar

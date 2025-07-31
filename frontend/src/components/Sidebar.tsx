@@ -31,6 +31,7 @@ import {
   SupervisorAccount,
   People,
   Menu as MenuIcon,
+  CloudUpload,
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -40,7 +41,8 @@ const drawerWidth = 280;
 const collapsedWidth = 80;
 
 const menuItems = [
-  { text: 'Inicio', icon: <Dashboard />, path: '/' },
+  { text: 'Dashboard', icon: <Dashboard />, path: '/' },
+  { text: 'Subida Masiva', icon: <CloudUpload />, path: '/mass-upload' },
   { text: 'Tráfico', icon: <Traffic />, path: '/traffic' },
   { text: 'Vacaciones', icon: <EventNote />, path: '/vacations' },
   { text: 'Documentos', icon: <Description />, path: '/documents' },

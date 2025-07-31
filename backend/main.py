@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.api import dashboard, traffic, vacations, documents, payroll, orders, profile, settings, users, auth, user_files
+from app.api import dashboard, traffic, vacations, documents, payroll, orders, profile, settings, users, auth, user_files, documentation
 from app.database.connection import check_database_connection
 
 app = FastAPI(title="Portal API", version="1.0.0")
@@ -27,6 +27,7 @@ app.add_middleware(
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(users.router, prefix="/api", tags=["users"])
 app.include_router(user_files.router, prefix="/api/user-files", tags=["user-files"])
+app.include_router(documentation.router, prefix="/api/documentation", tags=["documentation"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
 app.include_router(traffic.router, prefix="/api/traffic", tags=["traffic"])
 app.include_router(vacations.router, prefix="/api/vacations", tags=["vacations"])

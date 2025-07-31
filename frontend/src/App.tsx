@@ -5,14 +5,16 @@ import { Box } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
 import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { Dashboard } from './pages/Dashboard';
+import { Home } from './pages/Home';
+import { MassUpload } from './pages/MassUpload';
 import { Traffic } from './pages/Traffic';
 import { Vacations } from './pages/Vacations';
 import { Documents } from './pages/Documents';
 import { Orders } from './pages/Orders';
 import { Users } from './pages/Users';
-import { Gestor } from './pages/Gestor';
+import DocumentationPanel from './pages/DocumentationPanel';
 import { Profile } from './pages/Profile';
+import { Settings } from './pages/Settings';
 import Login from './pages/Login';
 import { useAuth } from './hooks/useAuth';
 import theme from './theme/theme';
@@ -52,7 +54,12 @@ function App() {
                   <Routes>
                     <Route path="/" element={
                       <ProtectedRoute>
-                        <Dashboard />
+                        <Home />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/mass-upload" element={
+                      <ProtectedRoute>
+                        <MassUpload />
                       </ProtectedRoute>
                     } />
                     <Route path="/traffic" element={
@@ -82,12 +89,17 @@ function App() {
                     } />
                     <Route path="/gestor" element={
                       <ProtectedRoute>
-                        <Gestor />
+                        <DocumentationPanel />
                       </ProtectedRoute>
                     } />
                     <Route path="/profile" element={
                       <ProtectedRoute>
                         <Profile />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/settings" element={
+                      <ProtectedRoute>
+                        <Settings />
                       </ProtectedRoute>
                     } />
                     {/* Ruta por defecto */}
