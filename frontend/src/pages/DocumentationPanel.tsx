@@ -86,7 +86,6 @@ const DocumentationPanel: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all');
-  const [filterDepartment, setFilterDepartment] = useState<'all' | 'CHOFER' | 'IT' | 'ADMIN'>('all');
   const [expandedUsers, setExpandedUsers] = useState<string[]>([]);
   const [alert, setAlert] = useState<AlertState | null>(null);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
@@ -119,6 +118,17 @@ const DocumentationPanel: React.FC = () => {
   useEffect(() => {
     loadUsers();
   }, []);
+
+  // Auto-ocultar alerta después de 4 segundos
+  useEffect(() => {
+    if (alert) {
+      const timer = setTimeout(() => {
+        setAlert(null);
+      }, 4000); // 4 segundos
+
+      return () => clearTimeout(timer); // Limpiar el timer si el componente se desmonta o la alerta cambia
+    }
+  }, [alert]);
 
   // Funciones auxiliares
   const loadUsers = async () => {
@@ -160,9 +170,7 @@ const DocumentationPanel: React.FC = () => {
       (filterStatus === 'active' && user.is_active) ||
       (filterStatus === 'inactive' && !user.is_active);
     
-    const matchesDepartment = filterDepartment === 'all' || user.role === filterDepartment;
-    
-    return matchesSearch && matchesStatus && matchesDepartment;
+    return matchesSearch && matchesStatus;
   });
 
   const handleExpandUser = (userId: string) => {
@@ -531,39 +539,6 @@ const DocumentationPanel: React.FC = () => {
                     <MenuItem value="all">Todos</MenuItem>
                     <MenuItem value="active">Activos</MenuItem>
                     <MenuItem value="inactive">Inactivos</MenuItem>
-                  </Select>
-                </FormControl>
-
-                <FormControl size="small" sx={{ minWidth: 130 }}>
-                  <InputLabel sx={{ 
-                    '&.Mui-focused': { 
-                      color: '#501b36' 
-                    } 
-                  }}>
-                    Departamento
-                  </InputLabel>
-                  <Select
-                    value={filterDepartment}
-                    label="Departamento"
-                    onChange={(e) => setFilterDepartment(e.target.value as typeof filterDepartment)}
-                    sx={{
-                      borderRadius: 2,
-                      '&:hover': {
-                        '& .MuiOutlinedInput-notchedOutline': {
-                          borderColor: '#501b36',
-                        },
-                      },
-                      '&.Mui-focused': {
-                        '& .MuiOutlinedInput-notchedOutline': {
-                          borderColor: '#501b36',
-                        },
-                      },
-                    }}
-                  >
-                    <MenuItem value="all">Todos</MenuItem>
-                    <MenuItem value="CHOFER">Conductores</MenuItem>
-                    <MenuItem value="IT">IT</MenuItem>
-                    <MenuItem value="ADMIN">Administración</MenuItem>
                   </Select>
                 </FormControl>
 
