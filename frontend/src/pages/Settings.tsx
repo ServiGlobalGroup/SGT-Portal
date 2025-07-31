@@ -24,10 +24,6 @@ import {
   Divider,
   Grid,
   Stack,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
   Badge,
   FormControlLabel,
   Chip,
@@ -58,6 +54,7 @@ import {
   Visibility,
   VisibilityOff,
 } from '@mui/icons-material';
+import { ModernModal, ModernButton } from '../components/ModernModal';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -1296,29 +1293,85 @@ const Settings: React.FC = () => {
       </Paper>
 
       {/* Dialog de confirmación */}
-      <Dialog open={openDialog} onClose={() => setOpenDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <Warning color="warning" />
-          Confirmar Restablecimiento del Sistema
-        </DialogTitle>
-        <DialogContent>
-          <Typography gutterBottom>
-            ¿Estás seguro de que quieres restablecer toda la configuración del sistema? 
-          </Typography>
-          <Typography variant="body2" color="textSecondary">
-            Esta acción restablecerá todos los valores a sus configuraciones por defecto y no se puede deshacer.
-            Se recomienda hacer un backup antes de continuar.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setOpenDialog(false)} variant="outlined">
-            Cancelar
-          </Button>
-          <Button onClick={confirmReset} color="warning" variant="contained" startIcon={<Refresh />}>
-            Confirmar Restablecimiento
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ModernModal
+        open={openDialog}
+        onClose={() => setOpenDialog(false)}
+        title="Confirmar Restablecimiento del Sistema"
+        subtitle="Esta acción es irreversible"
+        icon={<Warning />}
+        maxWidth="sm"
+        headerColor="#ff9800"
+        customHeaderGradient="linear-gradient(135deg, #ff9800 0%, #f57c00 50%, #ef6c00 100%)"
+        actions={
+          <>
+            <ModernButton
+              variant="outlined"
+              onClick={() => setOpenDialog(false)}
+            >
+              Cancelar
+            </ModernButton>
+            <ModernButton
+              variant="contained"
+              onClick={confirmReset}
+              customColor="#ff9800"
+              startIcon={<Refresh />}
+            >
+              Confirmar Restablecimiento
+            </ModernButton>
+          </>
+        }
+      >
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+          <Alert severity="warning" sx={{ borderRadius: 2 }}>
+            <Typography variant="body1" sx={{ fontWeight: 600, mb: 1 }}>
+              ⚠️ Acción Crítica del Sistema
+            </Typography>
+            <Typography variant="body2">
+              Esta operación restablecerá todas las configuraciones a sus valores por defecto.
+            </Typography>
+          </Alert>
+
+          <Box sx={{ 
+            p: 3, 
+            backgroundColor: 'white', 
+            borderRadius: 2.5,
+            border: '2px solid #ff980015',
+            boxShadow: '0 4px 16px rgba(0, 0, 0, 0.05)',
+          }}>
+            <Typography variant="h6" sx={{ fontWeight: 700, mb: 2, color: '#ff9800' }}>
+              ¿Qué se restablecerá?
+            </Typography>
+            
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+              {[
+                'Configuraciones de seguridad',
+                'Configuraciones de notificaciones',
+                'Configuraciones de correo electrónico',
+                'Configuraciones de almacenamiento',
+                'Temas y personalización',
+                'Configuraciones de empresa',
+                'APIs y integraciones'
+              ].map((item, index) => (
+                <Box key={index} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ 
+                    width: 6, 
+                    height: 6, 
+                    borderRadius: '50%', 
+                    backgroundColor: '#ff9800' 
+                  }} />
+                  <Typography variant="body2">{item}</Typography>
+                </Box>
+              ))}
+            </Box>
+          </Box>
+
+          <Alert severity="info" sx={{ borderRadius: 2 }}>
+            <Typography variant="body2">
+              <strong>Recomendación:</strong> Se recomienda realizar un backup de la configuración actual antes de continuar.
+            </Typography>
+          </Alert>
+        </Box>
+      </ModernModal>
     </Box>
   );
 };

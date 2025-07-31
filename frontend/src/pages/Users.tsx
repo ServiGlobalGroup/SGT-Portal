@@ -26,7 +26,6 @@ import {
   CardContent,
   InputAdornment,
   Button,
-  Dialog,
 } from '@mui/material';
 import type { SelectChangeEvent } from '@mui/material';
 import {
@@ -41,7 +40,14 @@ import {
   PersonAdd,
   Visibility,
   VisibilityOff,
+  Person,
+  Email,
+  Badge,
+  Business,
+  Key,
 } from '@mui/icons-material';
+import { ModernModal, ModernButton } from '../components/ModernModal';
+import { ModernField, InfoCard } from '../components/ModernFormComponents';
 
 interface User {
   id: number;
@@ -645,136 +651,158 @@ export const Users: React.FC = () => {
       </Menu>
 
       {/* Modal para crear usuario */}
-      <Dialog 
-        open={openCreateModal} 
+      <ModernModal
+        open={openCreateModal}
         onClose={handleCloseCreateModal}
-        maxWidth="md"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 2,
-            boxShadow: '0 8px 32px rgba(0,0,0,0.1)'
-          }
-        }}
+        title="Crear Nuevo Usuario"
+        subtitle="Completa la información del nuevo colaborador"
+        icon={<PersonAdd />}
+        maxWidth="lg"
+        headerColor="#501b36"
+        actions={
+          <>
+            <ModernButton
+              variant="outlined"
+              onClick={handleCloseCreateModal}
+              disabled={createUserLoading}
+              size="large"
+            >
+              Cancelar
+            </ModernButton>
+            <ModernButton
+              variant="contained"
+              onClick={handleCreateUser}
+              disabled={
+                createUserLoading ||
+                dniValidation.exists ||
+                !createUserData.dni_nie || 
+                !createUserData.first_name || 
+                !createUserData.last_name || 
+                !createUserData.email || 
+                !createUserData.department || 
+                !createUserData.password ||
+                createUserData.password !== createUserData.confirmPassword ||
+                createUserData.password.length < 8
+              }
+              loading={createUserLoading}
+              size="large"
+              customColor="#501b36"
+            >
+              Crear Usuario
+            </ModernButton>
+          </>
+        }
       >
-        <Box sx={{ 
-          bgcolor: '#501b36', 
-          color: 'white', 
-          p: 3,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 2
-        }}>
-          <PersonAdd sx={{ fontSize: 28 }} />
-          <Typography variant="h5" sx={{ fontWeight: 600 }}>
-            Crear Nuevo Usuario
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {/* Información personal */}
+          <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36', mb: 2 }}>
+            Información Personal
           </Typography>
-        </Box>
-        
-        <Box sx={{ p: 4 }}>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {/* Primera fila: DNI y Email */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 3 }}>
-              <TextField
-                label="DNI/NIE"
-                required
-                value={createUserData.dni_nie}
-                onChange={(e) => {
-                  const dni = e.target.value.toUpperCase();
-                  setCreateUserData(prev => ({ ...prev, dni_nie: dni }));
-                  checkDniExists(dni);
-                }}
-                placeholder="12345678A"
-                variant="outlined"
-                fullWidth
-                error={dniValidation.exists}
-                helperText={dniValidation.message}
-                InputProps={{
-                  endAdornment: dniValidation.checking ? (
-                    <InputAdornment position="end">
-                      <CircularProgress size={20} />
-                    </InputAdornment>
-                  ) : null,
-                }}
-              />
-            
-              <TextField
-                label="Email"
-                type="email"
-                required
-                value={createUserData.email}
-                onChange={(e) => setCreateUserData(prev => ({ ...prev, email: e.target.value.toLowerCase() }))}
-                placeholder="usuario@empresa.com"
-                variant="outlined"
-                fullWidth
-              />
-            </Box>
+          
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 3 }}>
+            <ModernField
+              label="DNI/NIE"
+              value={createUserData.dni_nie}
+              onChange={(value) => {
+                const dni = String(value).toUpperCase();
+                setCreateUserData(prev => ({ ...prev, dni_nie: dni }));
+                checkDniExists(dni);
+              }}
+              required
+              startIcon={<Badge />}
+              placeholder="12345678A"
+              error={dniValidation.exists ? dniValidation.message : undefined}
+              helperText={dniValidation.checking ? "Verificando disponibilidad..." : "Documento de identidad único"}
+            />
 
-            {/* Segunda fila: Nombre y Apellidos */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 3 }}>
-              <TextField
-                label="Nombre"
-                required
-                value={createUserData.first_name}
-                onChange={(e) => setCreateUserData(prev => ({ ...prev, first_name: e.target.value }))}
-                variant="outlined"
-                fullWidth
-              />
-            
-              <TextField
-                label="Apellidos"
-                required
-                value={createUserData.last_name}
-                onChange={(e) => setCreateUserData(prev => ({ ...prev, last_name: e.target.value }))}
-                variant="outlined"
-                fullWidth
-              />
-            </Box>
+            <ModernField
+              label="Email"
+              type="email"
+              value={createUserData.email}
+              onChange={(value) => setCreateUserData(prev => ({ ...prev, email: String(value).toLowerCase() }))}
+              required
+              startIcon={<Email />}
+              placeholder="usuario@empresa.com"
+              helperText="Correo electrónico corporativo"
+            />
+          </Box>
 
-            {/* Tercera fila: Departamento y Rol */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 3 }}>
-              <TextField
-                label="Departamento"
-                required
-                value={createUserData.department}
-                onChange={(e) => setCreateUserData(prev => ({ ...prev, department: e.target.value }))}
-                placeholder="IT, RRHH, Administración..."
-                variant="outlined"
-                fullWidth
-              />
-            
-              <FormControl variant="outlined" fullWidth required>
-                <InputLabel>Rol</InputLabel>
-                <Select
-                  value={createUserData.role}
-                  label="Rol"
-                  onChange={(e: SelectChangeEvent) => 
-                    setCreateUserData(prev => ({ ...prev, role: e.target.value as 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR' }))
-                  }
-                >
-                  <MenuItem value="TRABAJADOR">Trabajador</MenuItem>
-                  <MenuItem value="TRAFICO">Tráfico</MenuItem>
-                  <MenuItem value="ADMINISTRADOR">Administrador</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 3 }}>
+            <ModernField
+              label="Nombre"
+              value={createUserData.first_name}
+              onChange={(value) => setCreateUserData(prev => ({ ...prev, first_name: String(value) }))}
+              required
+              startIcon={<Person />}
+              placeholder="Nombre del empleado"
+            />
 
-            {/* Cuarta fila: Contraseñas */}
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 3 }}>
+            <ModernField
+              label="Apellidos"
+              value={createUserData.last_name}
+              onChange={(value) => setCreateUserData(prev => ({ ...prev, last_name: String(value) }))}
+              required
+              startIcon={<Person />}
+              placeholder="Apellidos del empleado"
+            />
+          </Box>
+
+          {/* Información laboral */}
+          <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36', mb: 2, mt: 3 }}>
+            Información Laboral
+          </Typography>
+
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 3 }}>
+            <ModernField
+              label="Departamento"
+              value={createUserData.department}
+              onChange={(value) => setCreateUserData(prev => ({ ...prev, department: String(value) }))}
+              required
+              startIcon={<Business />}
+              placeholder="IT, RRHH, Administración..."
+              helperText="Área de trabajo del empleado"
+            />
+
+            <ModernField
+              label="Rol"
+              type="select"
+              value={createUserData.role}
+              onChange={(value) => setCreateUserData(prev => ({ ...prev, role: value as 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR' }))}
+              required
+              options={[
+                { value: 'TRABAJADOR', label: 'Trabajador' },
+                { value: 'TRAFICO', label: 'Tráfico' },
+                { value: 'ADMINISTRADOR', label: 'Administrador' },
+              ]}
+              helperText="Nivel de acceso del usuario"
+            />
+          </Box>
+
+          {/* Configuración de acceso */}
+          <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36', mb: 2, mt: 3 }}>
+            Configuración de Acceso
+          </Typography>
+
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 3 }}>
+            <Box>
               <TextField
                 label="Contraseña"
                 type={showPassword ? 'text' : 'password'}
                 required
+                fullWidth
                 value={createUserData.password}
                 onChange={(e) => setCreateUserData(prev => ({ ...prev, password: e.target.value }))}
-                variant="outlined"
-                fullWidth
                 error={
                   createUserData.password !== '' && 
                   createUserData.confirmPassword !== '' && 
                   createUserData.password !== createUserData.confirmPassword
                 }
                 InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Key sx={{ color: 'rgba(0, 0, 0, 0.54)' }} />
+                    </InputAdornment>
+                  ),
                   endAdornment: (
                     <InputAdornment position="end">
                       <IconButton
@@ -793,23 +821,53 @@ export const Users: React.FC = () => {
                     ? "Las contraseñas no coinciden"
                     : createUserData.password !== '' && createUserData.password.length < 8
                     ? "Mínimo 8 caracteres"
-                    : "Mínimo 8 caracteres"
+                    : "Mínimo 8 caracteres requeridos"
                 }
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2.5,
+                    backgroundColor: 'white',
+                    '& fieldset': {
+                      borderColor: 'rgba(0, 0, 0, 0.15)',
+                      borderWidth: '2px',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: '#501b36',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#501b36',
+                      borderWidth: '2px',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    fontWeight: 600,
+                    '&.Mui-focused': {
+                      color: '#501b36',
+                    },
+                  },
+                  mb: 3,
+                }}
               />
-            
+            </Box>
+
+            <Box>
               <TextField
                 label="Confirmar Contraseña"
                 type={showConfirmPassword ? 'text' : 'password'}
                 required
+                fullWidth
                 value={createUserData.confirmPassword}
                 onChange={(e) => setCreateUserData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                variant="outlined"
-                fullWidth
                 error={
                   createUserData.confirmPassword !== '' && 
                   createUserData.password !== createUserData.confirmPassword
                 }
                 InputProps={{
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <Key sx={{ color: 'rgba(0, 0, 0, 0.54)' }} />
+                    </InputAdornment>
+                  ),
                   endAdornment: (
                     <InputAdornment position="end">
                       <IconButton
@@ -826,53 +884,68 @@ export const Users: React.FC = () => {
                     ? "Las contraseñas no coinciden" 
                     : createUserData.confirmPassword !== '' && createUserData.password === createUserData.confirmPassword
                     ? "Las contraseñas coinciden ✓"
-                    : "Repite la contraseña"
+                    : "Confirma la contraseña"
                 }
+                sx={{
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2.5,
+                    backgroundColor: 'white',
+                    '& fieldset': {
+                      borderColor: 'rgba(0, 0, 0, 0.15)',
+                      borderWidth: '2px',
+                    },
+                    '&:hover fieldset': {
+                      borderColor: '#501b36',
+                    },
+                    '&.Mui-focused fieldset': {
+                      borderColor: '#501b36',
+                      borderWidth: '2px',
+                    },
+                  },
+                  '& .MuiInputLabel-root': {
+                    fontWeight: 600,
+                    '&.Mui-focused': {
+                      color: '#501b36',
+                    },
+                  },
+                  mb: 3,
+                }}
               />
             </Box>
           </Box>
+
+          {/* Resumen del usuario */}
+          {createUserData.first_name && createUserData.last_name && createUserData.role && (
+            <InfoCard
+              title="Resumen del Usuario"
+              color="#501b36"
+              items={[
+                {
+                  icon: <Person sx={{ fontSize: 16 }} />,
+                  label: "Nombre completo",
+                  value: `${createUserData.first_name} ${createUserData.last_name}`
+                },
+                {
+                  icon: <Email sx={{ fontSize: 16 }} />,
+                  label: "Email",
+                  value: createUserData.email || "No especificado"
+                },
+                {
+                  icon: <Business sx={{ fontSize: 16 }} />,
+                  label: "Departamento",
+                  value: createUserData.department || "No especificado"
+                },
+                {
+                  icon: <Badge sx={{ fontSize: 16 }} />,
+                  label: "Rol asignado",
+                  value: createUserData.role === 'ADMINISTRADOR' ? 'Administrador' : 
+                        createUserData.role === 'TRAFICO' ? 'Tráfico' : 'Trabajador'
+                }
+              ]}
+            />
+          )}
         </Box>
-        
-        <Box sx={{ 
-          p: 3, 
-          borderTop: '1px solid #e0e0e0',
-          display: 'flex', 
-          justifyContent: 'flex-end',
-          gap: 2,
-          bgcolor: '#fafafa'
-        }}>
-          <Button 
-            onClick={handleCloseCreateModal}
-            variant="outlined"
-            size="large"
-            disabled={createUserLoading}
-            sx={{ minWidth: 120 }}
-          >
-            Cancelar
-          </Button>
-          <Button 
-            onClick={handleCreateUser}
-            variant="contained"
-            size="large"
-            startIcon={createUserLoading ? <CircularProgress size={20} color="inherit" /> : <PersonAdd />}
-            disabled={
-              createUserLoading ||
-              dniValidation.exists ||
-              !createUserData.dni_nie || 
-              !createUserData.first_name || 
-              !createUserData.last_name || 
-              !createUserData.email || 
-              !createUserData.department || 
-              !createUserData.password ||
-              createUserData.password !== createUserData.confirmPassword ||
-              createUserData.password.length < 8
-            }
-            sx={{ minWidth: 140 }}
-          >
-            {createUserLoading ? 'Creando...' : 'Crear Usuario'}
-          </Button>
-        </Box>
-      </Dialog>
+      </ModernModal>
     </Box>
   );
 };

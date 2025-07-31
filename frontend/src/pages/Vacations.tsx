@@ -4,11 +4,6 @@ import {
   Typography,
   Paper,
   Button,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  TextField,
   Table,
   TableBody,
   TableCell,
@@ -27,6 +22,7 @@ import {
   Stack,
   Fade,
   GlobalStyles,
+  TextField,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
@@ -46,6 +42,8 @@ import {
   BeachAccess,
   DateRange,
 } from '@mui/icons-material';
+import { ModernModal, ModernButton } from '../components/ModernModal';
+import { ModernField, InfoCard, StatusChip } from '../components/ModernFormComponents';
 
 interface VacationRequest {
   id: number;
@@ -114,24 +112,6 @@ export const Vacations: React.FC = () => {
       case 'rejected': return <Cancel sx={{ color: '#f44336' }} />;
       case 'pending': return <HourglassEmpty sx={{ color: '#ff9800' }} />;
       default: return <Pending sx={{ color: '#757575' }} />;
-    }
-  };
-
-  const getStatusColor = (status: string): 'success' | 'error' | 'warning' | 'default' => {
-    switch (status) {
-      case 'approved': return 'success';
-      case 'rejected': return 'error';
-      case 'pending': return 'warning';
-      default: return 'default';
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'approved': return 'Aprobada';
-      case 'rejected': return 'Rechazada';
-      case 'pending': return 'Pendiente';
-      default: return 'Desconocido';
     }
   };
 
@@ -527,7 +507,7 @@ export const Vacations: React.FC = () => {
                     ? `No se encontraron solicitudes que coincidan con "${searchTerm}"`
                     : filterStatus === 'all'
                       ? 'Comienza creando tu primera solicitud de vacaciones'
-                      : `No hay solicitudes con estado "${getStatusText(filterStatus)}"`
+                      : `No hay solicitudes con estado "${filterStatus === 'pending' ? 'Pendiente' : filterStatus === 'approved' ? 'Aprobada' : 'Rechazada'}"`
                   }
                 </Typography>
                 <Button
@@ -660,16 +640,7 @@ export const Vacations: React.FC = () => {
                         <TableCell>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                             {getStatusIcon(request.status)}
-                            <Chip
-                              label={getStatusText(request.status)}
-                              size="small"
-                              color={getStatusColor(request.status)}
-                              sx={{
-                                borderRadius: 2,
-                                fontWeight: 600,
-                                fontSize: '0.75rem',
-                              }}
-                            />
+                            <StatusChip status={request.status} size="small" />
                           </Box>
                           {request.approvedBy && (
                             <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 0.5 }}>
@@ -794,149 +765,96 @@ export const Vacations: React.FC = () => {
         </Menu>
 
         {/* Diálogo nueva solicitud mejorado */}
-        <Dialog 
-          open={openDialog} 
-          onClose={() => setOpenDialog(false)} 
-          maxWidth="sm" 
-          fullWidth
-          PaperProps={{
-            sx: {
-              borderRadius: 3,
-              boxShadow: '0 12px 48px rgba(0,0,0,0.15)',
-            }
-          }}
+        <ModernModal
+          open={openDialog}
+          onClose={() => setOpenDialog(false)}
+          title="Nueva Solicitud de Vacaciones"
+          subtitle="Completa los datos de tu solicitud"
+          icon={<Add />}
+          maxWidth="md"
+          headerColor="#501b36"
+          customHeaderGradient="linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 50%, #d4a574 100%)"
+          actions={
+            <>
+              <ModernButton
+                variant="outlined"
+                onClick={() => setOpenDialog(false)}
+                size="large"
+              >
+                Cancelar
+              </ModernButton>
+              <ModernButton
+                variant="contained"
+                onClick={handleSubmitRequest}
+                disabled={!newRequest.startDate || !newRequest.endDate || !newRequest.reason.trim()}
+                size="large"
+                customColor="#501b36"
+              >
+                Enviar Solicitud
+              </ModernButton>
+            </>
+          }
         >
-          <DialogTitle sx={{ 
-            backgroundColor: '#501b36',
-            color: 'white',
-            py: 3,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 2,
-          }}>
-            <Add sx={{ fontSize: 28 }} />
-            <Box>
-              <Typography variant="h6" component="div" sx={{ fontWeight: 700 }}>
-                Nueva Solicitud de Vacaciones
-              </Typography>
-              <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                Completa los datos de tu solicitud
-              </Typography>
-            </Box>
-          </DialogTitle>
-          <DialogContent sx={{ p: 4, bgcolor: '#f8f9fa' }}>
-            <Box sx={{ pt: 2 }}>
-              <TextField
-                label="Fecha de inicio"
-                type="date"
-                fullWidth
-                value={newRequest.startDate}
-                onChange={(e) => setNewRequest(prev => ({ ...prev, startDate: e.target.value }))}
-                InputLabelProps={{ shrink: true }}
-                sx={{ 
-                  mb: 3,
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 2,
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <ModernField
+              label="Fecha de inicio"
+              type="date"
+              value={newRequest.startDate}
+              onChange={(value) => setNewRequest(prev => ({ ...prev, startDate: value as string }))}
+              required
+              startIcon={<CalendarToday />}
+              min={new Date().toISOString().split('T')[0]}
+              helperText="Selecciona la fecha de inicio de tus vacaciones"
+            />
+
+            <ModernField
+              label="Fecha de fin"
+              type="date"
+              value={newRequest.endDate}
+              onChange={(value) => setNewRequest(prev => ({ ...prev, endDate: value as string }))}
+              required
+              startIcon={<CalendarToday />}
+              min={newRequest.startDate || new Date().toISOString().split('T')[0]}
+              helperText="Selecciona la fecha de fin de tus vacaciones"
+            />
+
+            <ModernField
+              label="Motivo de la solicitud"
+              type="multiline"
+              value={newRequest.reason}
+              onChange={(value) => setNewRequest(prev => ({ ...prev, reason: value as string }))}
+              required
+              rows={4}
+              placeholder="Describe el motivo de tu solicitud de vacaciones..."
+              maxLength={500}
+              helperText="Proporciona una descripción detallada del motivo"
+            />
+
+            {newRequest.startDate && newRequest.endDate && newRequest.startDate < newRequest.endDate && (
+              <InfoCard
+                title="Resumen de la solicitud"
+                color="#501b36"
+                items={[
+                  {
+                    icon: <CalendarToday sx={{ fontSize: 16 }} />,
+                    label: "Período",
+                    value: `${formatDate(newRequest.startDate)} - ${formatDate(newRequest.endDate)}`
                   },
-                }}
-                inputProps={{ min: new Date().toISOString().split('T')[0] }}
-              />
-              <TextField
-                label="Fecha de fin"
-                type="date"
-                fullWidth
-                value={newRequest.endDate}
-                onChange={(e) => setNewRequest(prev => ({ ...prev, endDate: e.target.value }))}
-                InputLabelProps={{ shrink: true }}
-                sx={{ 
-                  mb: 3,
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 2,
+                  {
+                    icon: <Schedule sx={{ fontSize: 16 }} />,
+                    label: "Total de días",
+                    value: `${calculateDays(newRequest.startDate, newRequest.endDate)} días`
                   },
-                }}
-                inputProps={{ min: newRequest.startDate || new Date().toISOString().split('T')[0] }}
+                  {
+                    icon: <EventNote sx={{ fontSize: 16 }} />,
+                    label: "Estado inicial",
+                    value: <StatusChip status="pending" size="small" />
+                  }
+                ]}
               />
-              <TextField
-                label="Motivo de la solicitud"
-                multiline
-                rows={4}
-                fullWidth
-                value={newRequest.reason}
-                onChange={(e) => setNewRequest(prev => ({ ...prev, reason: e.target.value }))}
-                placeholder="Describe el motivo de tu solicitud de vacaciones..."
-                sx={{ 
-                  mb: 3,
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 2,
-                  },
-                }}
-              />
-              
-              {newRequest.startDate && newRequest.endDate && newRequest.startDate < newRequest.endDate && (
-                <Box sx={{ 
-                  p: 3, 
-                  backgroundColor: 'white', 
-                  borderRadius: 2,
-                  border: '1px solid #e0e0e0',
-                  boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
-                }}>
-                  <Typography variant="body2" color="textSecondary" gutterBottom sx={{ fontWeight: 600 }}>
-                    Resumen de la solicitud:
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                    <CalendarToday sx={{ fontSize: 16, color: '#501b36' }} />
-                    <Typography variant="body2">
-                      <strong>Período:</strong> {formatDate(newRequest.startDate)} - {formatDate(newRequest.endDate)}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Schedule sx={{ fontSize: 16, color: '#501b36' }} />
-                    <Typography variant="body2">
-                      <strong>Total de días:</strong> {calculateDays(newRequest.startDate, newRequest.endDate)} días
-                    </Typography>
-                  </Box>
-                </Box>
-              )}
-            </Box>
-          </DialogContent>
-          <DialogActions sx={{ 
-            p: 3, 
-            bgcolor: '#f8f9fa',
-            gap: 1,
-            borderTop: '1px solid #e0e0e0',
-          }}>
-            <Button 
-              onClick={() => setOpenDialog(false)}
-              variant="outlined"
-              sx={{
-                borderRadius: 2,
-                px: 3,
-                textTransform: 'none',
-                fontWeight: 600,
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button 
-              onClick={handleSubmitRequest} 
-              variant="contained"
-              disabled={!newRequest.startDate || !newRequest.endDate || !newRequest.reason.trim()}
-              sx={{
-                borderRadius: 2,
-                px: 3,
-                textTransform: 'none',
-                fontWeight: 600,
-                backgroundColor: '#501b36',
-                minWidth: 140,
-                '&:hover': {
-                  backgroundColor: '#3d1429',
-                },
-              }}
-            >
-              Enviar Solicitud
-            </Button>
-          </DialogActions>
-        </Dialog>
+            )}
+          </Box>
+        </ModernModal>
       </Box>
     </>
   );
