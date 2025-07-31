@@ -192,10 +192,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       
       <Divider 
         sx={{ 
-          backgroundColor: '#e0e0e0',
-          margin: '0 16px',
+          backgroundColor: '#501b36',
+          margin: (isCollapsed && !isMobile) ? '0 8px' : '0 16px',
           height: '1px',
-          display: (isCollapsed && !isMobile) ? 'none' : 'block',
+          display: 'block',
+          opacity: (isCollapsed && !isMobile) ? 0.4 : 0.3,
         }} 
       />
       
@@ -269,13 +270,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* Separador superior con desvanecimiento */}
         <Box
           sx={{
-            height: '2px',
-            background: 'linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.4) 20%, rgba(255, 255, 255, 0.4) 80%, transparent 100%)',
+            height: '1px',
+            background: (isCollapsed && !isMobile) 
+              ? 'linear-gradient(90deg, transparent 0%, rgba(212, 165, 116, 0.6) 20%, rgba(212, 165, 116, 0.6) 80%, transparent 100%)'
+              : 'linear-gradient(90deg, transparent 0%, rgba(212, 165, 116, 0.5) 20%, rgba(212, 165, 116, 0.5) 80%, transparent 100%)',
             mb: 3,
-            mx: (isCollapsed && !isMobile) ? 0.5 : 1,
+            mx: (isCollapsed && !isMobile) ? 1 : 1,
             display: 'block',
-            borderRadius: '1px',
-            boxShadow: '0 0 4px rgba(255, 255, 255, 0.2)',
+            borderRadius: '0.5px',
+            boxShadow: (isCollapsed && !isMobile) 
+              ? '0 0 4px rgba(212, 165, 116, 0.4)'
+              : '0 0 3px rgba(212, 165, 116, 0.3)',
           }}
         />
         
@@ -289,12 +294,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
             justifyContent: 'center',
             px: 1,
             py: 2,
-            borderRadius: '12px',
+            borderRadius: '8px',
             cursor: 'pointer',
-            transition: 'all 0.3s ease',
+            transition: 'all 0.2s ease',
             '&:hover': {
-              backgroundColor: 'rgba(80, 27, 54, 0.08)',
+              background: 'rgba(0, 0, 0, 0.1)',
               transform: 'translateY(-1px)',
+              '& .MuiAvatar-root': {
+                transform: 'scale(1.05)',
+                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
+                border: '2px solid rgba(255, 255, 255, 0.25)',
+              },
+              '& .user-text': {
+                color: '#ffffff',
+              },
+              '& .role-text': {
+                color: '#ffffff',
+              },
             },
           }}
           onClick={handleProfileClick}
@@ -311,11 +327,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
               transition: 'all 0.2s ease',
               border: '2px solid rgba(255, 255, 255, 0.15)',
               boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-              '&:hover': {
-                transform: 'scale(1.05)',
-                boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
-                border: '2px solid rgba(255, 255, 255, 0.25)',
-              },
             }}
           >
             {user?.initials || user?.first_name?.charAt(0) || 'U'}
@@ -325,6 +336,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <Box sx={{ minWidth: 0, flex: 1, textAlign: 'left', maxWidth: '140px' }}>
               <Typography 
                 variant="body2" 
+                className="user-text"
                 sx={{ 
                   color: '#ecf0f1',
                   fontWeight: 600,
@@ -335,12 +347,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   display: '-webkit-box',
                   WebkitLineClamp: 2,
                   WebkitBoxOrient: 'vertical',
+                  transition: 'color 0.2s ease',
                 }}
               >
                 {user?.full_name || user?.first_name || 'Usuario'}
               </Typography>
               <Typography 
                 variant="caption" 
+                className="role-text"
                 sx={{ 
                   color: '#bdc3c7',
                   fontSize: '0.75rem',
@@ -348,6 +362,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   lineHeight: 1.2,
                   fontWeight: 400,
                   textTransform: 'capitalize',
+                  transition: 'color 0.2s ease',
                 }}
               >
                 {getRoleText(user?.role || '')}
