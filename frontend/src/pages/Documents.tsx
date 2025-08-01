@@ -167,24 +167,40 @@ export const Documents: React.FC = () => {
 
   const handleView = (document: UserDocument) => {
     if (document.type === '.pdf') {
-      // Obtener el token del localStorage
-      const token = localStorage.getItem('access_token');
-      if (!token) {
-        setAlert({ type: 'error', message: 'No se puede mostrar el archivo. Por favor, inicia sesión nuevamente.' });
-        return;
+      // Para documentos generales (información)
+      if (currentFolder === 'informacion') {
+        // Extraer el nombre del archivo de la download_url
+        const fileName = document.download_url.split('/').pop();
+        const previewUrl = `/api/documents/preview/general/${fileName}`;
+        const fullUrl = previewUrl.startsWith('http') 
+          ? previewUrl 
+          : `http://127.0.0.1:8000${previewUrl}`;
+        
+        setPdfPreview({
+          open: true,
+          fileUrl: fullUrl,
+          fileName: document.name
+        });
+      } else {
+        // Para documentos personales (nóminas, dietas)
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+          setAlert({ type: 'error', message: 'No se puede mostrar el archivo. Por favor, inicia sesión nuevamente.' });
+          return;
+        }
+        
+        // Construir URL de preview con token
+        const previewUrl = document.download_url.replace('/download/', '/preview/') + `?token=${token}`;
+        const fullUrl = previewUrl.startsWith('http') 
+          ? previewUrl 
+          : `http://127.0.0.1:8000${previewUrl}`;
+        
+        setPdfPreview({
+          open: true,
+          fileUrl: fullUrl,
+          fileName: document.name
+        });
       }
-      
-      // Construir URL de preview con token
-      const previewUrl = document.download_url.replace('/download/', '/preview/') + `?token=${token}`;
-      const fullUrl = previewUrl.startsWith('http') 
-        ? previewUrl 
-        : `http://127.0.0.1:8000${previewUrl}`;
-      
-      setPdfPreview({
-        open: true,
-        fileUrl: fullUrl,
-        fileName: document.name
-      });
     } else {
       window.open(document.download_url, '_blank');
     }

@@ -162,3 +162,27 @@ async def download_general_document(filename: str):
         filename=filename,
         media_type='application/pdf'
     )
+
+@router.get("/preview/general/{filename}")
+async def preview_general_document(filename: str):
+    """
+    Endpoint para previsualizar documentos generales en iframe.
+    """
+    file_path = Path("backend/files/general_documents") / filename
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+    
+    if not file_path.is_file():
+        raise HTTPException(status_code=400, detail="La ruta no corresponde a un archivo")
+    
+    # Verificar que sea un PDF
+    if not filename.lower().endswith('.pdf'):
+        raise HTTPException(status_code=400, detail="Solo se pueden previsualizar archivos PDF")
+    
+    return FileResponse(
+        path=str(file_path),
+        filename=filename,
+        media_type='application/pdf',
+        headers={"Content-Disposition": "inline"}
+    )
