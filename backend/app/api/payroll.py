@@ -1,10 +1,13 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from fastapi.responses import FileResponse, StreamingResponse
 from app.models.schemas import PayrollDocument, User, PayrollStats
+from app.models.user import UploadHistory
 from app.services.payroll_pdf_service import PayrollPDFProcessor
+from app.database.connection import get_db
 from app.config import settings
 from datetime import datetime
 from typing import List, Optional
+from sqlalchemy.orm import Session
 import os
 import uuid
 from pathlib import Path
@@ -161,7 +164,8 @@ async def get_payroll_stats():
 async def process_multiple_payrolls(
     file: UploadFile = File(...),
     month_year: str = Form(...),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     Procesa un PDF con múltiples nóminas, extrayendo cada página como PDF individual
@@ -213,6 +217,40 @@ async def process_multiple_payrolls(
         # Limpiar archivo temporal
         os.unlink(temp_file_path)
         
+        # Extraer mes y año del month_year
+        try:
+            if '_' in month_year:
+                month_str, year_str = month_year.split('_')
+            else:
+                # Asumir formato YYYY-MM o similar
+                year_str = month_year[:4]
+                month_str = month_year[-2:]
+        except:
+            month_str = "01"
+            year_str = str(datetime.now().year)
+        
+        # Guardar en historial de subidas
+        try:
+            upload_history = UploadHistory(
+                file_name=file.filename or "archivo_sin_nombre.pdf",
+                upload_date=datetime.now(),
+                user_dni=current_user["dni_nie"],
+                user_name=current_user["full_name"],
+                document_type="nominas",
+                month=month_str.zfill(2),
+                year=year_str,
+                total_pages=results["total_pages"],
+                successful_pages=results["successful_assignments"],
+                failed_pages=results["failed_assignments"],
+                status="completed" if results["failed_assignments"] == 0 else "partial"
+            )
+            db.add(upload_history)
+            db.commit()
+            db.refresh(upload_history)
+        except Exception as e:
+            print(f"Error guardando historial: {e}")
+            # No interrumpir el proceso principal si falla el historial
+        
         # Preparar respuesta
         response = {
             "success": True,
@@ -252,7 +290,8 @@ async def process_multiple_payrolls(
 async def process_multiple_dietas(
     file: UploadFile = File(...),
     month_year: str = Form(...),
-    current_user = Depends(get_current_user)
+    current_user = Depends(get_current_user),
+    db: Session = Depends(get_db)
 ):
     """
     Procesa un PDF con múltiples dietas, extrayendo cada página como PDF individual
@@ -303,6 +342,40 @@ async def process_multiple_dietas(
         
         # Limpiar archivo temporal
         os.unlink(temp_file_path)
+        
+        # Extraer mes y año del month_year
+        try:
+            if '_' in month_year:
+                month_str, year_str = month_year.split('_')
+            else:
+                # Asumir formato YYYY-MM o similar
+                year_str = month_year[:4]
+                month_str = month_year[-2:]
+        except:
+            month_str = "01"
+            year_str = str(datetime.now().year)
+        
+        # Guardar en historial de subidas
+        try:
+            upload_history = UploadHistory(
+                file_name=file.filename or "archivo_sin_nombre.pdf",
+                upload_date=datetime.now(),
+                user_dni=current_user["dni_nie"],
+                user_name=current_user["full_name"],
+                document_type="dietas",
+                month=month_str.zfill(2),
+                year=year_str,
+                total_pages=results["total_pages"],
+                successful_pages=results["successful_assignments"],
+                failed_pages=results["failed_assignments"],
+                status="completed" if results["failed_assignments"] == 0 else "partial"
+            )
+            db.add(upload_history)
+            db.commit()
+            db.refresh(upload_history)
+        except Exception as e:
+            print(f"Error guardando historial: {e}")
+            # No interrumpir el proceso principal si falla el historial
         
         # Preparar respuesta
         response = {

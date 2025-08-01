@@ -31,6 +31,8 @@ import {
   ListItemIcon,
   ListItemText,
   Pagination,
+  FormHelperText,
+  Divider,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
@@ -98,14 +100,24 @@ interface ProcessingResult {
 
 interface UploadHistoryItem {
   id: number;
-  filename: string;
+  file_name: string;
+  upload_date: string;
+  user_dni: string;
+  user_name: string;
   document_type: string;
+  month: string;
+  year: string;
   total_pages: number;
   successful_pages: number;
   failed_pages: number;
   status: string;
   created_at: string;
-  errors?: string[];
+  updated_at: string;
+}
+
+interface UploadHistoryResponse {
+  items: UploadHistoryItem[];
+  total: number;
 }
 
 export const MassUpload: React.FC = () => {
@@ -128,7 +140,7 @@ export const MassUpload: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [alert, setAlert] = useState<{ type: 'success' | 'error' | 'warning'; message: string } | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Verificar permisos
   useEffect(() => {
@@ -140,6 +152,11 @@ export const MassUpload: React.FC = () => {
   useEffect(() => {
     loadUploadHistory();
   }, []);
+
+  // Reset página cuando cambia el historial
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [uploadHistory]);
 
   useEffect(() => {
     if (alert) {
@@ -163,13 +180,11 @@ export const MassUpload: React.FC = () => {
     { value: '12', label: 'Diciembre' },
   ];
 
-  const years = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i);
-
   const loadUploadHistory = async () => {
     setHistoryLoading(true);
     try {
       const token = localStorage.getItem('access_token');
-      const response = await fetch('http://127.0.0.1:8000/api/upload-history/', {
+      const response = await fetch('http://127.0.0.1:8000/api/user-files/upload-history', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -178,7 +193,10 @@ export const MassUpload: React.FC = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setUploadHistory(data);
+        
+        // El backend devuelve { items: [...], total: number }
+        const historyArray = data.items || [];
+        setUploadHistory(historyArray);
       } else {
         console.error('Error loading upload history:', response.statusText);
         setAlert({ type: 'error', message: 'Error al cargar el historial de subidas' });
@@ -347,10 +365,10 @@ export const MassUpload: React.FC = () => {
     }
   };
 
-  const filteredHistory = uploadHistory.filter(item =>
-    item.filename.toLowerCase().includes(searchTerm.toLowerCase()) ||
+  const filteredHistory = Array.isArray(uploadHistory) ? uploadHistory.filter(item =>
+    item.file_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     getDocumentTypeLabel(item.document_type).toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  ) : [];
 
   const paginatedHistory = filteredHistory.slice(
     (currentPage - 1) * itemsPerPage,
@@ -434,7 +452,7 @@ export const MassUpload: React.FC = () => {
                       Subida Masiva
                     </Typography>
                     <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400 }}>
-                      Procesamiento masivo de nóminas y dietas • Solo Administradores
+                      Procesamiento masivo de nóminas y dietas
                     </Typography>
                   </Box>
                 </Box>
@@ -474,25 +492,6 @@ export const MassUpload: React.FC = () => {
               background: '#ffffff',
             }}
           >
-            <Box sx={{ 
-              p: 3, 
-              borderBottom: 1, 
-              borderColor: 'divider',
-              background: alpha('#501b36', 0.02),
-            }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <FileUpload sx={{ color: '#501b36', fontSize: 28 }} />
-                <Box>
-                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36' }}>
-                    Nueva Subida Masiva
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    Selecciona el tipo de documento y sube tu archivo PDF
-                  </Typography>
-                </Box>
-              </Box>
-            </Box>
-
             <Box sx={{ p: 3 }}>
               {/* Configuración de documentos */}
               <Box sx={{ display: 'grid', gridTemplateColumns: '1fr', gap: 3, mb: 3 }}>
@@ -783,7 +782,10 @@ export const MassUpload: React.FC = () => {
               <TextField
                 placeholder="Buscar en historial..."
                 value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1); // Reset a la primera página cuando se cambia el filtro
+                }}
                 InputProps={{
                   startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />
                 }}
@@ -872,6 +874,7 @@ export const MassUpload: React.FC = () => {
                         }}
                       >
                         <TableCell>Archivo</TableCell>
+                        <TableCell>Usuario</TableCell>
                         <TableCell>Tipo</TableCell>
                         <TableCell>Páginas Procesadas</TableCell>
                         <TableCell>Estado</TableCell>
@@ -908,12 +911,22 @@ export const MassUpload: React.FC = () => {
                               </Box>
                               <Box>
                                 <Typography variant="body1" sx={{ fontWeight: 600, mb: 0.5 }}>
-                                  {item.filename}
+                                  {item.file_name}
                                 </Typography>
                                 <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                                   ID: {item.id}
                                 </Typography>
                               </Box>
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Box>
+                              <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                                {item.user_name}
+                              </Typography>
+                              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                {item.user_dni}
+                              </Typography>
                             </Box>
                           </TableCell>
                           <TableCell>
@@ -945,7 +958,7 @@ export const MassUpload: React.FC = () => {
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                              {new Date(item.created_at).toLocaleDateString('es-ES', {
+                              {new Date(item.upload_date).toLocaleDateString('es-ES', {
                                 year: 'numeric',
                                 month: 'short',
                                 day: 'numeric',
@@ -960,31 +973,74 @@ export const MassUpload: React.FC = () => {
                   </Table>
                 </TableContainer>
 
-                {/* Paginación */}
-                {totalPages > 1 && (
+                {/* Paginación mejorada */}
+                {filteredHistory.length > 0 && (
                   <Box sx={{ 
-                    display: 'flex', 
-                    justifyContent: 'center', 
                     p: 3,
-                    borderTop: '1px solid #e0e0e0'
+                    borderTop: `1px solid ${alpha('#501b36', 0.1)}`,
+                    bgcolor: alpha('#501b36', 0.02)
                   }}>
-                    <Pagination
-                      count={totalPages}
-                      page={currentPage}
-                      onChange={(_event, value) => setCurrentPage(value)}
-                      color="primary"
-                      sx={{
-                        '& .MuiPaginationItem-root': {
-                          '&.Mui-selected': {
-                            backgroundColor: '#501b36',
-                            color: 'white',
-                            '&:hover': {
-                              backgroundColor: '#3d1429',
+                    {/* Información de resultados */}
+                    <Box sx={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: 2,
+                      mb: 2
+                    }}>
+                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                        Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredHistory.length)} de {filteredHistory.length} registros
+                      </Typography>
+                      
+                      {/* Selector de elementos por página */}
+                      <FormControl size="small" sx={{ minWidth: 120 }}>
+                        <InputLabel>Por página</InputLabel>
+                        <Select
+                          value={itemsPerPage}
+                          label="Por página"
+                          onChange={(e) => {
+                            setItemsPerPage(Number(e.target.value));
+                            setCurrentPage(1); // Reset a la primera página
+                          }}
+                        >
+                          <MenuItem value={5}>5</MenuItem>
+                          <MenuItem value={10}>10</MenuItem>
+                          <MenuItem value={25}>25</MenuItem>
+                          <MenuItem value={50}>50</MenuItem>
+                          <MenuItem value={100}>100</MenuItem>
+                        </Select>
+                      </FormControl>
+                    </Box>
+                    
+                    {/* Paginación */}
+                    {totalPages > 1 && (
+                      <Box sx={{ 
+                        display: 'flex', 
+                        justifyContent: 'center',
+                      }}>
+                        <Pagination
+                          count={totalPages}
+                          page={currentPage}
+                          onChange={(_event, value) => setCurrentPage(value)}
+                          color="primary"
+                          size="large"
+                          showFirstButton
+                          showLastButton
+                          sx={{
+                            '& .MuiPaginationItem-root': {
+                              '&.Mui-selected': {
+                                backgroundColor: '#501b36',
+                                color: 'white',
+                                '&:hover': {
+                                  backgroundColor: '#3d1429',
+                                },
+                              },
                             },
-                          },
-                        },
-                      }}
-                    />
+                          }}
+                        />
+                      </Box>
+                    )}
                   </Box>
                 )}
               </>
