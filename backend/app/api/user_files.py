@@ -19,17 +19,22 @@ async def get_user_documents(
     current_user: User = Depends(get_current_active_user)
 ):
     """
-    Obtiene los documentos de nóminas o dietas del usuario.
+    Obtiene los documentos del usuario o documentos generales.
     
     Args:
-        folder_type: Tipo de carpeta (nominas, dietas)
+        folder_type: Tipo de carpeta (nominas, dietas, documentos)
     """
     
-    # Validar que el tipo de carpeta es válido - solo nóminas y dietas
-    valid_folders = ["nominas", "dietas"]
+    # Validar que el tipo de carpeta es válido
+    valid_folders = ["nominas", "dietas", "documentos"]
     if folder_type not in valid_folders:
-        raise HTTPException(status_code=400, detail="Solo se permiten carpetas de nóminas y dietas")
+        raise HTTPException(status_code=400, detail="Solo se permiten carpetas de nóminas, dietas y documentos")
     
+    # Si es "documentos", devolver documentos generales
+    if folder_type == "documentos":
+        return await get_general_documents()
+    
+    # Para nóminas y dietas, usar la lógica original
     # Construir la ruta de la carpeta del usuario
     user_folder = Path(settings.user_files_base_path) / current_user.dni_nie / folder_type
     
@@ -665,3 +670,50 @@ async def get_user_documents_admin(
             user_documents["total_documents"] += len(documents)
     
     return user_documents
+
+async def get_general_documents():
+    """
+    Obtiene los documentos generales que están disponibles para todos los trabajadores.
+    Estos documentos se almacenan en backend/files/general_documents
+    """
+    general_docs_path = Path("backend/files/general_documents")
+    
+    if not general_docs_path.exists():
+        return {
+            "documents": [],
+            "folder_type": "documentos",
+            "total_files": 0,
+            "total_size": 0
+        }
+    
+    documents = []
+    total_size = 0
+    
+    try:
+        for file_path in general_docs_path.iterdir():
+            if file_path.is_file():
+                file_stat = file_path.stat()
+                file_size = file_stat.st_size
+                
+                document = {
+                    "id": f"general_{len(documents) + 1}",
+                    "name": file_path.name,
+                    "size": file_size,
+                    "type": file_path.suffix.lower(),
+                    "created_date": datetime.fromtimestamp(file_stat.st_ctime).isoformat(),
+                    "modified_date": datetime.fromtimestamp(file_stat.st_mtime).isoformat(),
+                    "download_url": f"/api/documents/download/general/{file_path.name}"
+                }
+                
+                documents.append(document)
+                total_size += file_size
+    except Exception as e:
+        # Si hay error leyendo la carpeta, devolver lista vacía
+        pass
+    
+    return {
+        "documents": documents,
+        "folder_type": "documentos",
+        "total_files": len(documents),
+        "total_size": total_size
+    }

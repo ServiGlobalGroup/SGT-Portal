@@ -41,6 +41,7 @@ import {
   InsertDriveFile,
   FolderOpen,
   FilePresent,
+  Info,
 } from '@mui/icons-material';
 import { PdfPreview } from '../components/PdfPreview';
 import { userFilesAPI } from '../services/api';
@@ -63,7 +64,7 @@ interface FolderData {
 }
 
 export const Documents: React.FC = () => {
-  const [currentFolder, setCurrentFolder] = useState('nominas');
+  const [currentFolder, setCurrentFolder] = useState('informacion');
   const [folderData, setFolderData] = useState<FolderData | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -93,7 +94,9 @@ export const Documents: React.FC = () => {
     setLoading(true);
     try {
       console.log('Loading documents for folder:', currentFolder);
-      const data = await userFilesAPI.getUserDocuments(currentFolder);
+      // Si es "informacion", enviar "documentos" al backend
+      const folderType = currentFolder === 'informacion' ? 'documentos' : currentFolder;
+      const data = await userFilesAPI.getUserDocuments(folderType);
       console.log('Documents loaded successfully:', data);
       setFolderData(data);
     } catch (error: any) {
@@ -191,6 +194,12 @@ export const Documents: React.FC = () => {
   const handleUpload = async () => {
     if (!uploadFile) return;
 
+    // Deshabilitar upload para documentos generales de información
+    if (currentFolder === 'informacion') {
+      setAlert({ type: 'error', message: 'No se pueden subir archivos a la carpeta de información' });
+      return;
+    }
+
     setUploading(true);
     try {
       await userFilesAPI.uploadFile(currentFolder, uploadFile);
@@ -209,7 +218,8 @@ export const Documents: React.FC = () => {
   const getFolderDisplayName = (folder: string) => {
     const folderNames: { [key: string]: string } = {
       'nominas': 'Nóminas', 
-      'dietas': 'Dietas'
+      'dietas': 'Dietas',
+      'informacion': 'Información'
     };
     return folderNames[folder] || folder;
   };
@@ -289,7 +299,7 @@ export const Documents: React.FC = () => {
                     Mis Documentos
                   </Typography>
                   <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400 }}>
-                    Gestiona tus nóminas y dietas de forma organizada
+                    Gestiona tus nóminas, dietas e información de forma organizada
                   </Typography>
                 </Box>
               </Box>
@@ -383,6 +393,16 @@ export const Documents: React.FC = () => {
               icon={<Description sx={{ fontSize: 24 }} />}
               label="Dietas"
               value="dietas"
+              iconPosition="start"
+              sx={{
+                gap: 1,
+                flexDirection: 'row',
+              }}
+            />
+            <Tab
+              icon={<Info sx={{ fontSize: 24 }} />}
+              label="Información"
+              value="informacion"
               iconPosition="start"
               sx={{
                 gap: 1,

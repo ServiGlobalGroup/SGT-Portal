@@ -16,6 +16,7 @@ import {
   MenuItem,
   SwipeableDrawer,
   AppBar,
+  GlobalStyles,
 } from '@mui/material';
 import {
   Dashboard,
@@ -42,11 +43,11 @@ const collapsedWidth = 80;
 
 const menuItems = [
   { text: 'Dashboard', icon: <Dashboard />, path: '/' },
-  { text: 'Subida Masiva', icon: <CloudUpload />, path: '/mass-upload' },
-  { text: 'Tráfico', icon: <Traffic />, path: '/traffic' },
-  { text: 'Vacaciones', icon: <EventNote />, path: '/vacations' },
   { text: 'Documentos', icon: <Description />, path: '/documents' },
+  { text: 'Vacaciones', icon: <EventNote />, path: '/vacations' },
+  { text: 'Tráfico', icon: <Traffic />, path: '/traffic' },
   { text: 'Órdenes', icon: <LocalShipping />, path: '/orders' },
+  { text: 'Subida Masiva', icon: <CloudUpload />, path: '/mass-upload' },
   { text: 'Gestión de Usuarios', icon: <People />, path: '/users' },
   { text: 'Panel de Documentación', icon: <SupervisorAccount />, path: '/gestor' },
 ];
@@ -123,6 +124,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const drawerContent = (
     <>
+      <GlobalStyles
+        styles={{
+          // Optimizaciones para renderizado de líneas en diferentes zooms
+          '.MuiDrawer-paper': {
+            '& hr, & [role="separator"]': {
+              transform: 'translateZ(0)',
+              willChange: 'transform',
+              backfaceVisibility: 'hidden',
+              WebkitFontSmoothing: 'antialiased',
+              MozOsxFontSmoothing: 'grayscale',
+            },
+            '& *': {
+              WebkitFontSmoothing: 'antialiased',
+              MozOsxFontSmoothing: 'grayscale',
+            },
+          },
+          // Optimizaciones específicas para líneas de separación
+          '.sidebar-divider': {
+            transform: 'translateZ(0)',
+            willChange: 'transform',
+            backfaceVisibility: 'hidden',
+            imageRendering: 'crisp-edges',
+            '&::before, &::after': {
+              transform: 'translateZ(0)',
+              willChange: 'transform',
+              backfaceVisibility: 'hidden',
+            },
+          },
+        }}
+      />
       <Toolbar sx={{ 
         minHeight: { xs: '64px !important', sm: '80px !important' }, 
         flexDirection: 'column', 
@@ -199,6 +230,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           height: '1px',
           display: 'block',
           opacity: (isCollapsed && !isMobile) ? 0.4 : 0.3,
+          transform: 'translateZ(0)', // Fuerza aceleración de hardware
+          willChange: 'transform', // Optimiza para cambios de transformación
+          borderRadius: '0.5px',
+          flexShrink: 0, // Evita que se comprima
         }} 
       />
       
@@ -269,20 +304,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </Box>
       
       <Box sx={{ mt: 'auto', p: 2 }}>
-        {/* Separador superior con desvanecimiento */}
+        {/* Separador superior con desvanecimiento mejorado */}
         <Box
+          className="sidebar-divider"
           sx={{
+            position: 'relative',
             height: '1px',
-            background: (isCollapsed && !isMobile) 
-              ? 'linear-gradient(90deg, transparent 0%, rgba(212, 165, 116, 0.6) 20%, rgba(212, 165, 116, 0.6) 80%, transparent 100%)'
-              : 'linear-gradient(90deg, transparent 0%, rgba(212, 165, 116, 0.5) 20%, rgba(212, 165, 116, 0.5) 80%, transparent 100%)',
             mb: 3,
             mx: (isCollapsed && !isMobile) ? 1 : 1,
             display: 'block',
-            borderRadius: '0.5px',
-            boxShadow: (isCollapsed && !isMobile) 
-              ? '0 0 4px rgba(212, 165, 116, 0.4)'
-              : '0 0 3px rgba(212, 165, 116, 0.3)',
+            '&::before': {
+              content: '""',
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: (isCollapsed && !isMobile) 
+                ? 'linear-gradient(90deg, transparent 0%, rgba(212, 165, 116, 0.6) 20%, rgba(212, 165, 116, 0.6) 80%, transparent 100%)'
+                : 'linear-gradient(90deg, transparent 0%, rgba(212, 165, 116, 0.5) 20%, rgba(212, 165, 116, 0.5) 80%, transparent 100%)',
+              borderRadius: '0.5px',
+              transform: 'translateZ(0)', // Fuerza aceleración de hardware
+              willChange: 'transform', // Optimiza para cambios de transformación
+            },
+            '&::after': {
+              content: '""',
+              position: 'absolute',
+              top: '-1px',
+              left: '10%',
+              right: '10%',
+              bottom: '-1px',
+              boxShadow: (isCollapsed && !isMobile) 
+                ? '0 0 4px rgba(212, 165, 116, 0.4)'
+                : '0 0 3px rgba(212, 165, 116, 0.3)',
+              borderRadius: '1px',
+              transform: 'translateZ(0)', // Fuerza aceleración de hardware
+              willChange: 'transform', // Optimiza para cambios de transformación
+            },
           }}
         />
         

@@ -57,7 +57,7 @@ interface UploadState {
   isUploading: boolean;
   uploadProgress: number;
   file: File | null;
-  documentType: 'multiple' | 'multiple-dietas' | '';
+  documentType: 'multiple' | 'multiple-dietas' | 'documentos-generales' | '';
   month: string;
   year: string;
   error: string | null;
@@ -251,8 +251,15 @@ export const MassUpload: React.FC = () => {
                        parseInt(uploadState.year) >= 2000 && 
                        parseInt(uploadState.year) <= 2050;
     
-    if (!uploadState.file || !uploadState.documentType || !uploadState.month || !uploadState.year || !isYearValid) {
-      setAlert({ type: 'error', message: 'Por favor, completa todos los campos requeridos y verifica que el año sea válido' });
+    // Para documentos generales no requerimos mes/año
+    const requiresMonthYear = uploadState.documentType !== 'documentos-generales';
+    
+    if (!uploadState.file || !uploadState.documentType || 
+        (requiresMonthYear && (!uploadState.month || !uploadState.year || !isYearValid))) {
+      const message = requiresMonthYear 
+        ? 'Por favor, completa todos los campos requeridos y verifica que el año sea válido'
+        : 'Por favor, selecciona un archivo y el tipo de documento';
+      setAlert({ type: 'error', message });
       return;
     }
 
@@ -262,13 +269,17 @@ export const MassUpload: React.FC = () => {
       const formData = new FormData();
       formData.append('file', uploadState.file);
       
-      // Construir month_year en formato correcto
-      const monthYear = `${uploadState.month}_${uploadState.year}`;
-      formData.append('month_year', monthYear);
+      // Solo agregar month_year para nóminas y dietas
+      if (uploadState.documentType !== 'documentos-generales') {
+        const monthYear = `${uploadState.month}_${uploadState.year}`;
+        formData.append('month_year', monthYear);
+      }
 
       const endpoint = uploadState.documentType === 'multiple' 
         ? 'http://127.0.0.1:8000/api/payroll/process-multiple-payrolls'
-        : 'http://127.0.0.1:8000/api/payroll/process-multiple-dietas';
+        : uploadState.documentType === 'multiple-dietas'
+        ? 'http://127.0.0.1:8000/api/payroll/process-multiple-dietas'
+        : 'http://127.0.0.1:8000/api/documents/upload-general-documents';
 
       const token = localStorage.getItem('access_token');
       const response = await fetch(endpoint, {
@@ -360,6 +371,8 @@ export const MassUpload: React.FC = () => {
         return '📄 Nóminas Múltiples';
       case 'multiple-dietas':
         return '🍽️ Dietas Múltiples';
+      case 'documentos-generales':
+        return '📚 Documentos Generales';
       default:
         return type;
     }
@@ -452,7 +465,7 @@ export const MassUpload: React.FC = () => {
                       Subida Masiva
                     </Typography>
                     <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400 }}>
-                      Procesamiento masivo de nóminas y dietas
+                      Procesamiento masivo de nóminas, dietas y documentos generales
                     </Typography>
                   </Box>
                 </Box>
@@ -516,7 +529,13 @@ export const MassUpload: React.FC = () => {
                   >
                     <MenuItem value="multiple">📄 Nóminas Múltiples</MenuItem>
                     <MenuItem value="multiple-dietas">🍽️ Dietas Múltiples</MenuItem>
+                    <MenuItem value="documentos-generales">📚 Documentos Generales</MenuItem>
                   </Select>
+                  {uploadState.documentType === 'documentos-generales' && (
+                    <FormHelperText sx={{ mt: 1, color: 'info.main' }}>
+                      📚 Los documentos generales (manuales, guías, políticas) estarán disponibles para todos los trabajadores en la carpeta "Documentos".
+                    </FormHelperText>
+                  )}
                 </FormControl>
 
                 {(uploadState.documentType === 'multiple' || uploadState.documentType === 'multiple-dietas') && (
@@ -702,8 +721,15 @@ export const MassUpload: React.FC = () => {
               <Button
                 variant="contained"
                 onClick={handleUpload}
-                disabled={!uploadState.file || !uploadState.documentType || !uploadState.month || !uploadState.year || uploadState.isUploading || 
-                  (uploadState.year.length === 4 && (parseInt(uploadState.year) < 2000 || parseInt(uploadState.year) > 2050))}
+                disabled={
+                  !uploadState.file || 
+                  !uploadState.documentType || 
+                  uploadState.isUploading ||
+                  // Para documentos generales no requerimos mes/año
+                  (uploadState.documentType !== 'documentos-generales' && (!uploadState.month || !uploadState.year)) ||
+                  // Validar año solo si está presente
+                  (uploadState.year.length > 0 && uploadState.year.length === 4 && (parseInt(uploadState.year) < 2000 || parseInt(uploadState.year) > 2050))
+                }
                 startIcon={<CloudUpload />}
                 sx={{
                   borderRadius: 2,
