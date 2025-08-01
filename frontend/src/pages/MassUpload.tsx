@@ -1,34 +1,55 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
-  Paper,
   Typography,
+  Paper,
   Button,
-  Grid,
-  LinearProgress,
-  Alert,
-  Chip,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  Pagination,
+  Chip,
+  TextField,
+  Alert,
   CircularProgress,
-  Tooltip
+  MenuItem,
+  Fade,
+  GlobalStyles,
+  FormControl,
+  InputLabel,
+  Select,
+  LinearProgress,
+  IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
+  Pagination,
 } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import {
-  CloudUpload as CloudUploadIcon,
-  PictureAsPdf as PictureAsPdfIcon,
-  History as HistoryIcon
+  CloudUpload,
+  PictureAsPdf,
+  Refresh,
+  History as HistoryIcon,
+  Assignment,
+  CheckCircle,
+  Error as ErrorIcon,
+  FileUpload,
+  Delete as DeleteIcon,
+  Warning as WarningIcon,
+  Search,
 } from '@mui/icons-material';
 import { useAuth } from '../hooks/useAuth';
+import { hasPermission, Permission } from '../utils/permissions';
 
+// Interfaces
 interface UploadState {
   isDragOver: boolean;
   isUploading: boolean;
@@ -37,26 +58,58 @@ interface UploadState {
   documentType: 'multiple' | 'multiple-dietas' | '';
   month: string;
   year: string;
-  employee: string;
   error: string | null;
-  success: boolean;
 }
 
-interface UploadHistory {
+interface ProcessingResult {
+  success: boolean;
+  message: string;
+  filename: string;
+  month_year: string;
+  document_type?: string;
+  stats: {
+    total_pages: number;
+    successful: number;
+    failed: number;
+    success_rate: number;
+  };
+  details: any[];
+  errors: string[];
+  summary: string;
+  results: {
+    processed_pages: number;
+    successful_assignments: number;
+    failed_assignments: number;
+    total_pages: number;
+    assignment_details: Array<{
+      page_number: number;
+      dni_nie_found: string;
+      user_folder_exists: boolean;
+      pdf_saved: boolean;
+      saved_path: string | null;
+      success: boolean;
+      error_message: string | null;
+    }>;
+    errors: string[];
+  };
+  processed_at: string;
+  warning?: string;
+}
+
+interface UploadHistoryItem {
   id: number;
   filename: string;
-  original_filename: string;
-  file_type: string;
   document_type: string;
-  dni?: string;
-  month?: string;
-  year?: string;
-  upload_date: string;
-  uploaded_by: string;
-  upload_type: string;
+  total_pages: number;
+  successful_pages: number;
+  failed_pages: number;
+  status: string;
+  created_at: string;
+  errors?: string[];
 }
 
-const PDFUploadComponent: React.FC = () => {
+export const MassUpload: React.FC = () => {
+  const { user } = useAuth();
   const [uploadState, setUploadState] = useState<UploadState>({
     isDragOver: false,
     isUploading: false,
@@ -64,14 +117,37 @@ const PDFUploadComponent: React.FC = () => {
     file: null,
     documentType: '',
     month: '',
-    year: '',
-    employee: '',
+    year: new Date().getFullYear().toString(),
     error: null,
-    success: false
   });
 
-  const currentYear = new Date().getFullYear();
-  const years = Array.from({length: 5}, (_, i) => currentYear - i);
+  const [processingResults, setProcessingResults] = useState<ProcessingResult | null>(null);
+  const [showResultsModal, setShowResultsModal] = useState(false);
+  const [uploadHistory, setUploadHistory] = useState<UploadHistoryItem[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [alert, setAlert] = useState<{ type: 'success' | 'error' | 'warning'; message: string } | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+
+  // Verificar permisos
+  useEffect(() => {
+    if (user && !hasPermission(user, Permission.MASS_UPLOAD)) {
+      window.location.href = '/dashboard';
+    }
+  }, [user]);
+
+  useEffect(() => {
+    loadUploadHistory();
+  }, []);
+
+  useEffect(() => {
+    if (alert) {
+      const timer = setTimeout(() => setAlert(null), 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [alert]);
+
   const months = [
     { value: '01', label: 'Enero' },
     { value: '02', label: 'Febrero' },
@@ -84,20 +160,48 @@ const PDFUploadComponent: React.FC = () => {
     { value: '09', label: 'Septiembre' },
     { value: '10', label: 'Octubre' },
     { value: '11', label: 'Noviembre' },
-    { value: '12', label: 'Diciembre' }
+    { value: '12', label: 'Diciembre' },
   ];
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const years = Array.from({ length: 10 }, (_, i) => new Date().getFullYear() - i);
+
+  const loadUploadHistory = async () => {
+    setHistoryLoading(true);
+    try {
+      const token = localStorage.getItem('access_token');
+      const response = await fetch('http://127.0.0.1:8000/api/upload-history/', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        setUploadHistory(data);
+      } else {
+        console.error('Error loading upload history:', response.statusText);
+        setAlert({ type: 'error', message: 'Error al cargar el historial de subidas' });
+      }
+    } catch (error) {
+      console.error('Error loading upload history:', error);
+      setAlert({ type: 'error', message: 'Error al cargar el historial de subidas' });
+    } finally {
+      setHistoryLoading(false);
+    }
+  };
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setUploadState(prev => ({ ...prev, isDragOver: true }));
-  };
+  }, []);
 
-  const handleDragLeave = (e: React.DragEvent) => {
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setUploadState(prev => ({ ...prev, isDragOver: false }));
-  };
+  }, []);
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     setUploadState(prev => ({ ...prev, isDragOver: false }));
     
@@ -105,16 +209,17 @@ const PDFUploadComponent: React.FC = () => {
     if (files.length > 0) {
       const file = files[0];
       if (file.type === 'application/pdf') {
-        setUploadState(prev => ({ ...prev, file }));
+        setUploadState(prev => ({ ...prev, file, error: null }));
       } else {
         setUploadState(prev => ({ ...prev, error: 'Solo se permiten archivos PDF' }));
       }
     }
-  };
+  }, []);
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const file = files[0];
       if (file.type === 'application/pdf') {
         setUploadState(prev => ({ ...prev, file, error: null }));
       } else {
@@ -124,427 +229,899 @@ const PDFUploadComponent: React.FC = () => {
   };
 
   const handleUpload = async () => {
-    const { file, documentType, month, year, employee } = uploadState;
+    const isYearValid = uploadState.year.length === 4 && 
+                       parseInt(uploadState.year) >= 2000 && 
+                       parseInt(uploadState.year) <= 2050;
     
-    if (!file) {
-      setUploadState(prev => ({ ...prev, error: 'Por favor selecciona un archivo' }));
+    if (!uploadState.file || !uploadState.documentType || !uploadState.month || !uploadState.year || !isYearValid) {
+      setAlert({ type: 'error', message: 'Por favor, completa todos los campos requeridos y verifica que el año sea válido' });
       return;
     }
 
-    if (!documentType) {
-      setUploadState(prev => ({ ...prev, error: 'Por favor selecciona el tipo de documento' }));
-      return;
-    }
-
-    if ((documentType === 'multiple' || documentType === 'multiple-dietas') && (!month || !year)) {
-      setUploadState(prev => ({ ...prev, error: 'Por favor selecciona mes y año' }));
-      return;
-    }
-
-    setUploadState(prev => ({ 
-      ...prev, 
-      isUploading: true, 
-      uploadProgress: 0, 
-      error: null, 
-      success: false 
-    }));
+    setUploadState(prev => ({ ...prev, isUploading: true, uploadProgress: 0 }));
 
     try {
       const formData = new FormData();
-      formData.append('file', file);
-      formData.append('upload_type', documentType);
+      formData.append('file', uploadState.file);
       
-      if (month) formData.append('month', month);
-      if (year) formData.append('year', year);
-      if (employee) formData.append('dni', employee);
+      // Construir month_year en formato correcto
+      const monthYear = `${uploadState.month}_${uploadState.year}`;
+      formData.append('month_year', monthYear);
 
-      let endpoint = '';
-      if (documentType === 'multiple') {
-        endpoint = '/api/payroll/upload';
-      } else if (documentType === 'multiple-dietas') {
-        endpoint = '/api/user-files/upload-dietas';
-      }
+      const endpoint = uploadState.documentType === 'multiple' 
+        ? 'http://127.0.0.1:8000/api/payroll/process-multiple-payrolls'
+        : 'http://127.0.0.1:8000/api/payroll/process-multiple-dietas';
 
+      const token = localStorage.getItem('access_token');
       const response = await fetch(endpoint, {
         method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
         body: formData,
-        credentials: 'include'
       });
 
       if (response.ok) {
+        const result = await response.json();
+        setProcessingResults(result);
+        setShowResultsModal(true);
         setUploadState(prev => ({ 
           ...prev, 
-          success: true, 
           file: null, 
           documentType: '', 
           month: '', 
-          year: '', 
-          employee: '' 
+          year: new Date().getFullYear().toString() 
         }));
+        loadUploadHistory(); // Recargar historial después de subida exitosa
+        setAlert({ type: 'success', message: 'Documentos procesados exitosamente' });
       } else {
-        const errorData = await response.json().catch(() => ({ error: 'Error desconocido' }));
-        throw new Error(errorData.error || 'Error al subir el archivo');
+        const errorData = await response.json();
+        setAlert({ type: 'error', message: errorData.detail || 'Error al procesar documentos' });
       }
-    } catch (error: any) {
-      setUploadState(prev => ({ 
-        ...prev, 
-        error: error.message || 'Error al subir el archivo' 
-      }));
+    } catch (error) {
+      console.error('Error uploading:', error);
+      setAlert({ type: 'error', message: 'Error de conexión al servidor' });
     } finally {
       setUploadState(prev => ({ ...prev, isUploading: false, uploadProgress: 0 }));
     }
   };
 
-  const resetUpload = () => {
-    setUploadState({
-      isDragOver: false,
-      isUploading: false,
-      uploadProgress: 0,
-      file: null,
-      documentType: '',
-      month: '',
-      year: '',
-      employee: '',
-      error: null,
-      success: false
-    });
+  const clearFile = () => {
+    setUploadState(prev => ({ ...prev, file: null, error: null }));
   };
 
-  return (
-    <Paper
-      elevation={3}
-      sx={{
-        p: 3,
-        border: uploadState.isDragOver ? '2px dashed #1976d2' : '2px dashed #ccc',
-        backgroundColor: uploadState.isDragOver ? '#f3f7ff' : 'white',
-        transition: 'all 0.3s ease',
-        mb: 3
-      }}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
-    >
-      <Box textAlign="center">
-        <CloudUploadIcon sx={{ fontSize: 48, color: '#1976d2', mb: 2 }} />
-        <Typography variant="h6" gutterBottom>
-          Subir Archivo PDF
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Arrastra y suelta un archivo PDF aquí, o haz clic para seleccionar
-        </Typography>
-
-        <input
-          type="file"
-          accept=".pdf"
-          onChange={handleFileSelect}
-          style={{ display: 'none' }}
-          id="file-upload"
+  const getStatusChip = (status: string, successfulPages: number, totalPages: number) => {
+    if (status === 'processing') {
+      return (
+        <Chip
+          icon={<CircularProgress size={16} />}
+          label="Procesando"
+          size="small"
+          color="info"
+          sx={{ borderRadius: 2, fontWeight: 600 }}
         />
-        <label htmlFor="file-upload">
-          <Button
-            variant="outlined"
-            component="span"
-            startIcon={<CloudUploadIcon />}
-            sx={{ mb: 3 }}
-          >
-            Seleccionar Archivo
-          </Button>
-        </label>
-
-        {uploadState.file && (
-          <Box sx={{ mt: 2, mb: 3 }}>
-            <Chip
-              icon={<PictureAsPdfIcon />}
-              label={uploadState.file.name}
-              variant="outlined"
-              onDelete={() => setUploadState(prev => ({ ...prev, file: null }))}
-            />
-          </Box>
-        )}
-
-        <FormControl fullWidth sx={{ mb: 2 }}>
-          <InputLabel>Tipo de Documento</InputLabel>
-          <Select
-            value={uploadState.documentType}
-            label="Tipo de Documento"
-            onChange={(e) => setUploadState(prev => ({ ...prev, documentType: e.target.value }))}
-          >
-            <MenuItem value="multiple">Nóminas Múltiples</MenuItem>
-            <MenuItem value="multiple-dietas">Dietas Múltiples</MenuItem>
-          </Select>
-        </FormControl>
-
-        {(uploadState.documentType === 'multiple' || uploadState.documentType === 'multiple-dietas') && (
-          <Grid container spacing={2} sx={{ mb: 2 }}>
-            <Grid size={{ xs: 6 }}>
-              <FormControl fullWidth>
-                <InputLabel>Mes</InputLabel>
-                <Select
-                  value={uploadState.month}
-                  label="Mes"
-                  onChange={(e) => setUploadState(prev => ({ ...prev, month: e.target.value }))}
-                >
-                  {months.map((month) => (
-                    <MenuItem key={month.value} value={month.value}>
-                      {month.label}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-            <Grid size={{ xs: 6 }}>
-              <FormControl fullWidth>
-                <InputLabel>Año</InputLabel>
-                <Select
-                  value={uploadState.year}
-                  label="Año"
-                  onChange={(e) => setUploadState(prev => ({ ...prev, year: e.target.value }))}
-                >
-                  {years.map((year) => (
-                    <MenuItem key={year} value={year.toString()}>
-                      {year}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            </Grid>
-          </Grid>
-        )}
-
-        {uploadState.error && (
-          <Alert severity="error" sx={{ mb: 2 }}>
-            {uploadState.error}
-          </Alert>
-        )}
-
-        {uploadState.success && (
-          <Alert severity="success" sx={{ mb: 2 }}>
-            Archivo subido correctamente
-          </Alert>
-        )}
-
-        {uploadState.isUploading && (
-          <Box sx={{ mb: 2 }}>
-            <LinearProgress variant="indeterminate" />
-            <Typography variant="body2" sx={{ mt: 1 }}>
-              Subiendo archivo...
-            </Typography>
-          </Box>
-        )}
-
-        <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
-          <Button
-            variant="contained"
-            onClick={handleUpload}
-            disabled={!uploadState.file || uploadState.isUploading}
-            startIcon={<CloudUploadIcon />}
-          >
-            {uploadState.isUploading ? 'Subiendo...' : 'Subir Archivo'}
-          </Button>
-          
-          {(uploadState.file || uploadState.success || uploadState.error) && (
-            <Button
-              variant="outlined"
-              onClick={resetUpload}
-              disabled={uploadState.isUploading}
-            >
-              Limpiar
-            </Button>
-          )}
-        </Box>
-      </Box>
-    </Paper>
-  );
-};
-
-const UploadHistoryComponent: React.FC<{
-  uploadHistory: UploadHistory[];
-  totalItems: number;
-  currentPage: number;
-  pageSize: number;
-  onPageChange: (page: number) => void;
-  loading: boolean;
-}> = ({ uploadHistory, totalItems, currentPage, pageSize, onPageChange, loading }) => {
-  const totalPages = Math.ceil(totalItems / pageSize);
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleString('es-ES', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+      );
+    }
+    
+    if (successfulPages === totalPages) {
+      return (
+        <Chip
+          icon={<CheckCircle />}
+          label="Completado"
+          size="small"
+          color="success"
+          sx={{ borderRadius: 2, fontWeight: 600 }}
+        />
+      );
+    } else if (successfulPages > 0) {
+      return (
+        <Chip
+          icon={<WarningIcon />}
+          label="Parcial"
+          size="small"
+          color="warning"
+          sx={{ borderRadius: 2, fontWeight: 600 }}
+        />
+      );
+    } else {
+      return (
+        <Chip
+          icon={<ErrorIcon />}
+          label="Error"
+          size="small"
+          color="error"
+          sx={{ borderRadius: 2, fontWeight: 600 }}
+        />
+      );
+    }
   };
 
   const getDocumentTypeLabel = (type: string) => {
     switch (type) {
       case 'multiple':
-        return 'Nóminas Múltiples';
+        return '📄 Nóminas Múltiples';
       case 'multiple-dietas':
-        return 'Dietas Múltiples';
+        return '🍽️ Dietas Múltiples';
       default:
         return type;
     }
   };
 
-  if (loading) {
-    return (
-      <Paper elevation={2} sx={{ p: 3 }}>
-        <Box display="flex" justifyContent="center" alignItems="center" minHeight={200}>
-          <CircularProgress />
-        </Box>
-      </Paper>
-    );
+  const filteredHistory = uploadHistory.filter(item =>
+    item.filename.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    getDocumentTypeLabel(item.document_type).toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const paginatedHistory = filteredHistory.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  const totalPages = Math.ceil(filteredHistory.length / itemsPerPage);
+
+  if (!user || !hasPermission(user, Permission.MASS_UPLOAD)) {
+    return null;
   }
 
   return (
-    <Paper elevation={2} sx={{ p: 3 }}>
-      <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <HistoryIcon />
-        Historial de Subidas
-      </Typography>
-
-      {uploadHistory.length === 0 ? (
-        <Box textAlign="center" py={4}>
-          <Typography variant="body1" color="text.secondary">
-            No hay archivos subidos aún
-          </Typography>
+    <>
+      <GlobalStyles
+        styles={{
+          body: {
+            paddingRight: '0px !important',
+            overflow: 'auto !important',
+            overflowX: 'hidden !important',
+          },
+          '.MuiModal-root': {
+            paddingRight: '0px !important',
+          },
+          '.MuiPopover-root': {
+            paddingRight: '0px !important',
+          },
+          '.MuiSelect-select': {
+            outline: 'none !important',
+            '&:focus': {
+              outline: 'none !important',
+              boxShadow: 'none !important',
+            },
+          },
+          '.MuiTableContainer-root': {
+            overflowX: 'hidden !important',
+          },
+          '.MuiTable-root': {
+            overflowX: 'hidden !important',
+          },
+        }}
+      />
+      <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: '100%', bgcolor: '#f5f5f5', minHeight: '100vh' }}>
+        {/* Header Principal */}
+        <Box sx={{ mb: 4 }}>
+          <Fade in timeout={800}>
+            <Paper 
+              elevation={0}
+              sx={{
+                p: { xs: 3, sm: 4 },
+                background: 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 50%, #d4a574 100%)',
+                color: 'white',
+                borderRadius: 3,
+                position: 'relative',
+                overflow: 'hidden',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundImage: 'url("data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%23ffffff" fill-opacity="0.1"%3E%3Cpath d="m36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
+                },
+              }}
+            >
+              <Box sx={{ position: 'relative', zIndex: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                  <Box
+                    sx={{
+                      p: 2,
+                      bgcolor: 'rgba(255, 255, 255, 0.2)',
+                      borderRadius: 2,
+                      backdropFilter: 'blur(10px)',
+                    }}
+                  >
+                    <CloudUpload sx={{ fontSize: 32 }} />
+                  </Box>
+                  <Box>
+                    <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
+                      Subida Masiva
+                    </Typography>
+                    <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400 }}>
+                      Procesamiento masivo de nóminas y dietas • Solo Administradores
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </Paper>
+          </Fade>
         </Box>
-      ) : (
-        <>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Archivo</TableCell>
-                  <TableCell>Tipo</TableCell>
-                  <TableCell>Mes/Año</TableCell>
-                  <TableCell>DNI</TableCell>
-                  <TableCell>Fecha Subida</TableCell>
-                  <TableCell>Subido por</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {uploadHistory.map((item) => (
-                  <TableRow key={item.id}>
-                    <TableCell>
-                      <Box display="flex" alignItems="center" gap={1}>
-                        <PictureAsPdfIcon color="error" />
-                        <Tooltip title={item.original_filename}>
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              maxWidth: 200,
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap'
-                            }}
-                          >
-                            {item.original_filename}
-                          </Typography>
-                        </Tooltip>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Chip
-                        label={getDocumentTypeLabel(item.document_type)}
-                        size="small"
-                        variant="outlined"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      {item.month && item.year ? `${item.month}/${item.year}` : '-'}
-                    </TableCell>
-                    <TableCell>{item.dni || '-'}</TableCell>
-                    <TableCell>{formatDate(item.upload_date)}</TableCell>
-                    <TableCell>{item.uploaded_by}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
 
-          {totalPages > 1 && (
-            <Box display="flex" justifyContent="center" mt={3}>
-              <Pagination
-                count={totalPages}
-                page={currentPage}
-                onChange={(_, page) => onPageChange(page)}
-                color="primary"
+        {/* Alertas */}
+        {alert && (
+          <Fade in timeout={400}>
+            <Alert 
+              severity={alert.type} 
+              sx={{ 
+                mb: 3,
+                borderRadius: 2,
+                '& .MuiAlert-icon': {
+                  fontSize: 24
+                }
+              }} 
+              onClose={() => setAlert(null)}
+            >
+              {alert.message}
+            </Alert>
+          </Fade>
+        )}
+
+        {/* Formulario de Subida */}
+        <Fade in timeout={1000}>
+          <Paper
+            elevation={0}
+            sx={{
+              mb: 3,
+              borderRadius: 2,
+              overflow: 'hidden',
+              border: '1px solid #e0e0e0',
+              background: '#ffffff',
+            }}
+          >
+            <Box sx={{ 
+              p: 3, 
+              borderBottom: 1, 
+              borderColor: 'divider',
+              background: alpha('#501b36', 0.02),
+            }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <FileUpload sx={{ color: '#501b36', fontSize: 28 }} />
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36' }}>
+                    Nueva Subida Masiva
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Selecciona el tipo de documento y sube tu archivo PDF
+                  </Typography>
+                </Box>
+              </Box>
+            </Box>
+
+            <Box sx={{ p: 3 }}>
+              {/* Configuración de documentos */}
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr', gap: 3, mb: 3 }}>
+                <FormControl fullWidth>
+                  <InputLabel>Tipo de Documento</InputLabel>
+                  <Select
+                    value={uploadState.documentType}
+                    label="Tipo de Documento"
+                    onChange={(e) => setUploadState(prev => ({ ...prev, documentType: e.target.value as any }))}
+                    sx={{
+                      borderRadius: 2,
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: 'rgba(0, 0, 0, 0.15)',
+                      },
+                      '&:hover .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#501b36',
+                      },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#501b36',
+                      },
+                    }}
+                  >
+                    <MenuItem value="multiple">📄 Nóminas Múltiples</MenuItem>
+                    <MenuItem value="multiple-dietas">🍽️ Dietas Múltiples</MenuItem>
+                  </Select>
+                </FormControl>
+
+                {(uploadState.documentType === 'multiple' || uploadState.documentType === 'multiple-dietas') && (
+                  <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                    <FormControl fullWidth>
+                      <InputLabel>Mes</InputLabel>
+                      <Select
+                        value={uploadState.month}
+                        label="Mes"
+                        onChange={(e) => setUploadState(prev => ({ ...prev, month: e.target.value }))}
+                        sx={{
+                          borderRadius: 2,
+                          '& .MuiOutlinedInput-notchedOutline': {
+                            borderColor: 'rgba(0, 0, 0, 0.15)',
+                          },
+                          '&:hover .MuiOutlinedInput-notchedOutline': {
+                            borderColor: '#501b36',
+                          },
+                          '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                            borderColor: '#501b36',
+                          },
+                        }}
+                      >
+                        {months.map((month) => (
+                          <MenuItem key={month.value} value={month.value}>
+                            {month.label}
+                          </MenuItem>
+                        ))}
+                      </Select>
+                    </FormControl>
+                    <TextField
+                      fullWidth
+                      label="Año"
+                      value={uploadState.year}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        // Solo permitir números y máximo 4 dígitos
+                        if (/^\d{0,4}$/.test(value)) {
+                          setUploadState(prev => ({ ...prev, year: value }));
+                        }
+                      }}
+                      placeholder="Ej: 2025"
+                      helperText={
+                        uploadState.year && uploadState.year.length === 4 && 
+                        (parseInt(uploadState.year) < 2000 || parseInt(uploadState.year) > 2050) 
+                          ? "Año debe estar entre 2000 y 2050" 
+                          : ""
+                      }
+                      error={
+                        uploadState.year.length === 4 && 
+                        (parseInt(uploadState.year) < 2000 || parseInt(uploadState.year) > 2050)
+                      }
+                      inputProps={{
+                        inputMode: 'numeric',
+                        pattern: '[0-9]*',
+                        maxLength: 4
+                      }}
+                      sx={{
+                        '& .MuiOutlinedInput-root': {
+                          borderRadius: 2,
+                          '& fieldset': {
+                            borderColor: 'rgba(0, 0, 0, 0.15)',
+                          },
+                          '&:hover fieldset': {
+                            borderColor: '#501b36',
+                          },
+                          '&.Mui-focused fieldset': {
+                            borderColor: '#501b36',
+                          },
+                        },
+                      }}
+                    />
+                  </Box>
+                )}
+              </Box>
+
+              {/* Zona de subida de archivos */}
+              <Box
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                sx={{
+                  border: uploadState.isDragOver ? '2px dashed #501b36' : '2px dashed #d0d0d0',
+                  borderRadius: 3,
+                  p: 4,
+                  textAlign: 'center',
+                  bgcolor: uploadState.isDragOver ? alpha('#501b36', 0.05) : '#fafafa',
+                  transition: 'all 0.3s ease',
+                  position: 'relative',
+                  cursor: 'pointer',
+                  mb: 3,
+                  '&:hover': {
+                    borderColor: '#501b36',
+                    bgcolor: alpha('#501b36', 0.02),
+                  },
+                }}
+              >
+                <input
+                  type="file"
+                  accept=".pdf"
+                  onChange={handleFileSelect}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: '100%',
+                    opacity: 0,
+                    cursor: 'pointer',
+                  }}
+                />
+                
+                {uploadState.file ? (
+                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2 }}>
+                    <PictureAsPdf sx={{ fontSize: 48, color: '#d32f2f' }} />
+                    <Box sx={{ textAlign: 'left' }}>
+                      <Typography variant="h6" sx={{ fontWeight: 600, color: '#501b36' }}>
+                        {uploadState.file.name}
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                        {(uploadState.file.size / 1024 / 1024).toFixed(2)} MB
+                      </Typography>
+                    </Box>
+                    <IconButton
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        clearFile();
+                      }}
+                      sx={{
+                        color: '#d32f2f',
+                        '&:hover': {
+                          bgcolor: alpha('#d32f2f', 0.1),
+                        },
+                      }}
+                    >
+                      <DeleteIcon />
+                    </IconButton>
+                  </Box>
+                ) : (
+                  <>
+                    <CloudUpload sx={{ fontSize: 64, color: '#501b36', mb: 2 }} />
+                    <Typography variant="h6" sx={{ fontWeight: 600, color: '#501b36', mb: 1 }}>
+                      Arrastra tu archivo PDF aquí
+                    </Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
+                      o haz clic para seleccionar desde tu dispositivo
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                      Solo archivos PDF • Máximo 50MB
+                    </Typography>
+                  </>
+                )}
+              </Box>
+
+              {uploadState.error && (
+                <Alert severity="error" sx={{ mb: 3, borderRadius: 2 }}>
+                  {uploadState.error}
+                </Alert>
+              )}
+
+              {uploadState.isUploading && (
+                <Box sx={{ mb: 3 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                    <CircularProgress size={20} />
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                      Procesando documentos...
+                    </Typography>
+                  </Box>
+                  <LinearProgress 
+                    variant="indeterminate" 
+                    sx={{ 
+                      borderRadius: 2,
+                      height: 8,
+                      '& .MuiLinearProgress-bar': {
+                        borderRadius: 2,
+                        bgcolor: '#501b36',
+                      },
+                    }} 
+                  />
+                </Box>
+              )}
+
+              <Button
+                variant="contained"
+                onClick={handleUpload}
+                disabled={!uploadState.file || !uploadState.documentType || !uploadState.month || !uploadState.year || uploadState.isUploading || 
+                  (uploadState.year.length === 4 && (parseInt(uploadState.year) < 2000 || parseInt(uploadState.year) > 2050))}
+                startIcon={<CloudUpload />}
+                sx={{
+                  borderRadius: 2,
+                  px: 4,
+                  py: 1.5,
+                  textTransform: 'none',
+                  fontWeight: 600,
+                  fontSize: '1rem',
+                  backgroundColor: '#501b36',
+                  color: 'white',
+                  '&:hover': {
+                    backgroundColor: '#3d1429',
+                  },
+                  '&:disabled': {
+                    backgroundColor: '#ccc',
+                  },
+                }}
+              >
+                {uploadState.isUploading ? 'Procesando...' : 'Procesar Documentos'}
+              </Button>
+            </Box>
+          </Paper>
+        </Fade>
+
+        {/* Historial de Subidas */}
+        <Fade in timeout={1200}>
+          <Paper
+            elevation={0}
+            sx={{
+              borderRadius: 2,
+              overflow: 'hidden',
+              border: '1px solid #e0e0e0',
+              background: '#ffffff',
+            }}
+          >
+            {/* Header del historial */}
+            <Box sx={{ 
+              p: 3, 
+              borderBottom: 1, 
+              borderColor: 'divider',
+              background: alpha('#501b36', 0.02),
+            }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                <HistoryIcon sx={{ color: '#501b36', fontSize: 28 }} />
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36' }}>
+                    Historial de Subidas
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    {filteredHistory.length} subida{filteredHistory.length !== 1 ? 's' : ''} realizada{filteredHistory.length !== 1 ? 's' : ''}
+                  </Typography>
+                </Box>
+                <Button
+                  variant="outlined"
+                  startIcon={<Refresh />}
+                  onClick={loadUploadHistory}
+                  disabled={historyLoading}
+                  sx={{
+                    borderRadius: 2,
+                    px: 3,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    borderColor: '#501b36',
+                    color: '#501b36',
+                    '&:hover': {
+                      borderColor: '#3d1429',
+                      bgcolor: alpha('#501b36', 0.04),
+                    },
+                  }}
+                >
+                  {historyLoading ? 'Actualizando...' : 'Actualizar'}
+                </Button>
+              </Box>
+
+              {/* Buscador */}
+              <TextField
+                placeholder="Buscar en historial..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                InputProps={{
+                  startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />
+                }}
+                sx={{ 
+                  maxWidth: 400,
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                    '&:hover': {
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#501b36',
+                      },
+                    },
+                  },
+                }}
+                size="small"
               />
             </Box>
-          )}
-        </>
-      )}
-    </Paper>
-  );
-};
 
-export const MassUpload: React.FC = () => {
-  const { user } = useAuth();
-  const [uploadHistory, setUploadHistory] = useState<UploadHistory[]>([]);
-  const [totalItems, setTotalItems] = useState(0);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(10);
-  const [loading, setLoading] = useState(true);
+            {/* Contenido del historial */}
+            {historyLoading ? (
+              <Box sx={{ 
+                display: 'flex', 
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                p: 6,
+                gap: 2
+              }}>
+                <CircularProgress size={48} sx={{ color: '#501b36' }} />
+                <Typography variant="h6" sx={{ color: 'text.secondary' }}>
+                  Cargando historial...
+                </Typography>
+              </Box>
+            ) : filteredHistory.length === 0 ? (
+              <Box sx={{ 
+                p: 6, 
+                textAlign: 'center',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 2
+              }}>
+                <Box
+                  sx={{
+                    p: 3,
+                    borderRadius: '50%',
+                    bgcolor: alpha('#501b36', 0.1),
+                    mb: 2,
+                  }}
+                >
+                  <Assignment sx={{ fontSize: 48, color: '#501b36' }} />
+                </Box>
+                <Typography variant="h5" sx={{ fontWeight: 600, color: 'text.secondary', mb: 1 }}>
+                  No hay subidas registradas
+                </Typography>
+                <Typography variant="body1" sx={{ color: 'text.secondary', mb: 3, maxWidth: 400 }}>
+                  {searchTerm 
+                    ? `No se encontraron subidas que coincidan con "${searchTerm}"`
+                    : 'Las subidas masivas que realices aparecerán aquí'
+                  }
+                </Typography>
+              </Box>
+            ) : (
+              <>
+                <TableContainer
+                  sx={{
+                    overflowX: 'hidden !important',
+                    '&::-webkit-scrollbar': {
+                      display: 'none',
+                    },
+                    '-ms-overflow-style': 'none',
+                    'scrollbar-width': 'none',
+                  }}
+                >
+                  <Table>
+                    <TableHead>
+                      <TableRow 
+                        sx={{ 
+                          bgcolor: alpha('#501b36', 0.02),
+                          '& .MuiTableCell-head': {
+                            fontWeight: 700,
+                            color: '#501b36',
+                            borderBottom: `2px solid ${alpha('#501b36', 0.1)}`,
+                            py: 2,
+                          }
+                        }}
+                      >
+                        <TableCell>Archivo</TableCell>
+                        <TableCell>Tipo</TableCell>
+                        <TableCell>Páginas Procesadas</TableCell>
+                        <TableCell>Estado</TableCell>
+                        <TableCell>Fecha</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {paginatedHistory.map((item) => (
+                        <TableRow 
+                          key={item.id} 
+                          hover
+                          sx={{
+                            transition: 'all 0.2s ease',
+                            '&:hover': {
+                              bgcolor: alpha('#501b36', 0.02),
+                              transform: 'translateX(4px)',
+                            },
+                            '& .MuiTableCell-root': {
+                              borderBottom: `1px solid ${alpha('#501b36', 0.06)}`,
+                              py: 2,
+                            }
+                          }}
+                        >
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                              <Box
+                                sx={{
+                                  p: 1.5,
+                                  borderRadius: 2,
+                                  bgcolor: alpha('#d32f2f', 0.1),
+                                }}
+                              >
+                                <PictureAsPdf sx={{ color: '#d32f2f' }} />
+                              </Box>
+                              <Box>
+                                <Typography variant="body1" sx={{ fontWeight: 600, mb: 0.5 }}>
+                                  {item.filename}
+                                </Typography>
+                                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                  ID: {item.id}
+                                </Typography>
+                              </Box>
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={getDocumentTypeLabel(item.document_type)}
+                              size="small"
+                              variant="outlined"
+                              sx={{
+                                borderRadius: 2,
+                                fontWeight: 600,
+                                fontSize: '0.75rem',
+                                borderColor: alpha('#501b36', 0.3),
+                                color: '#501b36',
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                              {item.successful_pages} / {item.total_pages}
+                            </Typography>
+                            {item.failed_pages > 0 && (
+                              <Typography variant="caption" sx={{ color: '#d32f2f' }}>
+                                {item.failed_pages} fallidas
+                              </Typography>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {getStatusChip(item.status, item.successful_pages, item.total_pages)}
+                          </TableCell>
+                          <TableCell>
+                            <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                              {new Date(item.created_at).toLocaleDateString('es-ES', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit'
+                              })}
+                            </Typography>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
 
-  const fetchUploadHistory = useCallback(async (page: number = 1) => {
-    try {
-      setLoading(true);
-      const response = await fetch(`/api/payroll/upload-history?page=${page}&pageSize=${pageSize}`, {
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const data = await response.json();
-        setUploadHistory(data.items || []);
-        setTotalItems(data.total || 0);
-      }
-    } catch (error) {
-      console.error('Error fetching upload history:', error);
-    } finally {
-      setLoading(false);
-    }
-  }, [pageSize]);
+                {/* Paginación */}
+                {totalPages > 1 && (
+                  <Box sx={{ 
+                    display: 'flex', 
+                    justifyContent: 'center', 
+                    p: 3,
+                    borderTop: '1px solid #e0e0e0'
+                  }}>
+                    <Pagination
+                      count={totalPages}
+                      page={currentPage}
+                      onChange={(_event, value) => setCurrentPage(value)}
+                      color="primary"
+                      sx={{
+                        '& .MuiPaginationItem-root': {
+                          '&.Mui-selected': {
+                            backgroundColor: '#501b36',
+                            color: 'white',
+                            '&:hover': {
+                              backgroundColor: '#3d1429',
+                            },
+                          },
+                        },
+                      }}
+                    />
+                  </Box>
+                )}
+              </>
+            )}
+          </Paper>
+        </Fade>
 
-  useEffect(() => {
-    fetchUploadHistory(currentPage);
-  }, [currentPage, fetchUploadHistory]);
+        {/* Modal de Resultados */}
+        <Dialog
+          open={showResultsModal}
+          onClose={() => setShowResultsModal(false)}
+          maxWidth="md"
+          fullWidth
+          PaperProps={{
+            sx: {
+              borderRadius: 3,
+              boxShadow: '0 12px 48px rgba(0,0,0,0.15)',
+            }
+          }}
+        >
+          <DialogTitle sx={{
+            backgroundColor: processingResults?.success ? '#4caf50' : '#f44336',
+            color: 'white',
+            py: 3,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+          }}>
+            {processingResults?.success ? <CheckCircle sx={{ fontSize: 28 }} /> : <ErrorIcon sx={{ fontSize: 28 }} />}
+            <Box>
+              <Typography variant="h6" component="div" sx={{ fontWeight: 700 }}>
+                {processingResults?.success ? 'Procesamiento Completado' : 'Procesamiento con Errores'}
+              </Typography>
+              <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                {processingResults?.stats?.successful || 0} de {processingResults?.stats?.total_pages || 0} documentos procesados
+              </Typography>
+            </Box>
+          </DialogTitle>
+          <DialogContent sx={{ p: 0 }}>
+            {processingResults && (
+              <Box>
+                {/* Resumen */}
+                <Box sx={{ p: 3, bgcolor: '#f8f9fa', borderBottom: '1px solid #e0e0e0' }}>
+                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                    Resumen de Procesamiento
+                  </Typography>
+                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 2 }}>
+                    <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'white', borderRadius: 2 }}>
+                      <Typography variant="h4" sx={{ fontWeight: 700, color: '#4caf50' }}>
+                        {processingResults.stats?.successful || 0}
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                        Exitosos
+                      </Typography>
+                    </Box>
+                    <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'white', borderRadius: 2 }}>
+                      <Typography variant="h4" sx={{ fontWeight: 700, color: '#f44336' }}>
+                        {processingResults.stats?.failed || 0}
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                        Fallidos
+                      </Typography>
+                    </Box>
+                    <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'white', borderRadius: 2 }}>
+                      <Typography variant="h4" sx={{ fontWeight: 700, color: '#501b36' }}>
+                        {processingResults.stats?.total_pages || 0}
+                      </Typography>
+                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                        Total
+                      </Typography>
+                    </Box>
+                  </Box>
+                </Box>
 
-  const handlePageChange = (page: number) => {
-    setCurrentPage(page);
-  };
-
-  if (!user) {
-    return <div>Loading...</div>;
-  }
-
-  return (
-    <Box sx={{ p: 3 }}>
-      <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <CloudUploadIcon />
-        Subida Masiva de Documentos
-      </Typography>
-      
-      <Typography variant="body1" color="text.secondary" sx={{ mb: 4 }}>
-        Sube archivos PDF de nóminas y dietas de forma masiva
-      </Typography>
-
-      <Box sx={{ mb: 4 }}>
-        <PDFUploadComponent />
+                {/* Detalles */}
+                <Box sx={{ p: 3 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>
+                    Detalles por Documento
+                  </Typography>
+                  <List sx={{ maxHeight: 300, overflow: 'auto' }}>
+                    {processingResults.results?.assignment_details?.map((detail, index) => (
+                      <ListItem
+                        key={index}
+                        sx={{
+                          bgcolor: detail.success ? alpha('#4caf50', 0.05) : alpha('#f44336', 0.05),
+                          borderRadius: 2,
+                          mb: 1,
+                          border: `1px solid ${detail.success ? alpha('#4caf50', 0.2) : alpha('#f44336', 0.2)}`,
+                        }}
+                      >
+                        <ListItemIcon>
+                          {detail.success ? (
+                            <CheckCircle sx={{ color: '#4caf50' }} />
+                          ) : (
+                            <ErrorIcon sx={{ color: '#f44336' }} />
+                          )}
+                        </ListItemIcon>
+                        <ListItemText
+                          primary={`Página ${detail.page_number} - ${detail.dni_nie_found}`}
+                          secondary={detail.error_message || `Guardado en: ${detail.saved_path}`}
+                          primaryTypographyProps={{ fontWeight: 600 }}
+                          secondaryTypographyProps={{ 
+                            color: detail.success ? '#4caf50' : '#f44336',
+                            fontWeight: 500 
+                          }}
+                        />
+                      </ListItem>
+                    )) || []}
+                  </List>
+                </Box>
+              </Box>
+            )}
+          </DialogContent>
+          <DialogActions sx={{ 
+            p: 3, 
+            bgcolor: '#f8f9fa',
+            borderTop: '1px solid #e0e0e0',
+          }}>
+            <Button 
+              onClick={() => setShowResultsModal(false)}
+              variant="contained"
+              sx={{
+                borderRadius: 2,
+                px: 4,
+                textTransform: 'none',
+                fontWeight: 600,
+                backgroundColor: '#501b36',
+                '&:hover': {
+                  backgroundColor: '#3d1429',
+                },
+              }}
+            >
+              Cerrar
+            </Button>
+          </DialogActions>
+        </Dialog>
       </Box>
-
-      <Box sx={{ mb: 4 }}>
-        <UploadHistoryComponent 
-          uploadHistory={uploadHistory}
-          totalItems={totalItems}
-          currentPage={currentPage}
-          pageSize={pageSize}
-          onPageChange={handlePageChange}
-          loading={loading}
-        />
-      </Box>
-    </Box>
+    </>
   );
 };

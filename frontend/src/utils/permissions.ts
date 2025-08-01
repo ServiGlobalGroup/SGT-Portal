@@ -29,6 +29,9 @@ export enum Permission {
   // Panel de Documentación
   VIEW_GESTOR = 'view_gestor',
   
+  // Subida Masiva (solo administradores)
+  MASS_UPLOAD = 'mass_upload',
+  
   // Configuración
   VIEW_SETTINGS = 'view_settings',
   MANAGE_SETTINGS = 'manage_settings',
@@ -64,6 +67,7 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     Permission.VIEW_USERS,
     Permission.MANAGE_USERS,
     Permission.VIEW_GESTOR,
+    Permission.MASS_UPLOAD,
     Permission.VIEW_SETTINGS,
     Permission.MANAGE_SETTINGS,
   ],
@@ -95,6 +99,8 @@ export const canAccessRoute = (user: User | null, route: string): boolean => {
   switch (route) {
     case '/':
       return hasPermission(user, Permission.VIEW_DASHBOARD);
+    case '/mass-upload':
+      return hasPermission(user, Permission.MASS_UPLOAD);
     case '/documents':
       return hasPermission(user, Permission.VIEW_DOCUMENTS);
     case '/orders':
