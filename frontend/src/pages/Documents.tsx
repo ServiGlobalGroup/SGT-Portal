@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { PaginationComponent } from '../components/PaginationComponent';
+import { usePagination } from '../hooks/usePagination';
 import {
   Box,
   Typography,
@@ -111,6 +113,18 @@ export const Documents: React.FC = () => {
   const filteredDocuments = folderData?.documents.filter(doc => 
     doc.name.toLowerCase().includes(searchTerm.toLowerCase())
   ) || [];
+
+  // Estados para paginación de documentos
+  const documentsPagination = usePagination({
+    data: filteredDocuments,
+    initialItemsPerPage: 15,
+    initialPage: 1
+  });
+
+  // Reset página cuando cambia el término de búsqueda
+  useEffect(() => {
+    documentsPagination.setCurrentPage(1);
+  }, [searchTerm, documentsPagination.setCurrentPage]);
 
   const getFileIcon = (fileType: string) => {
     if (fileType === '.pdf') return <PictureAsPdf color="error" />;
@@ -572,16 +586,17 @@ export const Documents: React.FC = () => {
               </Typography>
             </Box>
           ) : (
-            <TableContainer
-              sx={{
-                overflowX: 'hidden !important',
-                '&::-webkit-scrollbar': {
-                  display: 'none',
-                },
-                '-ms-overflow-style': 'none',
-                'scrollbar-width': 'none',
-              }}
-            >
+            <>
+              <TableContainer
+                sx={{
+                  overflowX: 'hidden !important',
+                  '&::-webkit-scrollbar': {
+                    display: 'none',
+                  },
+                  '-ms-overflow-style': 'none',
+                  'scrollbar-width': 'none',
+                }}
+              >
               <Table>
                 <TableHead>
                   <TableRow 
@@ -603,7 +618,7 @@ export const Documents: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {filteredDocuments.map((document) => (
+                  {documentsPagination.paginatedData.map((document: any) => (
                     <TableRow 
                       key={document.id} 
                       hover
@@ -697,6 +712,25 @@ export const Documents: React.FC = () => {
                 </TableBody>
               </Table>
             </TableContainer>
+            
+            {/* Componente de paginación */}
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'center', 
+              mt: 3,
+              p: 2,
+              borderTop: '1px solid',
+              borderColor: 'divider'
+            }}>
+              <PaginationComponent
+                currentPage={documentsPagination.currentPage}
+                itemsPerPage={documentsPagination.itemsPerPage}
+                totalItems={filteredDocuments.length}
+                onPageChange={documentsPagination.setCurrentPage}
+                onItemsPerPageChange={documentsPagination.setItemsPerPage}
+              />
+            </Box>
+            </>
           )}
         </Paper>
       </Fade>

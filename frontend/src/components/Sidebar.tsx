@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
   Drawer,
   List,
@@ -17,6 +17,7 @@ import {
   SwipeableDrawer,
   AppBar,
   GlobalStyles,
+  Collapse,
 } from '@mui/material';
 import {
   Dashboard,
@@ -33,6 +34,13 @@ import {
   People,
   Menu as MenuIcon,
   CloudUpload,
+  FolderSpecial,
+  AdminPanelSettings,
+  ManageAccounts,
+  ExpandLess,
+  ExpandMore,
+  Folder,
+  Assignment,
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -41,15 +49,28 @@ import { canAccessRoute, getRoleText, hasPermission, Permission } from '../utils
 const drawerWidth = 280;
 const collapsedWidth = 80;
 
-const menuItems = [
+interface MenuItem {
+  text: string;
+  icon: React.ReactNode;
+  path?: string;
+  children?: MenuItem[];
+}
+
+const menuItems: MenuItem[] = [
   { text: 'Dashboard', icon: <Dashboard />, path: '/' },
-  { text: 'Documentos', icon: <Description />, path: '/documents' },
+  { 
+    text: 'Gestor Docs', 
+    icon: <Folder />, 
+    children: [
+      { text: 'Mis Documentos', icon: <Description />, path: '/documents' },
+      { text: 'Documentación', icon: <Assignment />, path: '/gestor' },
+      { text: 'Subida Masiva', icon: <CloudUpload />, path: '/mass-upload' },
+    ]
+  },
   { text: 'Vacaciones', icon: <EventNote />, path: '/vacations' },
   { text: 'Tráfico', icon: <Traffic />, path: '/traffic' },
   { text: 'Órdenes', icon: <LocalShipping />, path: '/orders' },
-  { text: 'Subida Masiva', icon: <CloudUpload />, path: '/mass-upload' },
-  { text: 'Gestión de Usuarios', icon: <People />, path: '/users' },
-  { text: 'Panel de Documentación', icon: <SupervisorAccount />, path: '/gestor' },
+  { text: 'Gestión de Usuarios', icon: <ManageAccounts />, path: '/users' },
 ];
 
 interface SidebarProps {
@@ -71,11 +92,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
   const open = Boolean(anchorEl);
 
   // Filtrar elementos del menú según los permisos del usuario
   const allowedMenuItems = useMemo(() => {
-    return menuItems.filter(item => canAccessRoute(user, item.path));
+    const filterMenuItems = (items: MenuItem[]): MenuItem[] => {
+      return items.filter(item => {
+        if (item.path) {
+          return canAccessRoute(user, item.path);
+        }
+        if (item.children) {
+          const allowedChildren = filterMenuItems(item.children);
+          return allowedChildren.length > 0;
+        }
+        return true;
+      }).map(item => {
+        if (item.children) {
+          return {
+            ...item,
+            children: filterMenuItems(item.children)
+          };
+        }
+        return item;
+      });
+    };
+    
+    return filterMenuItems(menuItems);
   }, [user]);
 
   const handleToggle = () => {
@@ -121,6 +164,38 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setMobileMenuOpen(false);
     }
   };
+
+  const handleToggleSubmenu = (menuText: string) => {
+    setExpandedMenus(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(menuText)) {
+        newSet.delete(menuText);
+      } else {
+        newSet.add(menuText);
+      }
+      return newSet;
+    });
+  };
+
+  // Función para verificar si un menú padre debe estar activo
+  const isParentActive = (item: MenuItem): boolean => {
+    if (item.path && location.pathname === item.path) {
+      return true;
+    }
+    if (item.children) {
+      return item.children.some(child => child.path === location.pathname);
+    }
+    return false;
+  };
+
+  // Efecto para expandir automáticamente el menú padre cuando un hijo está activo
+  useEffect(() => {
+    menuItems.forEach(item => {
+      if (item.children && isParentActive(item)) {
+        setExpandedMenus(prev => new Set(prev).add(item.text));
+      }
+    });
+  }, [location.pathname]);
 
   const drawerContent = (
     <>
@@ -240,29 +315,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <Box sx={{ overflow: 'hidden', mt: 2, flex: 1 }}>
         <List sx={{ px: 1 }}>
           {allowedMenuItems.map((item) => (
-            <ListItem key={item.text} disablePadding sx={{ mb: 1 }}>
-              <ListItemButton
-                selected={location.pathname === item.path}
-                onClick={() => handleNavigation(item.path)}
-                sx={{
-                  borderRadius: 0,
-                  minHeight: 48,
-                  justifyContent: (isCollapsed && !isMobile) ? 'center' : 'flex-start',
-                  px: (isCollapsed && !isMobile) ? 1 : 2,
-                  '&.Mui-selected': {
-                    background: 'rgba(255, 255, 255, 0.15)',
-                    color: '#ffffff',
-                    borderRadius: '8px',
-                    '& .MuiListItemIcon-root': {
+            <React.Fragment key={item.text}>
+              <ListItem disablePadding sx={{ mb: 1 }}>
+                <ListItemButton
+                  selected={isParentActive(item)}
+                  onClick={() => {
+                    if (item.path) {
+                      handleNavigation(item.path);
+                    } else if (item.children) {
+                      handleToggleSubmenu(item.text);
+                    }
+                  }}
+                  sx={{
+                    borderRadius: 0,
+                    minHeight: 48,
+                    justifyContent: (isCollapsed && !isMobile) ? 'center' : 'flex-start',
+                    px: (isCollapsed && !isMobile) ? 1 : 2,
+                    '&.Mui-selected': {
+                      background: 'rgba(255, 255, 255, 0.15)',
                       color: '#ffffff',
-                    },
-                    '& .MuiListItemText-primary': {
-                      color: '#ffffff',
-                    },
-                    '&:hover': {
-                      background: 'rgba(255, 255, 255, 0.25)',
                       borderRadius: '8px',
-                    },
+                      '& .MuiListItemIcon-root': {
+                        color: '#ffffff',
+                      },
+                      '& .MuiListItemText-primary': {
+                        color: '#ffffff',
+                      },
+                      '&:hover': {
+                        background: 'rgba(255, 255, 255, 0.25)',
+                        borderRadius: '8px',
+                      },
                   },
                   '&:hover': {
                     background: 'rgba(0, 0, 0, 0.1)',
@@ -279,7 +361,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <ListItemIcon 
                   sx={{ 
-                    color: location.pathname === item.path ? '#ffffff' : '#ffffff',
+                    color: isParentActive(item) ? '#ffffff' : '#ffffff',
                     minWidth: (isCollapsed && !isMobile) ? 'auto' : 40,
                     justifyContent: 'center',
                     transition: 'all 0.2s ease',
@@ -292,13 +374,79 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     primary={item.text}
                     primaryTypographyProps={{
                       fontSize: '0.95rem',
-                      fontWeight: location.pathname === item.path ? 600 : 400,
-                      color: location.pathname === item.path ? '#ffffff' : '#ffffff',
+                      fontWeight: isParentActive(item) ? 600 : 400,
+                      color: isParentActive(item) ? '#ffffff' : '#ffffff',
                     }}
                   />
                 )}
+                {item.children && (!isCollapsed || isMobile) && (
+                  expandedMenus.has(item.text) ? <ExpandLess sx={{ color: '#ffffff' }} /> : <ExpandMore sx={{ color: '#ffffff' }} />
+                )}
               </ListItemButton>
             </ListItem>
+            
+            {/* Submenús */}
+            {item.children && (
+              <Collapse in={expandedMenus.has(item.text)} timeout="auto" unmountOnExit>
+                <List component="div" disablePadding>
+                  {item.children.map((subItem) => (
+                    <ListItem key={subItem.text} disablePadding sx={{ mb: 0.5 }}>
+                      <ListItemButton
+                        selected={subItem.path ? location.pathname === subItem.path : false}
+                        onClick={() => subItem.path && handleNavigation(subItem.path)}
+                        sx={{
+                          pl: 4,
+                          borderRadius: 0,
+                          minHeight: 40,
+                          '&.Mui-selected': {
+                            background: 'rgba(255, 255, 255, 0.2)',
+                            color: '#ffffff',
+                            borderRadius: '6px',
+                            '& .MuiListItemIcon-root': {
+                              color: '#ffffff',
+                            },
+                            '& .MuiListItemText-primary': {
+                              color: '#ffffff',
+                            },
+                          },
+                          '&:hover': {
+                            background: 'rgba(0, 0, 0, 0.1)',
+                            borderRadius: '6px',
+                            '& .MuiListItemIcon-root': {
+                              color: '#ffffff',
+                            },
+                            '& .MuiListItemText-primary': {
+                              color: '#ffffff',
+                            },
+                          },
+                          transition: 'all 0.2s ease',
+                        }}
+                      >
+                        <ListItemIcon 
+                          sx={{ 
+                            color: (subItem.path && location.pathname === subItem.path) ? '#ffffff' : 'rgba(255, 255, 255, 0.7)',
+                            minWidth: 30,
+                            justifyContent: 'center',
+                            transition: 'all 0.2s ease',
+                          }}
+                        >
+                          {subItem.icon}
+                        </ListItemIcon>
+                        <ListItemText 
+                          primary={subItem.text}
+                          primaryTypographyProps={{
+                            fontSize: '0.85rem',
+                            fontWeight: (subItem.path && location.pathname === subItem.path) ? 600 : 400,
+                            color: (subItem.path && location.pathname === subItem.path) ? '#ffffff' : 'rgba(255, 255, 255, 0.9)',
+                          }}
+                        />
+                      </ListItemButton>
+                    </ListItem>
+                  ))}
+                </List>
+              </Collapse>
+            )}
+            </React.Fragment>
           ))}
         </List>
       </Box>

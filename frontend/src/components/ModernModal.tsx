@@ -317,6 +317,7 @@ export const ModernButton: React.FC<{
       return {
         borderColor: primaryColor,
         color: primaryColor,
+        backgroundColor: 'transparent',
         '&:hover': {
           backgroundColor: `${primaryColor}08`,
           borderColor: `${primaryColor}dd`,
@@ -347,7 +348,8 @@ export const ModernButton: React.FC<{
         justifyContent: 'center',
         gap: 1,
         px: size === 'large' ? 4 : size === 'small' ? 2 : 3,
-        py: size === 'large' ? 1.5 : size === 'small' ? 1 : 1.25,
+        py: size === 'large' ? 2 : size === 'small' ? 1.25 : 1.5, // Aumentado el padding vertical
+        minHeight: size === 'large' ? 48 : size === 'small' ? 36 : 42, // Altura mínima fija
         borderRadius: 2.5,
         border: variant === 'outlined' ? '2px solid' : 'none',
         cursor: disabled || loading ? 'not-allowed' : 'pointer',
@@ -355,6 +357,7 @@ export const ModernButton: React.FC<{
         textTransform: 'none',
         fontWeight: 600,
         fontSize: size === 'large' ? '1rem' : size === 'small' ? '0.875rem' : '0.9375rem',
+        lineHeight: 1.2, // Altura de línea específica
         minWidth: size === 'large' ? 120 : size === 'small' ? 80 : 100,
         width: fullWidth ? '100%' : 'auto',
         opacity: disabled ? 0.6 : 1,

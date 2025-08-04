@@ -42,13 +42,13 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   TRABAJADOR: [
     Permission.VIEW_DOCUMENTS,
     Permission.UPLOAD_DOCUMENTS,
-    Permission.VIEW_ORDERS,
+    Permission.VIEW_ORDERS, // Solo los trabajadores (conductores) ven las órdenes
     Permission.VIEW_VACATIONS,
   ],
   TRAFICO: [
     Permission.VIEW_DOCUMENTS,
     Permission.UPLOAD_DOCUMENTS,
-    Permission.VIEW_ORDERS,
+    // Permission.VIEW_ORDERS - REMOVIDO: Tráfico no ve órdenes
     Permission.VIEW_VACATIONS,
     Permission.VIEW_TRAFFIC,
     Permission.MANAGE_TRAFFIC,
@@ -58,8 +58,8 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     Permission.VIEW_DOCUMENTS,
     Permission.UPLOAD_DOCUMENTS,
     Permission.MANAGE_DOCUMENTS,
-    Permission.VIEW_ORDERS,
-    Permission.MANAGE_ORDERS,
+    // Permission.VIEW_ORDERS - REMOVIDO: Administradores no ven órdenes
+    // Permission.MANAGE_ORDERS - REMOVIDO: Administradores no gestionan órdenes
     Permission.VIEW_VACATIONS,
     Permission.MANAGE_VACATIONS,
     Permission.VIEW_TRAFFIC,

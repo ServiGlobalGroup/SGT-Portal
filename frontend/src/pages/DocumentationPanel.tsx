@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { PaginationComponent } from '../components/PaginationComponent';
+import { usePagination } from '../hooks/usePagination';
 import {
   Box,
   Paper,
@@ -172,6 +174,18 @@ const DocumentationPanel: React.FC = () => {
     
     return matchesSearch && matchesStatus;
   });
+
+  // Estados para paginación de usuarios
+  const usersPagination = usePagination({
+    data: filteredUsers,
+    initialItemsPerPage: 8,
+    initialPage: 1
+  });
+
+  // Reset página cuando cambian los filtros
+  useEffect(() => {
+    usersPagination.setCurrentPage(1);
+  }, [searchTerm, filterStatus, usersPagination.setCurrentPage]);
 
   const handleExpandUser = (userId: string) => {
     setExpandedUsers(prev => 
@@ -644,7 +658,7 @@ const DocumentationPanel: React.FC = () => {
               </Box>
             ) : (
               <Box sx={{ p: 2 }}>
-                {filteredUsers.map((user) => (
+                {usersPagination.paginatedData.map((user: any) => (
                   <Card
                     key={user.id}
                     elevation={0}
@@ -938,6 +952,26 @@ const DocumentationPanel: React.FC = () => {
                     </CardContent>
                   </Card>
                 ))}
+
+                {/* Componente de paginación */}
+                {filteredUsers.length > 0 && (
+                  <Box sx={{ 
+                    display: 'flex', 
+                    justifyContent: 'center', 
+                    mt: 3,
+                    p: 2,
+                    borderTop: '1px solid',
+                    borderColor: 'divider'
+                  }}>
+                    <PaginationComponent
+                      currentPage={usersPagination.currentPage}
+                      itemsPerPage={usersPagination.itemsPerPage}
+                      totalItems={filteredUsers.length}
+                      onPageChange={usersPagination.setCurrentPage}
+                      onItemsPerPageChange={usersPagination.setItemsPerPage}
+                    />
+                  </Box>
+                )}
               </Box>
             )}
           </Paper>

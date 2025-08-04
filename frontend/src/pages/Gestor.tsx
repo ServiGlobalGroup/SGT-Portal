@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { PaginationComponent } from '../components/PaginationComponent';
+import { usePagination } from '../hooks/usePagination';
 import {
   Box,
   Typography,
@@ -168,6 +170,18 @@ export const Gestor: React.FC = () => {
     
     return matchesSearch && matchesDepartment && matchesStatus && hasDocuments;
   });
+
+  // Estados para paginación de usuarios
+  const usersPagination = usePagination({
+    data: filteredUsers,
+    initialItemsPerPage: 5,
+    initialPage: 1
+  });
+
+  // Reset página cuando cambian los filtros
+  useEffect(() => {
+    usersPagination.setCurrentPage(1);
+  }, [searchTerm, filterDepartment, filterStatus, filterDocumentType]);
 
   const getDocumentsForTab = (user: User, tabIndex: number) => {
     return tabIndex === 0 ? user.documents.nominas : user.documents.dietas;
@@ -435,7 +449,7 @@ export const Gestor: React.FC = () => {
           Usuarios y sus Documentos ({filteredUsers.length})
         </Typography>
 
-        {filteredUsers.map((user) => {
+        {usersPagination.paginatedData.map((user: any) => {
           const currentTab = userTabs[user.id] || 0;
           const tabDocuments = getDocumentsForTab(user, currentTab); // Para mostrar en tabla
           return (
@@ -583,6 +597,26 @@ export const Gestor: React.FC = () => {
             </Accordion>
           );
         })}
+
+        {/* Componente de paginación */}
+        {filteredUsers.length > 0 && (
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'center', 
+            mt: 3,
+            p: 2,
+            borderTop: '1px solid',
+            borderColor: 'divider'
+          }}>
+            <PaginationComponent
+              currentPage={usersPagination.currentPage}
+              itemsPerPage={usersPagination.itemsPerPage}
+              totalItems={filteredUsers.length}
+              onPageChange={usersPagination.setCurrentPage}
+              onItemsPerPageChange={usersPagination.setItemsPerPage}
+            />
+          </Box>
+        )}
 
         {filteredUsers.length === 0 && (
           <Box sx={{ textAlign: 'center', py: 4 }}>

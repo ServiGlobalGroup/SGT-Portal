@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { PaginationComponent } from '../components/PaginationComponent';
+import { usePagination } from '../hooks/usePagination';
 import {
   Box,
   Typography,
@@ -30,9 +32,7 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
-  Pagination,
   FormHelperText,
-  Divider,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
@@ -43,7 +43,6 @@ import {
   Assignment,
   CheckCircle,
   Error as ErrorIcon,
-  FileUpload,
   Delete as DeleteIcon,
   Warning as WarningIcon,
   Search,
@@ -139,8 +138,6 @@ export const MassUpload: React.FC = () => {
   const [historyLoading, setHistoryLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [alert, setAlert] = useState<{ type: 'success' | 'error' | 'warning'; message: string } | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Verificar permisos
   useEffect(() => {
@@ -152,11 +149,6 @@ export const MassUpload: React.FC = () => {
   useEffect(() => {
     loadUploadHistory();
   }, []);
-
-  // Reset página cuando cambia el historial
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [uploadHistory]);
 
   useEffect(() => {
     if (alert) {
@@ -383,12 +375,22 @@ export const MassUpload: React.FC = () => {
     getDocumentTypeLabel(item.document_type).toLowerCase().includes(searchTerm.toLowerCase())
   ) : [];
 
-  const paginatedHistory = filteredHistory.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  // Estados para paginación del historial
+  const historyPagination = usePagination({
+    data: filteredHistory,
+    initialItemsPerPage: 10,
+    initialPage: 1
+  });
 
-  const totalPages = Math.ceil(filteredHistory.length / itemsPerPage);
+  // Reset página cuando cambia el término de búsqueda
+  useEffect(() => {
+    historyPagination.setCurrentPage(1);
+  }, [searchTerm, historyPagination.setCurrentPage]);
+
+  // Reset página cuando cambia el historial
+  useEffect(() => {
+    historyPagination.setCurrentPage(1);
+  }, [uploadHistory, historyPagination.setCurrentPage]);
 
   if (!user || !hasPermission(user, Permission.MASS_UPLOAD)) {
     return null;
@@ -810,7 +812,6 @@ export const MassUpload: React.FC = () => {
                 value={searchTerm}
                 onChange={(e) => {
                   setSearchTerm(e.target.value);
-                  setCurrentPage(1); // Reset a la primera página cuando se cambia el filtro
                 }}
                 InputProps={{
                   startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />
@@ -908,7 +909,7 @@ export const MassUpload: React.FC = () => {
                       </TableRow>
                     </TableHead>
                     <TableBody>
-                      {paginatedHistory.map((item) => (
+                      {historyPagination.paginatedData.map((item: any) => (
                         <TableRow 
                           key={item.id} 
                           hover
@@ -1015,58 +1016,14 @@ export const MassUpload: React.FC = () => {
                       gap: 2,
                       mb: 2
                     }}>
-                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                        Mostrando {((currentPage - 1) * itemsPerPage) + 1} - {Math.min(currentPage * itemsPerPage, filteredHistory.length)} de {filteredHistory.length} registros
-                      </Typography>
-                      
-                      {/* Selector de elementos por página */}
-                      <FormControl size="small" sx={{ minWidth: 120 }}>
-                        <InputLabel>Por página</InputLabel>
-                        <Select
-                          value={itemsPerPage}
-                          label="Por página"
-                          onChange={(e) => {
-                            setItemsPerPage(Number(e.target.value));
-                            setCurrentPage(1); // Reset a la primera página
-                          }}
-                        >
-                          <MenuItem value={5}>5</MenuItem>
-                          <MenuItem value={10}>10</MenuItem>
-                          <MenuItem value={25}>25</MenuItem>
-                          <MenuItem value={50}>50</MenuItem>
-                          <MenuItem value={100}>100</MenuItem>
-                        </Select>
-                      </FormControl>
+                      <PaginationComponent
+                        currentPage={historyPagination.currentPage}
+                        itemsPerPage={historyPagination.itemsPerPage}
+                        totalItems={filteredHistory.length}
+                        onPageChange={historyPagination.setCurrentPage}
+                        onItemsPerPageChange={historyPagination.setItemsPerPage}
+                      />
                     </Box>
-                    
-                    {/* Paginación */}
-                    {totalPages > 1 && (
-                      <Box sx={{ 
-                        display: 'flex', 
-                        justifyContent: 'center',
-                      }}>
-                        <Pagination
-                          count={totalPages}
-                          page={currentPage}
-                          onChange={(_event, value) => setCurrentPage(value)}
-                          color="primary"
-                          size="large"
-                          showFirstButton
-                          showLastButton
-                          sx={{
-                            '& .MuiPaginationItem-root': {
-                              '&.Mui-selected': {
-                                backgroundColor: '#501b36',
-                                color: 'white',
-                                '&:hover': {
-                                  backgroundColor: '#3d1429',
-                                },
-                              },
-                            },
-                          }}
-                        />
-                      </Box>
-                    )}
                   </Box>
                 )}
               </>
