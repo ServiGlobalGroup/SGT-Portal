@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import {
   Box,
   TextField,
@@ -6,6 +6,7 @@ import {
   Typography,
   Alert,
   InputAdornment,
+  IconButton,
   alpha,
   Fade,
   CircularProgress
@@ -33,15 +34,14 @@ const LoginContainer = styled(Box)(() => ({
   display: 'flex',
   position: 'relative',
   overflow: 'hidden',
-  backgroundColor: '#ffffff', // Fondo blanco para toda la pantalla
 }));
 
 const LeftSection = styled(Box)(({ theme }) => ({
-  flex: '0 0 35%', // Reducir el ancho de la sección izquierda
+  flex: 1,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  backgroundColor: 'transparent',
+  backgroundColor: '#f8f9fa',
   padding: theme.spacing(4),
   position: 'relative',
   zIndex: 2,
@@ -53,87 +53,40 @@ const LeftSection = styled(Box)(({ theme }) => ({
 }));
 
 const RightSection = styled(Box)(({ theme }) => ({
-  flex: '0 0 65%', // Expandir la sección derecha
+  flex: 1,
+  background: 'linear-gradient(135deg, #501B39 0%, #3d1428 100%)',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  padding: theme.spacing(3),
+  padding: theme.spacing(6),
   position: 'relative',
   overflow: 'hidden',
   [theme.breakpoints.down('md')]: {
     display: 'none',
   },
-}));
-
-const RightSectionInner = styled(Box)(({ theme }) => ({
-  width: '100%',
-  height: '100%',
-  minHeight: '500px',
-  background: 'linear-gradient(135deg, #501B39 0%, #3d1428 100%)',
-  borderRadius: '24px',
-  padding: theme.spacing(6),
-  position: 'relative',
-  overflow: 'hidden',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  boxShadow: '0 8px 32px rgba(80, 27, 57, 0.2)',
-}));
-
-// Componentes del carrusel
-const CarouselContainer = styled(Box)(() => ({
-  position: 'absolute',
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  borderRadius: '24px',
-  overflow: 'hidden',
-}));
-
-const CarouselSlide = styled(Box)<{ active: boolean }>(({ active }) => ({
-  position: 'absolute',
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  backgroundSize: 'cover',
-  backgroundPosition: 'center',
-  opacity: active ? 0.25 : 0, // Menos opacidad por defecto
-  transition: 'opacity 1s ease-in-out',
-  zIndex: 1,
-}));
-
-const CarouselControls = styled(Box)(() => ({
-  position: 'absolute',
-  bottom: '20px',
-  left: '50%',
-  transform: 'translateX(-50%)',
-  display: 'flex',
-  gap: '8px',
-  zIndex: 3,
-}));
-
-const CarouselDot = styled(Box)<{ active: boolean }>(({ active }) => ({
-  width: '8px',
-  height: '8px',
-  borderRadius: '50%',
-  backgroundColor: active ? 'rgba(255, 255, 255, 0.8)' : 'rgba(255, 255, 255, 0.3)',
-  cursor: 'pointer',
-  transition: 'background-color 0.3s ease',
-  '&:hover': {
-    backgroundColor: 'rgba(255, 255, 255, 0.6)',
+  '&::before': {
+    content: '""',
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    background: 'url(/portada.png)',
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    opacity: 0.1,
+    zIndex: 1,
   },
 }));
 
-const LoginCard = styled(Box)(() => ({
+const LoginCard = styled(Box)(({ theme }) => ({
   maxWidth: 400,
   width: '100%',
-  backgroundColor: 'transparent', // Sin fondo de tarjeta
-  borderRadius: 0, // Sin esquinas redondeadas
-  padding: 0, // Sin padding extra
-  boxShadow: 'none', // Sin sombra
-  border: 'none', // Sin borde
+  backgroundColor: 'white',
+  borderRadius: '16px',
+  padding: theme.spacing(4),
+  boxShadow: '0 4px 20px rgba(0, 0, 0, 0.08)',
+  border: '1px solid rgba(0, 0, 0, 0.05)',
 }));
 
 const StyledTextField = styled(TextField)(({ theme }) => ({
@@ -212,10 +165,27 @@ const LoginButton = styled(Button)(({ theme }) => ({
   },
 }));
 
+// Componente para la sección promocional
+const PromoContent = styled(Box)(() => ({
+  color: 'white',
+  textAlign: 'left',
+  position: 'relative',
+  zIndex: 2,
+  maxWidth: '500px',
+}));
+
+const PromoCard = styled(Box)(({ theme }) => ({
+  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+  backdropFilter: 'blur(10px)',
+  borderRadius: '16px',
+  padding: theme.spacing(3),
+  border: '1px solid rgba(255, 255, 255, 0.2)',
+  marginTop: theme.spacing(4),
+}));
+
 const Login: React.FC = () => {
   const { login, isLoading: authLoading } = useAuth();
 
-  // Estados del formulario
   const [credentials, setCredentials] = useState<LoginCredentials>({
     username: '',
     password: ''
@@ -227,23 +197,6 @@ const Login: React.FC = () => {
     username: '',
     password: ''
   });
-
-  // Estados del carrusel
-  const [currentSlide, setCurrentSlide] = useState(0);
-  const carouselImages = [
-    '/portada.png',
-    '/portada.png', // Podrías agregar más imágenes aquí cuando las tengas
-    '/portada.png', // Por ahora usando la misma imagen
-  ];
-
-  // Efecto para el carrusel automático
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentSlide((prev) => (prev + 1) % carouselImages.length);
-    }, 5000); // Cambia cada 5 segundos
-
-    return () => clearInterval(interval);
-  }, [carouselImages.length]);
 
   // Validaciones básicas
   const validateUsername = (username: string) => {
@@ -340,15 +293,14 @@ const Login: React.FC = () => {
       {/* Sección Izquierda - Formulario */}
       <LeftSection>
         <LoginCard>
-          {/* Logo más grande y más arriba */}
+          {/* Logo pequeño */}
           <Box sx={{ 
             textAlign: 'center', 
-            mb: 4, // Más espacio ya que no hay subtítulo
-            mt: -2, // Margen superior negativo para subirlo más
+            mb: 1,
             '& img': {
-              maxWidth: '200px', // Más grande
+              maxWidth: '120px',
               height: 'auto',
-              maxHeight: '60px', // Más alto
+              maxHeight: '40px',
               objectFit: 'contain',
             }
           }}>
@@ -363,13 +315,22 @@ const Login: React.FC = () => {
             variant="h4" 
             align="center" 
             sx={{ 
-              mb: 4,
+              mb: 1,
               fontWeight: 700,
               color: '#333',
               fontSize: '28px'
             }}
           >
-            INICIAR SESIÓN
+            Bienvenido
+          </Typography>
+
+          <Typography 
+            variant="subtitle1" 
+            align="center" 
+            color="text.secondary"
+            sx={{ mb: 4, fontSize: '14px' }}
+          >
+            Sistema de Gestión Empresarial
           </Typography>
 
           {/* Formulario */}
@@ -390,7 +351,8 @@ const Login: React.FC = () => {
 
             <StyledTextField
               fullWidth
-              label="DNI/NIE"
+              label="Email"
+              type="email"
               value={credentials.username}
               onChange={handleInputChange('username')}
               onKeyPress={handleKeyPress}
@@ -420,7 +382,7 @@ const Login: React.FC = () => {
                   pointerEvents: 'auto'
                 }
               }}
-              placeholder="12345678A"
+              placeholder="tu@ejemplo.com"
             />
 
             <StyledTextField
@@ -453,22 +415,16 @@ const Login: React.FC = () => {
                 ),
                 endAdornment: (
                   <InputAdornment position="end">
-                    <Box
+                    <IconButton
                       onClick={() => setShowPassword(!showPassword)}
-                      sx={{
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: '#666',
-                        padding: '4px',
-                        '& svg': {
-                          fontSize: '20px'
-                        }
-                      }}
+                      edge="end"
+                      disabled={loading || authLoading}
+                      tabIndex={-1}
+                      style={{ cursor: 'pointer', pointerEvents: 'auto' }}
+                      sx={{ color: '#666' }}
                     >
                       {showPassword ? <VisibilityOff /> : <Visibility />}
-                    </Box>
+                    </IconButton>
                   </InputAdornment>
                 ),
                 style: {
@@ -478,6 +434,22 @@ const Login: React.FC = () => {
               }}
               placeholder="••••••••"
             />
+
+            <Typography 
+              variant="body2" 
+              align="right" 
+              sx={{ 
+                mb: 3,
+                color: '#501B39',
+                cursor: 'pointer',
+                fontSize: '14px',
+                '&:hover': {
+                  textDecoration: 'underline'
+                }
+              }}
+            >
+              ¿Olvidaste tu contraseña?
+            </Typography>
 
             <LoginButton
               type="submit"
@@ -499,61 +471,100 @@ const Login: React.FC = () => {
                 'Iniciar Sesión'
               )}
             </LoginButton>
-
-            {/* Línea separadora */}
-            <Box sx={{ 
-              width: '100%',
-              height: '1px',
-              backgroundColor: '#e0e0e0',
-              mt: 4,
-              mb: 3
-            }} />
-
-            {/* Texto de contacto */}
-            <Typography 
-              variant="body2" 
-              align="center" 
-              sx={{ 
-                color: '#666',
-                fontSize: '12px',
-                lineHeight: 1.4
-              }}
-            >
-              Para cualquier duda o pregunta al respecto,
-              <br />
-              contactar con administración.
-            </Typography>
           </Box>
+
+          {/* Footer */}
+          <Typography 
+            variant="body2" 
+            color="text.secondary" 
+            align="center" 
+            sx={{ mt: 3, fontSize: '12px' }}
+          >
+            ¿No tienes cuenta? <span style={{ color: '#501B39', cursor: 'pointer' }}>Regístrate</span>
+          </Typography>
         </LoginCard>
       </LeftSection>
 
-      {/* Sección Derecha - Solo fondo con carrusel */}
+      {/* Sección Derecha - Promocional */}
       <RightSection>
-        <RightSectionInner>
-          {/* Carrusel de imágenes */}
-          <CarouselContainer>
-            {carouselImages.map((image, index) => (
-              <CarouselSlide
-                key={index}
-                active={index === currentSlide}
-                sx={{
-                  backgroundImage: `url(${image})`,
-                }}
-              />
-            ))}
+        <PromoContent>
+          <Typography 
+            variant="h3" 
+            sx={{ 
+              fontWeight: 300,
+              fontSize: '48px',
+              lineHeight: 1.2,
+              mb: 2,
+              fontStyle: 'italic'
+            }}
+          >
+            Ingresa al Futuro
+          </Typography>
+          
+          <Typography 
+            variant="h4" 
+            sx={{ 
+              fontWeight: 600,
+              fontSize: '36px',
+              lineHeight: 1.2,
+              mb: 1
+            }}
+          >
+            de la Gestión Empresarial,
+          </Typography>
+          
+          <Typography 
+            variant="h4" 
+            sx={{ 
+              fontWeight: 600,
+              fontSize: '36px',
+              lineHeight: 1.2,
+              mb: 4
+            }}
+          >
+            hoy
+          </Typography>
+
+          <PromoCard>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+              <Box sx={{ 
+                width: 40, 
+                height: 40, 
+                borderRadius: '8px',
+                backgroundColor: 'rgba(255, 255, 255, 0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center'
+              }}>
+                <Typography sx={{ fontSize: '20px', fontWeight: 'bold' }}>
+                  SGT
+                </Typography>
+              </Box>
+              <Box>
+                <Typography sx={{ fontSize: '24px', fontWeight: 'bold' }}>
+                  Portal Integrado
+                </Typography>
+                <Typography sx={{ fontSize: '14px', opacity: 0.8 }}>
+                  Gestión Completa
+                </Typography>
+              </Box>
+            </Box>
             
-            {/* Indicadores del carrusel */}
-            <CarouselControls>
-              {carouselImages.map((_, index) => (
-                <CarouselDot
-                  key={index}
-                  active={index === currentSlide}
-                  onClick={() => setCurrentSlide(index)}
-                />
-              ))}
-            </CarouselControls>
-          </CarouselContainer>
-        </RightSectionInner>
+            <Box sx={{ 
+              display: 'flex', 
+              justifyContent: 'space-between', 
+              alignItems: 'center',
+              mt: 2 
+            }}>
+              <Typography sx={{ fontSize: '16px', fontWeight: 500 }}>
+                Dashboard Principal
+              </Typography>
+              <Typography sx={{ fontSize: '14px', opacity: 0.8 }}>
+                Ver Todo
+              </Typography>
+            </Box>
+          </PromoCard>
+        </PromoContent>
       </RightSection>
     </LoginContainer>
   );
