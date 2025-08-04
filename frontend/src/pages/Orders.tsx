@@ -30,7 +30,6 @@ import {
 import { alpha } from '@mui/material/styles';
 import {
   Assignment,
-  Email,
   Search,
   MoreVert,
   Visibility,

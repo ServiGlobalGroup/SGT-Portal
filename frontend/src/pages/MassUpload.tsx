@@ -114,11 +114,6 @@ interface UploadHistoryItem {
   updated_at: string;
 }
 
-interface UploadHistoryResponse {
-  items: UploadHistoryItem[];
-  total: number;
-}
-
 export const MassUpload: React.FC = () => {
   const { user } = useAuth();
   const [uploadState, setUploadState] = useState<UploadState>({

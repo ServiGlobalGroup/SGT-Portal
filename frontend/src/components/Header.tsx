@@ -19,9 +19,7 @@ import {
   Logout, 
   Person,
   AdminPanelSettings,
-  Work,
-  Brightness4,
-  Brightness7
+  Work
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
