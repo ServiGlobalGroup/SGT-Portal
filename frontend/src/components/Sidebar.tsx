@@ -36,7 +36,7 @@ import {
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { canAccessRoute, getRoleText } from '../utils/permissions';
+import { canAccessRoute, getRoleText, hasPermission, Permission } from '../utils/permissions';
 
 const drawerWidth = 280;
 const collapsedWidth = 80;
@@ -482,26 +482,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
             />
           </MenuItem>
           
-          <MenuItem 
-            onClick={() => handleMenuAction('configuracion')}
-            sx={{
-              py: 1.5,
-              '&:hover': {
-                backgroundColor: 'rgba(0, 0, 0, 0.04)',
-              },
-            }}
-          >
-            <ListItemIcon>
-              <Settings sx={{ color: '#501b36' }} />
-            </ListItemIcon>
-            <ListItemText 
-              primary="Configuración" 
-              primaryTypographyProps={{
-                fontSize: '0.95rem',
-                fontWeight: 500,
+          {/* Solo mostrar Configuración si el usuario tiene permisos */}
+          {hasPermission(user, Permission.VIEW_SETTINGS) && (
+            <MenuItem 
+              onClick={() => handleMenuAction('configuracion')}
+              sx={{
+                py: 1.5,
+                '&:hover': {
+                  backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                },
               }}
-            />
-          </MenuItem>
+            >
+              <ListItemIcon>
+                <Settings sx={{ color: '#501b36' }} />
+              </ListItemIcon>
+              <ListItemText 
+                primary="Configuración" 
+                primaryTypographyProps={{
+                  fontSize: '0.95rem',
+                  fontWeight: 500,
+                }}
+              />
+            </MenuItem>
+          )}
           
           <Divider sx={{ my: 1 }} />
           

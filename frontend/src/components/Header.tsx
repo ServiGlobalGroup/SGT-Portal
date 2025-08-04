@@ -25,6 +25,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { hasPermission, Permission } from '../utils/permissions';
 
 const drawerWidth = 240;
 const collapsedWidth = 80;
@@ -236,26 +237,29 @@ export const Header: React.FC<HeaderProps> = ({ isCollapsed }) => {
               />
             </MenuItem>
             
-            <MenuItem 
-              onClick={() => handleMenuAction('configuracion')}
-              sx={{
-                py: 1.5,
-                '&:hover': {
-                  backgroundColor: 'rgba(80, 27, 54, 0.05)',
-                },
-              }}
-            >
-              <ListItemIcon>
-                <Settings sx={{ color: '#501b36' }} />
-              </ListItemIcon>
-              <ListItemText 
-                primary="Configuración" 
-                primaryTypographyProps={{
-                  fontSize: '0.95rem',
-                  fontWeight: 500,
+            {/* Solo mostrar Configuración si el usuario tiene permisos */}
+            {hasPermission(user, Permission.VIEW_SETTINGS) && (
+              <MenuItem 
+                onClick={() => handleMenuAction('configuracion')}
+                sx={{
+                  py: 1.5,
+                  '&:hover': {
+                    backgroundColor: 'rgba(80, 27, 54, 0.05)',
+                  },
                 }}
-              />
-            </MenuItem>
+              >
+                <ListItemIcon>
+                  <Settings sx={{ color: '#501b36' }} />
+                </ListItemIcon>
+                <ListItemText 
+                  primary="Configuración" 
+                  primaryTypographyProps={{
+                    fontSize: '0.95rem',
+                    fontWeight: 500,
+                  }}
+                />
+              </MenuItem>
+            )}
             
             <Divider sx={{ my: 1 }} />
             
