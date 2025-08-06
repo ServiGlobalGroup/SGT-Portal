@@ -193,6 +193,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     });
   }, [location.pathname]);
 
+  // Efecto para cerrar todos los submenús cuando el sidebar se colapsa
+  useEffect(() => {
+    if (isCollapsed && !isMobile) {
+      setExpandedMenus(new Set());
+    }
+  }, [isCollapsed, isMobile]);
+
   const drawerContent = (
     <>
       <GlobalStyles
@@ -382,7 +389,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </ListItem>
             
             {/* Submenús */}
-            {item.children && (
+            {item.children && (!isCollapsed || isMobile) && (
               <Collapse in={expandedMenus.has(item.text)} timeout="auto" unmountOnExit>
                 <List component="div" disablePadding>
                   {item.children.map((subItem) => (

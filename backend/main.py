@@ -2,8 +2,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.api import dashboard, traffic, vacations, documents, payroll, orders, profile, settings, users, auth, user_files, documentation
 from app.database.connection import check_database_connection
+from app.middleware.maintenance import MaintenanceMiddleware
 
 app = FastAPI(title="Portal API", version="1.0.0")
+
+# Agregar middleware de mantenimiento (debe ir antes que CORS)
+app.add_middleware(MaintenanceMiddleware)
 
 # Configurar CORS
 app.add_middleware(

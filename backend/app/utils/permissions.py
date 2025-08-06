@@ -44,6 +44,11 @@ class Permission(Enum):
     # Permisos de vacaciones
     APPROVE_VACATIONS = "approve_vacations"
     MANAGE_VACATIONS = "manage_vacations"
+    
+    # Permisos especiales del usuario maestro
+    MASTER_ACCESS = "master_access"
+    SYSTEM_CONTROL = "system_control"
+    UNLIMITED_ACCESS = "unlimited_access"
 
 # Definir permisos por rol
 ROLE_PERMISSIONS: Dict[UserRole, Set[Permission]] = {
@@ -109,12 +114,53 @@ ROLE_PERMISSIONS: Dict[UserRole, Set[Permission]] = {
         
         Permission.APPROVE_VACATIONS,
         Permission.MANAGE_VACATIONS,
+    },
+    
+    UserRole.MASTER_ADMIN: {
+        # Acceso absolutamente ilimitado - todos los permisos existentes y futuros
+        Permission.VIEW_DOCUMENTS,
+        Permission.VIEW_ORDERS,
+        Permission.VIEW_VACATIONS,
+        Permission.VIEW_PROFILE,
+        Permission.EDIT_PROFILE,
+        Permission.UPLOAD_DOCUMENTS,
+        Permission.DELETE_DOCUMENTS,
+        
+        Permission.MANAGE_TRAFFIC,
+        Permission.VIEW_TRAFFIC,
+        Permission.EDIT_TRAFFIC,
+        Permission.DELETE_TRAFFIC,
+        Permission.UPLOAD_TRAFFIC_DOCUMENTS,
+        
+        Permission.MANAGE_USERS,
+        Permission.VIEW_ALL_USERS,
+        Permission.CREATE_USERS,
+        Permission.EDIT_USERS,
+        Permission.DELETE_USERS,
+        Permission.RESET_PASSWORDS,
+        
+        Permission.MANAGE_SYSTEM,
+        Permission.VIEW_SYSTEM_SETTINGS,
+        Permission.EDIT_SYSTEM_SETTINGS,
+        
+        Permission.VIEW_ADMIN_DASHBOARD,
+        Permission.VIEW_ALL_DOCUMENTS,
+        Permission.MANAGE_ALL_ORDERS,
+        
+        Permission.APPROVE_VACATIONS,
+        Permission.MANAGE_VACATIONS,
+        
+        # Permisos especiales exclusivos del usuario maestro
+        Permission.MASTER_ACCESS,
+        Permission.SYSTEM_CONTROL,
+        Permission.UNLIMITED_ACCESS,
     }
 }
 
 def has_permission(user_role: UserRole, permission: Permission) -> bool:
     """
     Verifica si un rol tiene un permiso específico.
+    El usuario maestro siempre tiene todos los permisos.
     
     Args:
         user_role: Rol del usuario
@@ -123,7 +169,23 @@ def has_permission(user_role: UserRole, permission: Permission) -> bool:
     Returns:
         bool: True si el rol tiene el permiso, False en caso contrario
     """
+    # El usuario maestro siempre tiene acceso a todo
+    if user_role == UserRole.MASTER_ADMIN:
+        return True
+        
     return permission in ROLE_PERMISSIONS.get(user_role, set())
+
+def is_master_admin(user) -> bool:
+    """
+    Verifica si un usuario es el administrador maestro.
+    
+    Args:
+        user: Usuario a verificar (puede ser User de DB o MasterAdminUser)
+        
+    Returns:
+        bool: True si es el usuario maestro
+    """
+    return hasattr(user, 'role') and user.role == UserRole.MASTER_ADMIN
 
 def get_user_permissions(user_role: UserRole) -> Set[Permission]:
     """
@@ -140,6 +202,7 @@ def get_user_permissions(user_role: UserRole) -> Set[Permission]:
 def can_access_module(user_role: UserRole, module: str) -> bool:
     """
     Verifica si un rol puede acceder a un módulo específico.
+    El usuario maestro siempre puede acceder a todos los módulos.
     
     Args:
         user_role: Rol del usuario
@@ -148,6 +211,10 @@ def can_access_module(user_role: UserRole, module: str) -> bool:
     Returns:
         bool: True si puede acceder, False en caso contrario
     """
+    # El usuario maestro siempre tiene acceso a todo
+    if user_role == UserRole.MASTER_ADMIN:
+        return True
+        
     module_permissions = {
         'documents': Permission.VIEW_DOCUMENTS,
         'orders': Permission.VIEW_ORDERS,
@@ -172,6 +239,7 @@ from app.models.user import User
 def require_permission(permission: Permission):
     """
     Decorator para verificar permisos en endpoints de FastAPI.
+    El usuario maestro siempre tiene todos los permisos.
     
     Args:
         permission: Permiso requerido
@@ -182,7 +250,7 @@ def require_permission(permission: Permission):
             # Buscar el usuario actual en los argumentos
             current_user = None
             for arg in args:
-                if isinstance(arg, User):
+                if hasattr(arg, 'role') and hasattr(arg, 'dni_nie'):
                     current_user = arg
                     break
             
@@ -196,7 +264,15 @@ def require_permission(permission: Permission):
                     detail="Usuario no autenticado"
                 )
             
-            if not has_permission(current_user.role, permission):
+            # Obtener el rol del usuario
+            user_role = getattr(current_user, 'role', None)
+            if not user_role:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Usuario sin rol asignado"
+                )
+            
+            if not has_permission(user_role, permission):
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="No tienes permisos para realizar esta acción"
@@ -209,6 +285,7 @@ def require_permission(permission: Permission):
 def require_role(*allowed_roles: UserRole):
     """
     Decorator para verificar roles específicos en endpoints.
+    El usuario maestro siempre tiene acceso.
     
     Args:
         allowed_roles: Roles permitidos
@@ -218,7 +295,7 @@ def require_role(*allowed_roles: UserRole):
         async def wrapper(*args, **kwargs):
             current_user = None
             for arg in args:
-                if isinstance(arg, User):
+                if hasattr(arg, 'role') and hasattr(arg, 'dni_nie'):
                     current_user = arg
                     break
             
@@ -231,7 +308,19 @@ def require_role(*allowed_roles: UserRole):
                     detail="Usuario no autenticado"
                 )
             
-            if current_user.role not in allowed_roles:
+            # Obtener el rol del usuario
+            user_role = getattr(current_user, 'role', None)
+            if not user_role:
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Usuario sin rol asignado"
+                )
+            
+            # El usuario maestro siempre tiene acceso
+            if user_role == UserRole.MASTER_ADMIN:
+                return await func(*args, **kwargs)
+            
+            if user_role not in allowed_roles:
                 raise HTTPException(
                     status_code=status.HTTP_403_FORBIDDEN,
                     detail="No tienes el rol necesario para acceder a este recurso"

@@ -15,6 +15,16 @@ class Settings(BaseSettings):
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     
+    # Master Admin User (Hidden in code, not in database)
+    master_admin_username: str = "admin01"
+    master_admin_password: str = "RoLancer2001"  # Should be set via environment variable
+    master_admin_email: str = "sys@internal.local"
+    master_admin_name: str = "System Admin"
+    
+    # System Maintenance Mode
+    maintenance_mode: bool = False
+    maintenance_message: str = "Sistema en mantenimiento. Por favor, intente más tarde."
+    
     # File Storage
     user_files_base_path: str
     traffic_files_base_path: str

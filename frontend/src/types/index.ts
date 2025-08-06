@@ -73,7 +73,7 @@ export interface User {
   last_name: string;
   email: string;
   phone?: string;
-  role: 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR';
+  role: 'MASTER_ADMIN' | 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR';
   department: string;
   position?: string;
   hire_date?: string;
@@ -101,7 +101,7 @@ export interface UserProfile {
   last_name: string;
   email: string;
   phone: string;
-  role: 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR';
+  role: 'MASTER_ADMIN' | 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR';
   department: string;
   position: string;
   hire_date: string;

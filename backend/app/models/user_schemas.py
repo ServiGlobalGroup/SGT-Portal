@@ -1,12 +1,13 @@
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 from typing import Optional
 from datetime import datetime
 from app.models.user import UserRole
+from app.utils.dni_validation import validate_dni_nie_format, sanitize_dni_nie_for_login
 
 # Esquemas base
 class UserBase(BaseModel):
     """Esquema base para usuario con campos comunes"""
-    dni_nie: str = Field(..., min_length=8, max_length=20, description="DNI o NIE")
+    dni_nie: str = Field(..., min_length=2, max_length=20, description="DNI o NIE")
     first_name: str = Field(..., min_length=2, max_length=100, description="Nombre")
     last_name: str = Field(..., min_length=2, max_length=100, description="Apellidos")
     email: EmailStr = Field(..., description="Email corporativo")
@@ -14,6 +15,17 @@ class UserBase(BaseModel):
     department: str = Field(..., min_length=2, max_length=100, description="Departamento")
     position: Optional[str] = Field(None, max_length=100, description="Puesto de trabajo")
     role: UserRole = Field(default=UserRole.TRABAJADOR, description="Rol del usuario")
+    
+    @field_validator('dni_nie')
+    @classmethod
+    def validate_dni_nie(cls, v: str) -> str:
+        """
+        Valida el formato del DNI/NIE con excepción para usuarios especiales.
+        """
+        v = sanitize_dni_nie_for_login(v)
+        if not validate_dni_nie_format(v):
+            raise ValueError('DNI/NIE no válido')
+        return v
 
 # Esquemas para creación
 class UserCreate(UserBase):
@@ -96,6 +108,14 @@ class UserLogin(BaseModel):
     """Esquema para login de usuario"""
     dni_nie: str = Field(..., description="DNI/NIE o email del usuario")
     password: str = Field(..., description="Contraseña")
+    
+    @field_validator('dni_nie')
+    @classmethod
+    def sanitize_dni_nie_login(cls, v: str) -> str:
+        """
+        Sanitiza el DNI/NIE para login, preservando usuarios especiales.
+        """
+        return sanitize_dni_nie_for_login(v)
 
 class Token(BaseModel):
     """Esquema para respuesta de token"""

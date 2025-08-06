@@ -23,7 +23,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { hasPermission, Permission } from '../utils/permissions';
+import { hasPermission, Permission, getRoleColor as getPermissionRoleColor } from '../utils/permissions';
 
 const drawerWidth = 240;
 const collapsedWidth = 80;
@@ -93,12 +93,16 @@ export const Header: React.FC<HeaderProps> = ({ isCollapsed }) => {
 
   const getRoleLabel = (role: string) => {
     switch (role) {
-      case 'ADMIN':
+      case 'MASTER_ADMIN':
+        return 'Admin Master';
+      case 'ADMINISTRADOR':
         return 'Administrador';
-      case 'MANAGER':
-        return 'Gerente';
+      case 'TRAFICO':
+        return 'Tráfico';
+      case 'TRABAJADOR':
+        return 'Trabajador';
       default:
-        return 'Empleado';
+        return 'Usuario';
     }
   };
 
@@ -180,7 +184,8 @@ export const Header: React.FC<HeaderProps> = ({ isCollapsed }) => {
             <Avatar
               sx={{
                 bgcolor: user?.role === 'ADMINISTRADOR' ? '#d32f2f' : 
-                        user?.role === 'TRAFICO' ? '#ed6c02' : '#501b36',
+                        user?.role === 'TRAFICO' ? '#ed6c02' : 
+                        user?.role === 'MASTER_ADMIN' ? '#9c27b0' : '#501b36',
                 width: 45,
                 height: 45,
                 fontWeight: 700,

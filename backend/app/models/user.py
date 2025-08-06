@@ -3,11 +3,49 @@ from sqlalchemy.sql import func
 from app.database.connection import Base
 import enum
 import os
+from datetime import datetime, timezone
+from typing import Optional
 
 class UserRole(enum.Enum):
+    MASTER_ADMIN = "MASTER_ADMIN"  # Usuario maestro oculto
     ADMINISTRADOR = "ADMINISTRADOR"
     TRAFICO = "TRAFICO"
     TRABAJADOR = "TRABAJADOR"
+
+class MasterAdminUser:
+    """
+    Usuario maestro que existe únicamente en el código, no en la base de datos.
+    Tiene acceso completo e ilimitado a todo el sistema.
+    """
+    def __init__(self, username: str, email: str, full_name: str):
+        self.id = -1  # ID especial que nunca puede existir en la DB
+        self.dni_nie = username  # Usamos el username como dni_nie
+        self.first_name = "Admin"
+        self.last_name = "System"
+        self.email = "admin.system@serviglobal.com"  # Email válido para evitar error de validación
+        self.phone = "+34000000001"
+        self.role = UserRole.MASTER_ADMIN
+        self.department = "IT"
+        self.position = "Administrador de Sistema"
+        self.hire_date = datetime.now(timezone.utc)
+        self.birth_date = None
+        self.address = "Oficina Central"
+        self.city = "Madrid"
+        self.postal_code = "28001"
+        self.emergency_contact_name = None
+        self.emergency_contact_phone = None
+        self.is_active = True
+        self.is_verified = True
+        self.avatar = None
+        self.user_folder_path = None
+        self.created_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(timezone.utc)
+        self.last_login = None  # Tipo datetime | None
+        self.full_name = full_name
+        self.initials = "AS"  # Admin System
+    
+    def __repr__(self):
+        return f"<User(dni_nie='{self.dni_nie}', email='{self.email}', name='{self.full_name}')>"
 
 class User(Base):
     """

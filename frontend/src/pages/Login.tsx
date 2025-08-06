@@ -19,6 +19,7 @@ import {
 } from '@mui/icons-material';
 import { styled } from '@mui/material/styles';
 import { useAuth } from '../hooks/useAuth';
+import { validateUsername } from '../utils/validation';
 import '../styles/login-fixes.css';
 
 // Interfaces
@@ -245,20 +246,7 @@ const Login: React.FC = () => {
     return () => clearInterval(interval);
   }, [carouselImages.length]);
 
-  // Validaciones básicas
-  const validateUsername = (username: string) => {
-    if (!username.trim()) {
-      return 'Este campo es obligatorio';
-    }
-    const dniRegex = /^\d{8}[A-Za-z]$/;
-    const nieRegex = /^[XYZ]\d{7}[A-Za-z]$/;
-    
-    if (!dniRegex.test(username) && !nieRegex.test(username)) {
-      return 'Formato inválido. Use DNI o NIE';
-    }
-    return '';
-  };
-
+  // Validación de contraseña
   const validatePassword = (password: string) => {
     if (!password.trim()) {
       return 'Este campo es obligatorio';

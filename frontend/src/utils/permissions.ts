@@ -39,6 +39,25 @@ export enum Permission {
 
 // Permisos por rol
 const ROLE_PERMISSIONS: Record<string, Permission[]> = {
+  MASTER_ADMIN: [
+    // Usuario maestro tiene TODOS los permisos
+    Permission.VIEW_DASHBOARD,
+    Permission.VIEW_DOCUMENTS,
+    Permission.UPLOAD_DOCUMENTS,
+    Permission.MANAGE_DOCUMENTS,
+    Permission.VIEW_ORDERS,
+    Permission.MANAGE_ORDERS,
+    Permission.VIEW_VACATIONS,
+    Permission.MANAGE_VACATIONS,
+    Permission.VIEW_TRAFFIC,
+    Permission.MANAGE_TRAFFIC,
+    Permission.VIEW_USERS,
+    Permission.MANAGE_USERS,
+    Permission.VIEW_GESTOR,
+    Permission.MASS_UPLOAD,
+    Permission.VIEW_SETTINGS,
+    Permission.MANAGE_SETTINGS,
+  ],
   TRABAJADOR: [
     Permission.VIEW_DOCUMENTS,
     Permission.UPLOAD_DOCUMENTS,
@@ -76,6 +95,9 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
 // Función para verificar si un usuario tiene un permiso específico
 export const hasPermission = (user: User | null, permission: Permission): boolean => {
   if (!user || !user.role) return false;
+  
+  // El usuario maestro tiene todos los permisos, siempre
+  if (user.role === 'MASTER_ADMIN') return true;
   
   const userPermissions = ROLE_PERMISSIONS[user.role] || [];
   return userPermissions.includes(permission);
@@ -116,7 +138,8 @@ export const canAccessRoute = (user: User | null, route: string): boolean => {
     case '/gestor':
       return hasPermission(user, Permission.VIEW_GESTOR);
     case '/settings':
-      return hasPermission(user, Permission.VIEW_SETTINGS);
+      // Solo el usuario maestro puede acceder a configuración
+      return user.role === 'MASTER_ADMIN';
     case '/profile':
       return true; // Todos pueden ver su perfil
     default:
@@ -127,6 +150,8 @@ export const canAccessRoute = (user: User | null, route: string): boolean => {
 // Función para obtener el texto de un rol en español
 export const getRoleText = (role: string): string => {
   switch (role) {
+    case 'MASTER_ADMIN':
+      return 'Admin Master';
     case 'ADMINISTRADOR':
       return 'Administrador';
     case 'TRAFICO':
@@ -157,6 +182,8 @@ export const getDefaultRoute = (user: User | null): string => {
 // Función para obtener el color de un rol
 export const getRoleColor = (role: string): string => {
   switch (role) {
+    case 'MASTER_ADMIN':
+      return '#9c27b0'; // Púrpura para el usuario maestro
     case 'ADMINISTRADOR':
       return '#d32f2f'; // Rojo
     case 'TRAFICO':

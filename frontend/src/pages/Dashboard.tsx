@@ -24,6 +24,7 @@ import {
   CalendarToday,
 } from '@mui/icons-material';
 import { useAuth } from '../hooks/useAuth';
+import { hasPermission, Permission } from '../utils/permissions';
 
 interface DashboardStats {
   total_users: number;
@@ -115,8 +116,8 @@ export const Dashboard: React.FC = () => {
     loadDashboardData();
   }, [loadDashboardData]);
 
-  // Verificar permisos básicos
-  const canViewDashboard = user?.role === 'ADMINISTRADOR';
+  // Verificar permisos usando la función de permisos
+  const canViewDashboard = hasPermission(user, Permission.VIEW_DASHBOARD);
 
   if (!canViewDashboard) {
     return (

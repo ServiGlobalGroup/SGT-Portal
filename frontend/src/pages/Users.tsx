@@ -81,8 +81,8 @@ export const Users: React.FC = () => {
   }
   const { user: currentUser } = authContext;
 
-  // Helper para verificar si el usuario actual es administrador
-  const isAdmin = currentUser?.role === 'ADMINISTRADOR';
+  // Helper para verificar si el usuario actual es administrador o maestro
+  const isAdmin = currentUser?.role === 'ADMINISTRADOR' || currentUser?.role === 'MASTER_ADMIN';
 
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);

