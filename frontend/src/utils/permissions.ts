@@ -98,6 +98,8 @@ export const canAccessRoute = (user: User | null, route: string): boolean => {
   
   switch (route) {
     case '/':
+      return hasPermission(user, Permission.VIEW_DOCUMENTS);
+    case '/dashboard':
       return hasPermission(user, Permission.VIEW_DASHBOARD);
     case '/mass-upload':
       return hasPermission(user, Permission.MASS_UPLOAD);
@@ -141,8 +143,8 @@ export const getDefaultRoute = (user: User | null): string => {
   if (!user) return '/login';
   
   // Verificar rutas en orden de prioridad
-  if (hasPermission(user, Permission.VIEW_DASHBOARD)) return '/';
-  if (hasPermission(user, Permission.VIEW_DOCUMENTS)) return '/documents';
+  if (hasPermission(user, Permission.VIEW_DASHBOARD)) return '/dashboard';
+  if (hasPermission(user, Permission.VIEW_DOCUMENTS)) return '/';
   if (hasPermission(user, Permission.VIEW_ORDERS)) return '/orders';
   if (hasPermission(user, Permission.VIEW_VACATIONS)) return '/vacations';
   if (hasPermission(user, Permission.VIEW_TRAFFIC)) return '/traffic';

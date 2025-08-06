@@ -20,7 +20,6 @@ import {
   Collapse,
 } from '@mui/material';
 import {
-  Dashboard,
   Traffic,
   EventNote,
   Description,
@@ -37,6 +36,7 @@ import {
   ExpandMore,
   Folder,
   Assignment,
+  Dashboard,
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -53,12 +53,12 @@ interface MenuItem {
 }
 
 const menuItems: MenuItem[] = [
-  { text: 'Dashboard', icon: <Dashboard />, path: '/' },
+  { text: 'Dashboard', icon: <Dashboard />, path: '/dashboard' },
   { 
     text: 'Gestor Docs', 
     icon: <Folder />, 
     children: [
-      { text: 'Mis Documentos', icon: <Description />, path: '/documents' },
+      { text: 'Mis Documentos', icon: <Description />, path: '/' },
       { text: 'Documentación', icon: <Assignment />, path: '/gestor' },
       { text: 'Subida Masiva', icon: <CloudUpload />, path: '/mass-upload' },
     ]

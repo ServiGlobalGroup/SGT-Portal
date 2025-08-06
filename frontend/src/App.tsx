@@ -5,7 +5,7 @@ import { Box } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
 import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import { Home } from './pages/Home';
+import Dashboard from './pages/Dashboard';
 import { MassUpload } from './pages/MassUpload';
 import { Traffic } from './pages/Traffic';
 import { Vacations } from './pages/Vacations';
@@ -54,7 +54,12 @@ function App() {
                   <Routes>
                     <Route path="/" element={
                       <ProtectedRoute>
-                        <Home />
+                        <Documents />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/dashboard" element={
+                      <ProtectedRoute>
+                        <Dashboard />
                       </ProtectedRoute>
                     } />
                     <Route path="/mass-upload" element={

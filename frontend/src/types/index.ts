@@ -1,10 +1,3 @@
-export interface DashboardStats {
-  total_users: number;
-  active_sessions: number;
-  total_documents: number;
-  pending_requests: number;
-}
-
 export interface TrafficData {
   id: number;
   timestamp: string;

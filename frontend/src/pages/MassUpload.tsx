@@ -137,7 +137,7 @@ export const MassUpload: React.FC = () => {
   // Verificar permisos
   useEffect(() => {
     if (user && !hasPermission(user, Permission.MASS_UPLOAD)) {
-      window.location.href = '/dashboard';
+      window.location.href = '/';
     }
   }, [user]);
 

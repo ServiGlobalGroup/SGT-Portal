@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { DashboardStats, TrafficData, VacationRequest, Document, Activity, TrafficFolder, TrafficDocument, PayrollDocument, PayrollStats, User } from '../types';
+import type { TrafficData, VacationRequest, Document, TrafficFolder, TrafficDocument, PayrollDocument, PayrollStats, User } from '../types';
 
 const API_BASE_URL = 'http://127.0.0.1:8000';
 
@@ -18,13 +18,6 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
-
-export const dashboardAPI = {
-  getStats: (): Promise<DashboardStats> => 
-    api.get('/api/dashboard/stats').then(res => res.data),
-  getRecentActivity: (): Promise<{ activities: Activity[] }> => 
-    api.get('/api/dashboard/recent-activity').then(res => res.data),
-};
 
 export const trafficAPI = {
   getTrafficData: (): Promise<TrafficData[]> => 
@@ -156,17 +149,17 @@ export const payrollAPI = {
     }
   },
 
-  // Procesar PDF con múltiples nóminas desde el dashboard (solo admin)
+  // Procesar PDF con múltiples nóminas (solo admin)
   processPayrollPDF: (file: File, monthYear: string) => {
     const formData = new FormData();
     formData.append('file', file);
     formData.append('month_year', monthYear);
-    return api.post('/api/dashboard/process-payroll-pdf', formData, {
+    return api.post('/api/payroll/process-payroll-pdf', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     }).then(res => res.data);
   },
 
-  // Procesar PDF con múltiples dietas desde el dashboard (solo admin)
+  // Procesar PDF con múltiples dietas (solo admin)
   processDietasPDF: (file: File, monthYear: string) => {
     const formData = new FormData();
     formData.append('file', file);
