@@ -87,8 +87,8 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     Permission.MANAGE_USERS,
     Permission.VIEW_GESTOR,
     Permission.MASS_UPLOAD,
-    Permission.VIEW_SETTINGS,
-    Permission.MANAGE_SETTINGS,
+    // Permission.VIEW_SETTINGS - REMOVIDO: Solo MASTER_ADMIN puede ver configuración
+    // Permission.MANAGE_SETTINGS - REMOVIDO: Solo MASTER_ADMIN puede gestionar configuración
   ],
 };
 
