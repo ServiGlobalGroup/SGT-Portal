@@ -334,14 +334,14 @@ const Login: React.FC = () => {
             mb: 4, // Más espacio ya que no hay subtítulo
             mt: -2, // Margen superior negativo para subirlo más
             '& img': {
-              maxWidth: '200px', // Más grande
+              maxWidth: '220px', // Más grande
               height: 'auto',
-              maxHeight: '60px', // Más alto
+              maxHeight: '70px', // Más alto
               objectFit: 'contain',
             }
           }}>
             <img 
-              src="/images/logosgt.png" 
+              src="/images/logosgt.webp" 
               alt="Logo SGT" 
               style={{ width: '100%' }}
             />
@@ -518,6 +518,40 @@ const Login: React.FC = () => {
       {/* Sección Derecha - Solo fondo con carrusel */}
       <RightSection>
         <RightSectionInner>
+          {/* Texto de marca en la esquina inferior */}
+          <Box
+            sx={{
+              position: 'absolute',
+              bottom: 40,
+              right: 40,
+              zIndex: 10,
+              textAlign: 'right',
+            }}
+          >
+            <Typography
+              variant="h6"
+              sx={{
+                color: 'white',
+                fontWeight: 700,
+                fontSize: '20px',
+                mb: 0.5,
+                textShadow: '0 2px 4px rgba(0,0,0,0.3)',
+              }}
+            >
+              ServiGlobal Group
+            </Typography>
+            <Typography
+              variant="body2"
+              sx={{
+                color: 'rgba(255,255,255,0.8)',
+                fontSize: '14px',
+                textShadow: '0 1px 2px rgba(0,0,0,0.3)',
+              }}
+            >
+              Portal de Gestión Empresarial
+            </Typography>
+          </Box>
+
           {/* Carrusel de imágenes */}
           <CarouselContainer>
             {carouselImages.map((image, index) => (

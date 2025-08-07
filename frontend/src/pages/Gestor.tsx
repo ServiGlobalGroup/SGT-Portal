@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { PaginationComponent } from '../components/PaginationComponent';
 import { usePagination } from '../hooks/usePagination';
+import { useDeviceType } from '../hooks/useDeviceType';
+import { MobileGestor } from './mobile/MobileGestor';
 import {
   Box,
   Typography,
@@ -87,6 +89,13 @@ interface AllUsersData {
 }
 
 export const Gestor: React.FC = () => {
+  const { useMobileVersion } = useDeviceType();
+  
+  // Si es dispositivo móvil, usar la versión optimizada
+  if (useMobileVersion) {
+    return <MobileGestor />;
+  }
+
   const [allUsersData, setAllUsersData] = useState<AllUsersData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);

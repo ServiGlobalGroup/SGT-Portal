@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { PaginationComponent } from '../components/PaginationComponent';
 import { usePagination } from '../hooks/usePagination';
+import { useDeviceType } from '../hooks/useDeviceType';
+import { MobileDocuments } from './mobile/MobileDocumentsNew';
 import {
   Box,
   Typography,
@@ -66,6 +68,13 @@ interface FolderData {
 }
 
 export const Documents: React.FC = () => {
+  const { useMobileVersion } = useDeviceType();
+  
+  // Si es dispositivo móvil, usar la versión optimizada
+  if (useMobileVersion) {
+    return <MobileDocuments />;
+  }
+
   const [currentFolder, setCurrentFolder] = useState('informacion');
   const [folderData, setFolderData] = useState<FolderData | null>(null);
   const [loading, setLoading] = useState(true);

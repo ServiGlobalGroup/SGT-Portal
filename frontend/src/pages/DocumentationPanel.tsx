@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { PaginationComponent } from '../components/PaginationComponent';
 import { usePagination } from '../hooks/usePagination';
+import { useDeviceType } from '../hooks/useDeviceType';
+import { MobileDocumentationPanel } from './mobile/MobileDocumentationPanel';
 import {
   Box,
   Paper,
@@ -83,6 +85,13 @@ interface AlertState {
 }
 
 const DocumentationPanel: React.FC = () => {
+  const { useMobileVersion } = useDeviceType();
+  
+  // Si es dispositivo móvil, usar la versión optimizada
+  if (useMobileVersion) {
+    return <MobileDocumentationPanel />;
+  }
+
   // Estados
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
