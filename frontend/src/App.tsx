@@ -1,21 +1,23 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { Box } from '@mui/material';
 import { AuthProvider } from './contexts/AuthContext';
 import { Layout } from './components/Layout';
 import { ProtectedRoute } from './components/ProtectedRoute';
-import Dashboard from './pages/Dashboard';
-import { MassUpload } from './pages/MassUpload';
-import { Traffic } from './pages/Traffic';
-import { Vacations } from './pages/Vacations';
-import { Documents } from './pages/Documents';
-import { Orders } from './pages/Orders';
-import { Users } from './pages/Users';
-import DocumentationPanel from './pages/DocumentationPanel';
-import { Profile } from './pages/Profile';
-import { Settings } from './pages/Settings';
-import Login from './pages/Login';
+// Lazy load de páginas para dividir el bundle por ruta
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const MassUpload = lazy(() => import('./pages/MassUpload').then(m => ({ default: m.MassUpload })));
+const Traffic = lazy(() => import('./pages/Traffic').then(m => ({ default: m.Traffic })));
+const Vacations = lazy(() => import('./pages/Vacations').then(m => ({ default: m.Vacations })));
+const Documents = lazy(() => import('./pages/Documents').then(m => ({ default: m.Documents })));
+const Orders = lazy(() => import('./pages/Orders').then(m => ({ default: m.Orders })));
+const Users = lazy(() => import('./pages/Users'));
+const DocumentationPanel = lazy(() => import('./pages/DocumentationPanel'));
+const Profile = lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
+const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })));
+const Login = lazy(() => import('./pages/Login'));
 import { useAuth } from './hooks/useAuth';
 import theme from './theme/theme';
 
@@ -44,6 +46,7 @@ function App() {
           overflow: 'hidden' 
         }}>
           <Router>
+            <Suspense fallback={null}>
             <Routes>
               {/* Ruta de login */}
               <Route path="/login" element={<LoginRoute />} />
@@ -113,6 +116,7 @@ function App() {
                 </Layout>
               } />
             </Routes>
+            </Suspense>
           </Router>
         </Box>
       </AuthProvider>

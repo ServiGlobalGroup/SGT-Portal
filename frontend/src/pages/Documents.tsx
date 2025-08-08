@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import { PaginationComponent } from '../components/PaginationComponent';
 import { usePagination } from '../hooks/usePagination';
 import { useDeviceType } from '../hooks/useDeviceType';
-import { MobileDocuments } from './mobile/MobileDocumentsNew';
+const MobileDocuments = lazy(() => import('./mobile/MobileDocumentsNew').then(m => ({ default: m.MobileDocuments })));
 import {
   Box,
   Typography,
@@ -47,7 +47,7 @@ import {
   FilePresent,
   Info,
 } from '@mui/icons-material';
-import { PdfPreview } from '../components/PdfPreview';
+const PdfPreview = lazy(() => import('../components/PdfPreview').then(m => ({ default: m.PdfPreview })));
 import { userFilesAPI, API_BASE_URL } from '../services/api';
 
 interface UserDocument {
@@ -72,7 +72,11 @@ export const Documents: React.FC = () => {
   
   // Si es dispositivo móvil, usar la versión optimizada
   if (useMobileVersion) {
-    return <MobileDocuments />;
+    return (
+      <Suspense fallback={null}>
+        <MobileDocuments />
+      </Suspense>
+    );
   }
 
   const [currentFolder, setCurrentFolder] = useState('informacion');
@@ -944,13 +948,15 @@ export const Documents: React.FC = () => {
       </Dialog>
 
       {/* Preview de PDF mejorado */}
-      <PdfPreview
+  <Suspense fallback={null}>
+  <PdfPreview
         open={pdfPreview.open}
         onClose={() => setPdfPreview({ open: false, fileUrl: '', fileName: '' })}
         fileUrl={pdfPreview.fileUrl}
         fileName={pdfPreview.fileName}
         title={`Vista previa: ${pdfPreview.fileName}`}
       />
+  </Suspense>
     </Box>
     </>
   );
