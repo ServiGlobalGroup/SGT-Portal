@@ -1,7 +1,11 @@
 import axios from 'axios';
 import type { TrafficData, VacationRequest, Document, TrafficFolder, TrafficDocument, PayrollDocument, PayrollStats, User } from '../types';
 
-const API_BASE_URL = 'http://127.0.0.1:8000';
+// Usar variable de entorno en Vite para configurar el backend en dev/prod
+const envUrl = (import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined;
+export const API_BASE_URL = envUrl && envUrl.trim() !== ''
+  ? envUrl
+  : (typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:8000');
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -74,6 +78,14 @@ export const documentsAPI = {
     api.get(`/api/documents/category/${category}`).then(res => res.data),
   getStats: () => 
     api.get('/api/documents/stats/summary').then(res => res.data),
+  // Subir documentos generales (visibles para todos)
+  uploadGeneralDocuments: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/api/documents/upload-general-documents', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }).then(res => res.data);
+  }
 };
 
 export const payrollAPI = {

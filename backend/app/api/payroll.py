@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from fastapi.responses import FileResponse, StreamingResponse
-from app.models.schemas import PayrollDocument, User, PayrollStats
-from app.models.user import UploadHistory
+from app.models.schemas import PayrollDocument, User as UserSchema, PayrollStats
+from app.models.user import UploadHistory, User
 from app.services.payroll_pdf_service import PayrollPDFProcessor
 from app.database.connection import get_db
 from app.config import settings
@@ -13,6 +13,7 @@ import uuid
 from pathlib import Path
 import io
 import tempfile
+from app.api.auth import get_current_active_user
 
 router = APIRouter()
 
@@ -26,13 +27,16 @@ users_db = []
 # Base de datos simulada de documentos de nómina
 payroll_documents_db = []
 
-def get_current_user():
-    """Simulación de obtener el usuario actual (normalmente vendría del token de autenticación)"""
-    return {"user_id": 1, "role": "admin"}  # Usuario admin para testing
+def _is_admin(current_user: User) -> bool:
+    try:
+        role_value = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+        return role_value in ("ADMINISTRADOR", "ADMIN")
+    except Exception:
+        return False
 
 # Endpoints para el usuario actual
 @router.get("/my-documents", response_model=List[PayrollDocument])
-async def get_my_documents(month: Optional[str] = None, current_user = Depends(get_current_user)):
+async def get_my_documents(month: Optional[str] = None, current_user: User = Depends(get_current_active_user)):
     """Obtener documentos del usuario actual"""
     user_documents = [doc for doc in payroll_documents_db if doc.user_id == current_user["user_id"]]
     
@@ -46,7 +50,7 @@ async def upload_document(
     file: UploadFile = File(...),
     type: str = Form(...),
     month: str = Form(...),
-    current_user = Depends(get_current_user)
+    current_user: User = Depends(get_current_active_user)
 ):
     """Subir un documento del usuario actual"""
     if type not in ["nomina", "dieta"]:
@@ -66,11 +70,11 @@ async def upload_document(
         buffer.write(content)
     
     # Crear registro en base de datos
-    user = next((u for u in users_db if u.id == current_user["user_id"]), None)
+    user = next((u for u in users_db if u.id == getattr(current_user, "id", None)), None)
     new_document = PayrollDocument(
-        id=max([doc.id for doc in payroll_documents_db]) + 1,
-        user_id=current_user["user_id"],
-        user_name=user.name if user else "Usuario Desconocido",
+        id=(max([doc.id for doc in payroll_documents_db]) + 1) if payroll_documents_db else 1,
+        user_id=getattr(current_user, "id", 0),
+        user_name=(getattr(current_user, "full_name", None) or f"{getattr(current_user, 'first_name', '')} {getattr(current_user, 'last_name', '')}").strip() or "Usuario",
         type=type,
         month=month,
         file_url=f"/files/payroll/{unique_filename}",
@@ -85,35 +89,35 @@ async def upload_document(
 
 # Endpoints para visualización y descarga
 @router.get("/documents/{document_id}/view")
-async def view_document(document_id: int, current_user = Depends(get_current_user)):
+async def view_document(document_id: int, current_user: User = Depends(get_current_active_user)):
     """Ver un documento PDF en el navegador"""
     document = next((doc for doc in payroll_documents_db if doc.id == document_id), None)
     if not document:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
     
     # Verificar permisos
-    if current_user["role"] != "admin" and document.user_id != current_user["user_id"]:
+    if (not _is_admin(current_user)) and document.user_id != getattr(current_user, "id", None):
         raise HTTPException(status_code=403, detail="No tienes permisos para ver este documento")
     
     # TODO: Implementar lectura real del archivo
     raise HTTPException(status_code=501, detail="Funcionalidad no implementada")
 
 @router.get("/documents/{document_id}/download")
-async def download_document(document_id: int, current_user = Depends(get_current_user)):
+async def download_document(document_id: int, current_user: User = Depends(get_current_active_user)):
     """Descargar un documento PDF"""
     document = next((doc for doc in payroll_documents_db if doc.id == document_id), None)
     if not document:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
     
     # Verificar permisos
-    if current_user["role"] != "admin" and document.user_id != current_user["user_id"]:
+    if (not _is_admin(current_user)) and document.user_id != getattr(current_user, "id", None):
         raise HTTPException(status_code=403, detail="No tienes permisos para descargar este documento")
     
     # TODO: Implementar descarga real del archivo
     raise HTTPException(status_code=501, detail="Funcionalidad no implementada")
 
 @router.delete("/documents/{document_id}")
-async def delete_document(document_id: int, current_user = Depends(get_current_user)):
+async def delete_document(document_id: int, current_user: User = Depends(get_current_active_user)):
     """Eliminar un documento"""
     global payroll_documents_db
     document = next((doc for doc in payroll_documents_db if doc.id == document_id), None)
@@ -121,7 +125,7 @@ async def delete_document(document_id: int, current_user = Depends(get_current_u
         raise HTTPException(status_code=404, detail="Documento no encontrado")
     
     # Verificar permisos
-    if current_user["role"] != "admin" and document.user_id != current_user["user_id"]:
+    if (not _is_admin(current_user)) and document.user_id != getattr(current_user, "id", None):
         raise HTTPException(status_code=403, detail="No tienes permisos para eliminar este documento")
     
     # Eliminar archivo físico si existe
@@ -164,7 +168,7 @@ async def get_payroll_stats():
 async def process_multiple_payrolls(
     file: UploadFile = File(...),
     month_year: str = Form(...),
-    current_user = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -177,7 +181,7 @@ async def process_multiple_payrolls(
         current_user: Usuario actual (debe ser admin)
     """
     # Verificar permisos de administrador
-    if current_user["role"] != "admin":
+    if not _is_admin(current_user):
         raise HTTPException(
             status_code=403, 
             detail="Acceso denegado: se requieren permisos de administrador para procesar nóminas múltiples"
@@ -234,8 +238,8 @@ async def process_multiple_payrolls(
             upload_history = UploadHistory(
                 file_name=file.filename or "archivo_sin_nombre.pdf",
                 upload_date=datetime.now(),
-                user_dni=current_user["dni_nie"],
-                user_name=current_user["full_name"],
+                user_dni=getattr(current_user, "dni_nie", ""),
+                user_name=(getattr(current_user, "full_name", None) or f"{getattr(current_user, 'first_name', '')} {getattr(current_user, 'last_name', '')}").strip(),
                 document_type="nominas",
                 month=month_str.zfill(2),
                 year=year_str,
@@ -290,7 +294,7 @@ async def process_multiple_payrolls(
 async def process_multiple_dietas(
     file: UploadFile = File(...),
     month_year: str = Form(...),
-    current_user = Depends(get_current_user),
+    current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db)
 ):
     """
@@ -303,7 +307,7 @@ async def process_multiple_dietas(
         current_user: Usuario actual (debe ser admin)
     """
     # Verificar permisos de administrador
-    if current_user["role"] != "admin":
+    if not _is_admin(current_user):
         raise HTTPException(
             status_code=403, 
             detail="Acceso denegado: se requieren permisos de administrador para procesar dietas múltiples"
@@ -360,8 +364,8 @@ async def process_multiple_dietas(
             upload_history = UploadHistory(
                 file_name=file.filename or "archivo_sin_nombre.pdf",
                 upload_date=datetime.now(),
-                user_dni=current_user["dni_nie"],
-                user_name=current_user["full_name"],
+                user_dni=getattr(current_user, "dni_nie", ""),
+                user_name=(getattr(current_user, "full_name", None) or f"{getattr(current_user, 'first_name', '')} {getattr(current_user, 'last_name', '')}").strip(),
                 document_type="dietas",
                 month=month_str.zfill(2),
                 year=year_str,
@@ -414,11 +418,11 @@ async def process_multiple_dietas(
         )
 
 @router.get("/processing-status/{process_id}")
-async def get_processing_status(process_id: str, current_user = Depends(get_current_user)):
+async def get_processing_status(process_id: str, current_user: User = Depends(get_current_active_user)):
     """
     Obtiene el estado de procesamiento de un PDF (para futuras implementaciones asíncronas).
     """
-    if current_user["role"] != "admin":
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Acceso denegado")
     
     # Por ahora retornamos un estado mock
@@ -430,18 +434,18 @@ async def get_processing_status(process_id: str, current_user = Depends(get_curr
     }
 
 # Endpoints de administrador
-@router.get("/admin/users", response_model=List[User])
-async def get_all_users(current_user = Depends(get_current_user)):
+@router.get("/admin/users", response_model=List[UserSchema])
+async def get_all_users(current_user: User = Depends(get_current_active_user)):
     """Obtener todos los usuarios (solo admins)"""
-    if current_user["role"] != "admin":
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Acceso denegado: se requieren permisos de administrador")
     
     return users_db
 
 @router.get("/admin/users/{user_id}/documents", response_model=List[PayrollDocument])
-async def get_user_documents(user_id: int, month: Optional[str] = None, current_user = Depends(get_current_user)):
+async def get_user_documents(user_id: int, month: Optional[str] = None, current_user: User = Depends(get_current_active_user)):
     """Obtener documentos de un usuario específico (solo admins)"""
-    if current_user["role"] != "admin":
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Acceso denegado: se requieren permisos de administrador")
     
     user_documents = [doc for doc in payroll_documents_db if doc.user_id == user_id]
@@ -452,9 +456,9 @@ async def get_user_documents(user_id: int, month: Optional[str] = None, current_
     return user_documents
 
 @router.get("/admin/documents", response_model=List[PayrollDocument])
-async def get_all_documents(month: Optional[str] = None, type: Optional[str] = None, current_user = Depends(get_current_user)):
+async def get_all_documents(month: Optional[str] = None, type: Optional[str] = None, current_user: User = Depends(get_current_active_user)):
     """Obtener todos los documentos (solo admins)"""
-    if current_user["role"] != "admin":
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Acceso denegado: se requieren permisos de administrador")
     
     documents = payroll_documents_db.copy()
@@ -473,10 +477,10 @@ async def upload_document_for_user(
     type: str = Form(...),
     month: str = Form(...),
     user_id: int = Form(...),
-    current_user = Depends(get_current_user)
+    current_user: User = Depends(get_current_active_user)
 ):
     """Subir un documento para cualquier usuario (solo admins)"""
-    if current_user["role"] != "admin":
+    if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Acceso denegado: se requieren permisos de administrador")
     
     if type not in ["nomina", "dieta"]:

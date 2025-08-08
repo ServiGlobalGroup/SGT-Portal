@@ -26,7 +26,7 @@ import { MobileLayout } from '../../components/mobile/MobileLayout';
 import { MobileTabs } from '../../components/mobile/MobileTabs';
 import { MobileSearchBar } from '../../components/mobile/MobileSearchBar';
 import { MobilePagination } from '../../components/mobile/MobilePagination';
-import { userFilesAPI } from '../../services/api';
+import { userFilesAPI, API_BASE_URL } from '../../services/api';
 
 // Interfaces
 interface UserDocument {
@@ -491,7 +491,7 @@ export const MobileDocuments: React.FC = () => {
         const previewUrl = `/api/documents/preview/general/${fileName}`;
         const fullUrl = previewUrl.startsWith('http') 
           ? previewUrl 
-          : `http://127.0.0.1:8000${previewUrl}`;
+          : `${API_BASE_URL}${previewUrl}`;
         
         setPdfPreview({
           open: true,
@@ -508,7 +508,7 @@ export const MobileDocuments: React.FC = () => {
         const previewUrl = document.download_url.replace('/download/', '/preview/') + `?token=${token}`;
         const fullUrl = previewUrl.startsWith('http') 
           ? previewUrl 
-          : `http://127.0.0.1:8000${previewUrl}`;
+          : `${API_BASE_URL}${previewUrl}`;
         
         setPdfPreview({
           open: true,

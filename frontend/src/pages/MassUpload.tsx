@@ -49,6 +49,7 @@ import {
 } from '@mui/icons-material';
 import { useAuth } from '../hooks/useAuth';
 import { hasPermission, Permission } from '../utils/permissions';
+import { API_BASE_URL, userFilesAPI, documentsAPI, payrollAPI } from '../services/api';
 
 // Interfaces
 interface UploadState {
@@ -171,7 +172,7 @@ export const MassUpload: React.FC = () => {
     setHistoryLoading(true);
     try {
       const token = localStorage.getItem('access_token');
-      const response = await fetch('http://127.0.0.1:8000/api/user-files/upload-history', {
+  const response = await fetch(`${API_BASE_URL}/api/user-files/upload-history`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -262,23 +263,17 @@ export const MassUpload: React.FC = () => {
         formData.append('month_year', monthYear);
       }
 
-      const endpoint = uploadState.documentType === 'multiple' 
-        ? 'http://127.0.0.1:8000/api/payroll/process-multiple-payrolls'
-        : uploadState.documentType === 'multiple-dietas'
-        ? 'http://127.0.0.1:8000/api/payroll/process-multiple-dietas'
-        : 'http://127.0.0.1:8000/api/documents/upload-general-documents';
+      let result: any;
+      if (uploadState.documentType === 'multiple') {
+        result = await payrollAPI.admin.processMultiplePayrolls(uploadState.file, `${uploadState.month}_${uploadState.year}`);
+      } else if (uploadState.documentType === 'multiple-dietas') {
+        result = await payrollAPI.processDietasPDF(uploadState.file, `${uploadState.month}_${uploadState.year}`);
+      } else {
+        // documentos-generales
+        result = await documentsAPI.uploadGeneralDocuments(uploadState.file);
+      }
 
-      const token = localStorage.getItem('access_token');
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formData,
-      });
-
-      if (response.ok) {
-        const result = await response.json();
+      if (result) {
         setProcessingResults(result);
         setShowResultsModal(true);
         setUploadState(prev => ({ 
@@ -290,9 +285,6 @@ export const MassUpload: React.FC = () => {
         }));
         loadUploadHistory(); // Recargar historial después de subida exitosa
         setAlert({ type: 'success', message: 'Documentos procesados exitosamente' });
-      } else {
-        const errorData = await response.json();
-        setAlert({ type: 'error', message: errorData.detail || 'Error al procesar documentos' });
       }
     } catch (error) {
       console.error('Error uploading:', error);

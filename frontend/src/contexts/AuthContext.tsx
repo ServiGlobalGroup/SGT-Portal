@@ -1,6 +1,13 @@
 import React, { createContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import type { User } from '../types';
+import { } from '../types';
+
+// Base de API compartida con services/api.ts
+const envUrl = (import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined;
+const API_BASE_URL = envUrl && envUrl.trim() !== ''
+  ? envUrl
+  : (typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:8000');
 
 interface AuthContextType {
   user: User | null;
@@ -38,7 +45,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     
     // Opcional: llamar al endpoint de logout del servidor
     if (token) {
-      fetch('http://127.0.0.1:8000/api/auth/logout', {
+      fetch(`${API_BASE_URL}/api/auth/logout`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -75,7 +82,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const verifyToken = async (tokenToVerify: string): Promise<boolean> => {
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/auth/verify-token', {
+  const response = await fetch(`${API_BASE_URL}/api/auth/verify-token`, {
         headers: {
           'Authorization': `Bearer ${tokenToVerify}`,
         },
@@ -96,7 +103,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       formData.append('username', username);
       formData.append('password', password);
 
-      const response = await fetch('http://127.0.0.1:8000/api/auth/login', {
+  const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
         body: formData,
       });

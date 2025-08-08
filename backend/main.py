@@ -1,5 +1,15 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
+import os
+import sys
+
+# Ensure the 'backend' directory is on sys.path so imports like 'from app...' resolve to 'backend/app'
+BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
+if BACKEND_DIR not in sys.path:
+    sys.path.insert(0, BACKEND_DIR)
+
 from app.api import dashboard, traffic, vacations, documents, payroll, orders, profile, settings, users, auth, user_files, documentation
 from app.database.connection import check_database_connection
 from app.middleware.maintenance import MaintenanceMiddleware
@@ -41,9 +51,7 @@ app.include_router(orders.router, tags=["orders"])
 app.include_router(profile.router, prefix="/api", tags=["profile"])
 app.include_router(settings.router, prefix="/api", tags=["settings"])
 
-@app.get("/")
-async def root():
-    return {"message": "Portal API is running"}
+# Nota: la ruta raíz '/' será servida por el fallback de la SPA si existe el build
 
 @app.get("/health")
 async def health_check():
@@ -53,6 +61,33 @@ async def health_check():
         "status": "healthy" if db_status else "unhealthy",
         "database": "connected" if db_status else "disconnected"
     }
+
+# ---------- Static Frontend (Vite build) ----------
+# Resolver ruta absoluta al directorio dist de Vite
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+REPO_ROOT = os.path.abspath(os.path.join(BASE_DIR, os.pardir))
+FRONTEND_DIST = os.path.join(REPO_ROOT, 'frontend', 'dist')
+
+if os.path.isdir(FRONTEND_DIST):
+    # Servir assets estáticos (JS/CSS) y archivos públicos
+    app.mount("/assets", StaticFiles(directory=os.path.join(FRONTEND_DIST, "assets")), name="assets")
+
+    INDEX_HTML = os.path.join(FRONTEND_DIST, 'index.html')
+
+    @app.get("/{full_path:path}")
+    async def spa_fallback(full_path: str, request: Request) -> Response:
+        # Si la ruta empieza por api, dejar que FastAPI maneje 404/routers
+        if full_path.startswith('api'):
+            return Response(status_code=404)
+
+        # Si el archivo solicitado existe en dist (assets públicos: favicon, imágenes, etc.), servirlo
+        requested_path = os.path.normpath(os.path.join(FRONTEND_DIST, full_path))
+        # Proteger contra path traversal
+        if os.path.commonpath([requested_path, FRONTEND_DIST]) == FRONTEND_DIST and os.path.isfile(requested_path):
+            return FileResponse(requested_path)
+
+        # Devolver index.html para que el router del frontend gestione la ruta
+        return FileResponse(INDEX_HTML)
 
 if __name__ == "__main__":
     import uvicorn
