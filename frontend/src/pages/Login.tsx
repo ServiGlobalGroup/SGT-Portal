@@ -232,9 +232,9 @@ const Login: React.FC = () => {
   // Estados del carrusel
   const [currentSlide, setCurrentSlide] = useState(0);
   const carouselImages = [
-    '/portada.png',
-    '/portada.png', // Podrías agregar más imágenes aquí cuando las tengas
-    '/portada.png', // Por ahora usando la misma imagen
+    '/portada.webp',
+    '/portada.webp', // Podrías agregar más imágenes aquí cuando las tengas
+    '/portada.webp', // Por ahora usando la misma imagen
   ];
 
   // Efecto para el carrusel automático
