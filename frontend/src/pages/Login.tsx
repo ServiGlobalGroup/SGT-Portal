@@ -233,8 +233,9 @@ const Login: React.FC = () => {
   const [currentSlide, setCurrentSlide] = useState(0);
   const carouselImages = [
     '/portada.webp',
-    '/portada.webp', // Podrías agregar más imágenes aquí cuando las tengas
-    '/portada.webp', // Por ahora usando la misma imagen
+    '/portada2.webp',
+    '/portada3.webp',
+    '/portada4.webp',
   ];
 
   // Efecto para el carrusel automático
@@ -245,6 +246,18 @@ const Login: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [carouselImages.length]);
+
+  // Pre-carga de imágenes del carrusel para evitar parpadeos
+  useEffect(() => {
+    const preload = carouselImages.map((src) => {
+      const img = new Image();
+      img.src = src;
+      return img;
+    });
+    return () => {
+      // Nada específico que limpiar, pero mantenemos la forma por consistencia
+    };
+  }, [carouselImages]);
 
   // Validación de contraseña
   const validatePassword = (password: string) => {
