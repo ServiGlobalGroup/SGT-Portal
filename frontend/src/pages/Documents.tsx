@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { PaginationComponent } from '../components/PaginationComponent';
 import { usePagination } from '../hooks/usePagination';
 import { useDeviceType } from '../hooks/useDeviceType';
-import { MobileDocuments } from './mobile/MobileDocumentsNew';
+import { MobileMisDocumentos } from './mobile/MobileMisDocumentos';
 import {
   Box,
   Typography,
@@ -72,7 +72,7 @@ export const Documents: React.FC = () => {
   
   // Si es dispositivo móvil, usar la versión optimizada
   if (useMobileVersion) {
-    return <MobileDocuments />;
+    return <MobileMisDocumentos />;
   }
 
   const [currentFolder, setCurrentFolder] = useState('informacion');

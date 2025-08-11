@@ -88,23 +88,26 @@ export const MobileSidebar: React.FC<MobileSidebarProps> = ({
             position: 'relative',
           }}
         >
+          {/* Botón de menú/cerrar en el header */}
           <IconButton
             onClick={onClose}
             sx={{
               position: 'absolute',
               top: 8,
-              right: 8,
+              left: 8,
               color: 'white',
               backgroundColor: 'rgba(255,255,255,0.1)',
               '&:hover': {
                 backgroundColor: 'rgba(255,255,255,0.2)',
               },
+              borderRadius: 2,
+              p: 1.5,
             }}
           >
             <Close />
           </IconButton>
 
-          <Stack direction="row" alignItems="center" spacing={2} sx={{ mt: 1 }}>
+          <Stack direction="row" alignItems="center" spacing={2} sx={{ mt: 1, ml: 6 }}>
             <Box
               component="img"
               src="/images/logosgt.webp"

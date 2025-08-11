@@ -15,7 +15,6 @@ import {
   Menu,
   MenuItem,
   SwipeableDrawer,
-  AppBar,
   GlobalStyles,
   Collapse,
 } from '@mui/material';
@@ -694,52 +693,31 @@ export const Sidebar: React.FC<SidebarProps> = ({
   if (isMobile) {
     return (
       <>
-        {/* AppBar para móviles */}
-        <AppBar 
-          position="fixed" 
-          sx={{ 
-            zIndex: (theme) => theme.zIndex.drawer + 1,
-            background: '#501b36',
-            color: 'white',
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-            display: { xs: 'block', md: 'none' }
-          }}
-        >
-          <Toolbar>
-            <IconButton
-              color="inherit"
-              aria-label="open drawer"
-              edge="start"
-              onClick={() => setMobileMenuOpen(true)}
-              sx={{ mr: 2 }}
-            >
-              <MenuIcon />
-            </IconButton>
-            <Typography variant="h6" noWrap component="div" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center' }}>
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  p: 0.5,
-                }}
-              >
-                <Box
-                  component="img"
-                  src="/images/logosgt.png"
-                  alt="Grupo SGT"
-                  sx={{
-                    height: 32,
-                    width: 'auto',
-                    maxWidth: '120px',
-                    objectFit: 'contain',
-                    filter: 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.4))',
-                  }}
-                />
-              </Box>
-            </Typography>
-          </Toolbar>
-        </AppBar>
+        {/* Botón flotante para abrir sidebar (solo cuando está cerrado) */}
+        {!mobileMenuOpen && (
+          <IconButton
+            onClick={() => setMobileMenuOpen(true)}
+            sx={{
+              position: 'fixed',
+              top: 16,
+              left: 16,
+              zIndex: (theme) => theme.zIndex.drawer + 2,
+              bgcolor: 'rgba(80, 27, 54, 0.9)',
+              color: 'white',
+              '&:hover': {
+                bgcolor: 'rgba(80, 27, 54, 1)',
+                transform: 'scale(1.05)',
+              },
+              borderRadius: 2,
+              p: 1.5,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+              backdropFilter: 'blur(8px)',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+            }}
+          >
+            <MenuIcon />
+          </IconButton>
+        )}
         
         {/* Drawer deslizable para móviles */}
         <SwipeableDrawer
@@ -761,9 +739,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
         >
           {drawerContent}
         </SwipeableDrawer>
-
-        {/* Espaciador para el AppBar */}
-        <Toolbar sx={{ display: { xs: 'block', md: 'none' } }} />
       </>
     );
   }
