@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback, useContext } from 'react';
+import { useDeviceType } from '../hooks/useDeviceType';
+import { MobileUsers } from './mobile/MobileUsers';
 import { usersAPI } from '../services/api';
 import { AuthContext } from '../contexts/AuthContext';
 import { PaginationComponent } from '../components/PaginationComponent';
@@ -74,6 +76,10 @@ interface User {
 }
 
 export const Users: React.FC = () => {
+  const { useMobileVersion } = useDeviceType();
+  if (useMobileVersion) {
+    return <MobileUsers />;
+  }
   // Contexto de autenticación
   const authContext = useContext(AuthContext);
   if (!authContext) {

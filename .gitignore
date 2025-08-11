@@ -61,6 +61,8 @@ files/temp/
 user_files/
 backend/files/
 uploads/
+backend/.trash/
+backend/maintenance_status.json
 
 # Archivos de base de datos locales
 *.db

@@ -2,7 +2,6 @@ from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
 from fastapi.responses import FileResponse, StreamingResponse
 from app.models.schemas import PayrollDocument, User as UserSchema, PayrollStats
 from app.models.user import UploadHistory, User
-from app.services.payroll_pdf_service import PayrollPDFProcessor
 from app.database.connection import get_db
 from app.config import settings
 from datetime import datetime
@@ -34,6 +33,29 @@ def _is_admin(current_user: User) -> bool:
     except Exception:
         return False
 
+
+def _import_pdf_processor():
+    """Importación perezosa del procesador de PDFs para evitar requerir PyMuPDF al iniciar la app.
+
+    Returns:
+        Clase PayrollPDFProcessor si la importación tiene éxito.
+
+    Raises:
+        HTTPException 503 si la dependencia no está disponible.
+    """
+    try:
+        from app.services.payroll_pdf_service import PayrollPDFProcessor  # type: ignore
+        return PayrollPDFProcessor
+    except Exception as e:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Servicio de procesamiento de PDF no disponible: falta dependencia PyMuPDF. "
+                "Instala 'PyMuPDF' en el entorno o usa una versión de Python con wheel precompilado. "
+                f"Detalle: {e}"
+            ),
+        )
+
 # Endpoints para el usuario actual
 @router.get("/my-documents", response_model=List[PayrollDocument])
 async def get_my_documents(month: Optional[str] = None, current_user: User = Depends(get_current_active_user)):
@@ -56,11 +78,11 @@ async def upload_document(
     if type not in ["nomina", "dieta"]:
         raise HTTPException(status_code=400, detail="Tipo de documento inválido")
     
-    if not file.filename.endswith('.pdf'):
+    if not getattr(file, 'filename', None) or not str(file.filename).lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Solo se permiten archivos PDF")
     
     # Generar nombre único para el archivo
-    file_extension = file.filename.split('.')[-1]
+    file_extension = str(file.filename).split('.')[-1]
     unique_filename = f"{type}_{current_user['user_id']}_{month}_{uuid.uuid4().hex[:8]}.{file_extension}"
     file_path = PAYROLL_FILES_DIR / unique_filename
     
@@ -78,7 +100,7 @@ async def upload_document(
         type=type,
         month=month,
         file_url=f"/files/payroll/{unique_filename}",
-        file_name=file.filename,
+    file_name=file.filename or "archivo.pdf",
         file_size=len(content),
         upload_date=datetime.now(),
         status="active"
@@ -188,7 +210,7 @@ async def process_multiple_payrolls(
         )
     
     # Validar que el archivo sea PDF
-    if not file.filename or not file.filename.lower().endswith('.pdf'):
+    if not getattr(file, 'filename', None) or not str(file.filename).lower().endswith('.pdf'):
         raise HTTPException(
             status_code=400, 
             detail="Solo se permiten archivos PDF"
@@ -208,19 +230,20 @@ async def process_multiple_payrolls(
             content = await file.read()
             temp_file.write(content)
             temp_file_path = temp_file.name
-        
-        # Inicializar el procesador de PDFs
-        processor = PayrollPDFProcessor(settings.user_files_base_path)
-        
+
+        # Inicializar el procesador de PDFs (importación perezosa)
+        ProcessorCls = _import_pdf_processor()
+        processor = ProcessorCls(settings.user_files_base_path)
+
         # Procesar el PDF
         results = processor.process_payroll_pdf(temp_file_path, month_year, document_type="nominas")
-        
+
         # Generar resumen legible
         summary = processor.get_processing_summary(results)
-        
+
         # Limpiar archivo temporal
         os.unlink(temp_file_path)
-        
+
         # Extraer mes y año del month_year
         try:
             if '_' in month_year:
@@ -229,10 +252,10 @@ async def process_multiple_payrolls(
                 # Asumir formato YYYY-MM o similar
                 year_str = month_year[:4]
                 month_str = month_year[-2:]
-        except:
+        except Exception:
             month_str = "01"
             year_str = str(datetime.now().year)
-        
+
         # Guardar en historial de subidas
         try:
             upload_history = UploadHistory(
@@ -254,7 +277,7 @@ async def process_multiple_payrolls(
         except Exception as e:
             print(f"Error guardando historial: {e}")
             # No interrumpir el proceso principal si falla el historial
-        
+
         # Preparar respuesta
         response = {
             "success": True,
@@ -273,20 +296,19 @@ async def process_multiple_payrolls(
             "results": results,
             "processed_at": datetime.now().isoformat()
         }
-        
+
         # Si hay errores críticos, devolver código de error parcial
         if results["failed_assignments"] > 0:
             response["warning"] = f"Se procesaron {results['successful_assignments']} nóminas exitosamente, pero {results['failed_assignments']} fallaron."
-        
+
         return response
-        
     except Exception as e:
         # Limpiar archivo temporal si existe
         if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
             os.unlink(temp_file_path)
-        
+
         raise HTTPException(
-            status_code=500, 
+            status_code=500,
             detail=f"Error procesando el archivo PDF: {str(e)}"
         )
 
@@ -314,7 +336,7 @@ async def process_multiple_dietas(
         )
     
     # Validar que el archivo sea PDF
-    if not file.filename or not file.filename.lower().endswith('.pdf'):
+    if not getattr(file, 'filename', None) or not str(file.filename).lower().endswith('.pdf'):
         raise HTTPException(
             status_code=400, 
             detail="Solo se permiten archivos PDF"
@@ -334,19 +356,20 @@ async def process_multiple_dietas(
             content = await file.read()
             temp_file.write(content)
             temp_file_path = temp_file.name
-        
-        # Inicializar el procesador de PDFs
-        processor = PayrollPDFProcessor(settings.user_files_base_path)
-        
+
+        # Inicializar el procesador de PDFs (importación perezosa)
+        ProcessorCls = _import_pdf_processor()
+        processor = ProcessorCls(settings.user_files_base_path)
+
         # Procesar el PDF como dietas
         results = processor.process_payroll_pdf(temp_file_path, month_year, document_type="dietas")
-        
+
         # Generar resumen legible
         summary = processor.get_processing_summary(results)
-        
+
         # Limpiar archivo temporal
         os.unlink(temp_file_path)
-        
+
         # Extraer mes y año del month_year
         try:
             if '_' in month_year:
@@ -355,10 +378,10 @@ async def process_multiple_dietas(
                 # Asumir formato YYYY-MM o similar
                 year_str = month_year[:4]
                 month_str = month_year[-2:]
-        except:
+        except Exception:
             month_str = "01"
             year_str = str(datetime.now().year)
-        
+
         # Guardar en historial de subidas
         try:
             upload_history = UploadHistory(
@@ -380,7 +403,7 @@ async def process_multiple_dietas(
         except Exception as e:
             print(f"Error guardando historial: {e}")
             # No interrumpir el proceso principal si falla el historial
-        
+
         # Preparar respuesta
         response = {
             "success": True,
@@ -400,20 +423,19 @@ async def process_multiple_dietas(
             "results": results,
             "processed_at": datetime.now().isoformat()
         }
-        
+
         # Si hay errores críticos, devolver código de error parcial
         if results["failed_assignments"] > 0:
             response["warning"] = f"Se procesaron {results['successful_assignments']} dietas exitosamente, pero {results['failed_assignments']} fallaron."
-        
+
         return response
-        
     except Exception as e:
         # Limpiar archivo temporal si existe
         if 'temp_file_path' in locals() and os.path.exists(temp_file_path):
             os.unlink(temp_file_path)
-        
+
         raise HTTPException(
-            status_code=500, 
+            status_code=500,
             detail=f"Error procesando el archivo PDF de dietas: {str(e)}"
         )
 
@@ -486,7 +508,7 @@ async def upload_document_for_user(
     if type not in ["nomina", "dieta"]:
         raise HTTPException(status_code=400, detail="Tipo de documento inválido")
     
-    if not file.filename.endswith('.pdf'):
+    if not getattr(file, 'filename', None) or not str(file.filename).lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Solo se permiten archivos PDF")
     
     user = next((u for u in users_db if u.id == user_id), None)
@@ -494,7 +516,7 @@ async def upload_document_for_user(
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     
     # Generar nombre único para el archivo
-    file_extension = file.filename.split('.')[-1]
+    file_extension = str(file.filename).split('.')[-1]
     unique_filename = f"{type}_{user_id}_{month}_{uuid.uuid4().hex[:8]}.{file_extension}"
     file_path = PAYROLL_FILES_DIR / unique_filename
     
@@ -511,7 +533,7 @@ async def upload_document_for_user(
         type=type,
         month=month,
         file_url=f"/files/payroll/{unique_filename}",
-        file_name=file.filename,
+    file_name=file.filename or "archivo.pdf",
         file_size=len(content),
         upload_date=datetime.now(),
         status="active"

@@ -8,16 +8,19 @@ load_dotenv()
 
 class Settings(BaseSettings):
     # Database
-    database_url: str
+    # Fallback seguro para permitir import sin DB en desarrollo
+    database_url: str = os.getenv("DATABASE_URL", "sqlite:///./dev.db")
     
     # Security
-    secret_key: str
+    # Evitar vacío para operaciones criptográficas básicas en desarrollo
+    secret_key: str = os.getenv("SECRET_KEY", "change-me")
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     
     # Master Admin User (Hidden in code, not in database)
     master_admin_username: str = "admin01"
-    master_admin_password: str = "RoLancer2001"  # Should be set via environment variable
+    # En producción, establezca via variable de entorno MASTER_ADMIN_PASSWORD
+    master_admin_password: str = ""  # No hardcodear credenciales
     master_admin_email: str = "sys@internal.local"
     master_admin_name: str = "System Admin"
     
@@ -26,15 +29,28 @@ class Settings(BaseSettings):
     maintenance_message: str = "Sistema en mantenimiento. Por favor, intente más tarde."
     
     # File Storage
-    user_files_base_path: str
-    traffic_files_base_path: str
+    user_files_base_path: str = os.getenv("USER_FILES_BASE_PATH", "../user_files")
+    traffic_files_base_path: str = os.getenv("TRAFFIC_FILES_BASE_PATH", "../traffic_files")
     upload_max_size: int = 10485760  # 10MB
     allowed_extensions: List[str] = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".jpg", ".jpeg", ".png"]
     
     # App
     app_name: str = "Portal SGT"
     app_version: str = "1.0.0"
-    debug: bool = True
+    debug: bool = False  # Producción por defecto
+
+    # CORS
+    allowed_origins: List[str] = [
+        # Valores por defecto para desarrollo; en producción, configure ALLOWED_ORIGINS en .env (separadas por comas)
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:5174",
+        "http://127.0.0.1:5174",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3001",
+        "http://127.0.0.1:3001",
+    ]
     
     class Config:
         env_file = ".env"

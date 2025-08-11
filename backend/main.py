@@ -13,6 +13,7 @@ if BACKEND_DIR not in sys.path:
 from app.api import dashboard, traffic, vacations, documents, payroll, orders, profile, settings, users, auth, user_files, documentation
 from app.database.connection import check_database_connection
 from app.middleware.maintenance import MaintenanceMiddleware
+from app.config import settings as app_settings
 
 app = FastAPI(title="Portal API", version="1.0.0")
 
@@ -22,16 +23,7 @@ app.add_middleware(MaintenanceMiddleware)
 # Configurar CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173", 
-        "http://127.0.0.1:5173", 
-        "http://localhost:5174", 
-        "http://127.0.0.1:5174",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3001"
-    ],  # Puertos de desarrollo
+    allow_origins=app_settings.allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
