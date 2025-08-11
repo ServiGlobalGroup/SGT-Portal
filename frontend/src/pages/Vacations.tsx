@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { DevelopmentModal } from '../components/DevelopmentModal';
 import {
   Box,
   Typography,
@@ -80,6 +81,7 @@ export const Vacations: React.FC = () => {
 
   // Estados para administradores (simulado como false para usuarios normales)
   const [isAdmin] = useState(false);
+  const [showDevelopmentModal, setShowDevelopmentModal] = useState(true);
 
   // Auto-hide alert
   useEffect(() => {
@@ -855,6 +857,25 @@ export const Vacations: React.FC = () => {
             )}
           </Box>
         </ModernModal>
+
+        {/* Modal de desarrollo */}
+        <DevelopmentModal
+          open={showDevelopmentModal}
+          onClose={() => setShowDevelopmentModal(false)}
+          pageTitle="Gestión de Vacaciones"
+          description="Esta funcionalidad está siendo desarrollada para gestionar las solicitudes de vacaciones de forma eficiente."
+          features={[
+            'Solicitud de vacaciones por empleados',
+            'Sistema de aprobación por gerentes',
+            'Calendario de vacaciones integrado',
+            'Notificaciones automáticas',
+            'Historial completo de solicitudes',
+            'Reportes de disponibilidad'
+          ]}
+          estimatedCompletion="Agosto 2025"
+          progressValue={85}
+          corporateColor="#501b36"
+        />
       </Box>
     </>
   );

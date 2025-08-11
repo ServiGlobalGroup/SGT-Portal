@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { DevelopmentModal } from '../components/DevelopmentModal';
 import {
   Box,
   Typography,
@@ -66,6 +67,7 @@ export const Orders: React.FC = () => {
   // Estados UI
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [showDevelopmentModal, setShowDevelopmentModal] = useState(true);
   const [pdfPreview, setPdfPreview] = useState<{ open: boolean; fileUrl: string; fileName: string }>({
     open: false,
     fileUrl: '',
@@ -952,6 +954,25 @@ export const Orders: React.FC = () => {
           fileUrl={pdfPreview.fileUrl}
           fileName={pdfPreview.fileName}
           title="Documento de Orden"
+        />
+
+        {/* Modal de desarrollo */}
+        <DevelopmentModal
+          open={showDevelopmentModal}
+          onClose={() => setShowDevelopmentModal(false)}
+          pageTitle="Gestión de Órdenes"
+          description="Esta funcionalidad está siendo desarrollada para administrar y procesar las órdenes recibidas por correo electrónico."
+          features={[
+            'Recepción automática de órdenes por email',
+            'Clasificación automática por empresa',
+            'Gestión de estados y prioridades',
+            'Sistema de notificaciones',
+            'Historial completo de órdenes',
+            'Exportación de reportes'
+          ]}
+          estimatedCompletion="Septiembre 2025"
+          progressValue={70}
+          corporateColor="#501b36"
         />
       </Box>
     </>

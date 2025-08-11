@@ -10,7 +10,8 @@ import { ProtectedRoute } from './components/ProtectedRoute';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const MassUpload = lazy(() => import('./pages/MassUpload').then(m => ({ default: m.MassUpload })));
 const Traffic = lazy(() => import('./pages/Traffic').then(m => ({ default: m.Traffic })));
-const Vacations = lazy(() => import('./pages/Vacations').then(m => ({ default: m.Vacations })));
+// Página de vacaciones temporalmente oculta
+// const Vacations = lazy(() => import('./pages/Vacations').then(m => ({ default: m.Vacations })));
 const Documents = lazy(() => import('./pages/Documents').then(m => ({ default: m.Documents })));
 const Orders = lazy(() => import('./pages/Orders').then(m => ({ default: m.Orders })));
 const Users = lazy(() => import('./pages/Users'));
@@ -75,11 +76,12 @@ function App() {
                         <Traffic />
                       </ProtectedRoute>
                     } />
-                    <Route path="/vacations" element={
+                    {/* Página de vacaciones temporalmente oculta */}
+                    {/* <Route path="/vacations" element={
                       <ProtectedRoute>
                         <Vacations />
                       </ProtectedRoute>
-                    } />
+                    } /> */}
                     <Route path="/documents" element={
                       <ProtectedRoute>
                         <Documents />

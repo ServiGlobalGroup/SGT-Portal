@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { DevelopmentModal } from '../components/DevelopmentModal';
 import {
   Box,
   Typography,
@@ -64,6 +65,7 @@ export const Profile: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedProfile, setEditedProfile] = useState<UserProfile>(userProfile);
   const [alert, setAlert] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+  const [showDevelopmentModal, setShowDevelopmentModal] = useState(true);
 
   // Funciones auxiliares
   const formatDate = (dateString: string): string => {
@@ -656,6 +658,25 @@ export const Profile: React.FC = () => {
           </Button>
         </Box>
       )}
+
+      {/* Modal de desarrollo */}
+      <DevelopmentModal
+        open={showDevelopmentModal}
+        onClose={() => setShowDevelopmentModal(false)}
+        pageTitle="Perfil de Usuario"
+        description="Esta funcionalidad está siendo desarrollada para gestionar la información personal y laboral de los usuarios."
+        features={[
+          'Edición completa de datos personales',
+          'Gestión de información laboral',
+          'Cambio de avatar personalizado',
+          'Configuración de preferencias',
+          'Historial de cambios',
+          'Integración con LDAP/AD'
+        ]}
+        estimatedCompletion="Agosto 2025"
+        progressValue={90}
+        corporateColor="#501b36"
+      />
     </Box>
   );
 };

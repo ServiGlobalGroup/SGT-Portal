@@ -30,6 +30,7 @@ import {
   Grid,
   IconButton,
 } from '@mui/material';
+import { DevelopmentModal } from '../components/DevelopmentModal';
 import { alpha } from '@mui/material/styles';
 import {
   Folder,
@@ -111,6 +112,7 @@ export const Traffic: React.FC = () => {
   const [pdfPreview, setPdfPreview] = useState<{ open: boolean; fileUrl: string; fileName: string }>({
     open: false, fileUrl: '', fileName: ''
   });
+  const [showDevelopmentModal, setShowDevelopmentModal] = useState(true);
 
   // Estados de formularios
   const [newFolderName, setNewFolderName] = useState('');
@@ -1513,6 +1515,25 @@ export const Traffic: React.FC = () => {
           fileUrl={pdfPreview.fileUrl}
           fileName={pdfPreview.fileName}
           title={`Vista previa: ${pdfPreview.fileName}`}
+        />
+
+        {/* Modal de desarrollo */}
+        <DevelopmentModal
+          open={showDevelopmentModal}
+          onClose={() => setShowDevelopmentModal(false)}
+          pageTitle="Gestión de Archivos de Tráfico"
+          description="Esta funcionalidad está siendo desarrollada para gestionar documentos por empresas, tipos de vehículos y vehículos específicos."
+          features={[
+            'Organización por empresas de transporte',
+            'Clasificación por tipos de vehículos',
+            'Gestión de documentos específicos por vehículo',
+            'Sistema de permisos y accesos',
+            'Carga y descarga de documentos',
+            'Vista previa de archivos PDF'
+          ]}
+          estimatedCompletion="Septiembre 2025"
+          progressValue={75}
+          corporateColor="#501b36"
         />
       </Box>
     </>

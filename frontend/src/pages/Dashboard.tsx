@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { DevelopmentModal } from '../components/DevelopmentModal';
 import {
   Box,
   Typography,
@@ -56,6 +57,7 @@ export const Dashboard: React.FC = () => {
   const [recentActivity, setRecentActivity] = useState<Activity[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showDevelopmentModal, setShowDevelopmentModal] = useState(true);
 
   // Cargar datos del dashboard
   const loadDashboardData = useCallback(async () => {
@@ -322,6 +324,25 @@ export const Dashboard: React.FC = () => {
             <QuickActionsCard />
           </Box>
         </Fade>
+
+        {/* Modal de desarrollo */}
+        <DevelopmentModal
+          open={showDevelopmentModal}
+          onClose={() => setShowDevelopmentModal(false)}
+          pageTitle="Dashboard Principal"
+          description="Esta funcionalidad está siendo desarrollada para mostrar estadísticas y resumen general del sistema."
+          features={[
+            'Estadísticas en tiempo real',
+            'Gráficos interactivos',
+            'Actividad reciente del sistema',
+            'Alertas y notificaciones',
+            'Accesos rápidos personalizados',
+            'Reportes ejecutivos'
+          ]}
+          estimatedCompletion="Agosto 2025"
+          progressValue={80}
+          corporateColor="#501b36"
+        />
       </Box>
     </>
   );

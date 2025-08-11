@@ -23,7 +23,7 @@ import {
   Person,
   BusinessCenter,
   Assignment,
-  CalendarToday,
+  // CalendarToday, // Temporalmente oculto
   Receipt,
   RestaurantMenu,
 } from '@mui/icons-material';
@@ -50,7 +50,8 @@ export const MobileSidebar: React.FC<MobileSidebarProps> = ({
     { icon: <Description />, text: 'Mis Documentos', path: '/documents' },
     { icon: <Receipt />, text: 'Nóminas', path: '/payroll' },
     { icon: <RestaurantMenu />, text: 'Dietas', path: '/dietas' },
-    { icon: <CalendarToday />, text: 'Vacaciones', path: '/vacations' },
+    // Vacaciones temporalmente oculto
+    // { icon: <CalendarToday />, text: 'Vacaciones', path: '/vacations' },
     { icon: <Assignment />, text: 'Permisos', path: '/permissions' },
     { icon: <DirectionsCar />, text: 'Tráfico', path: '/traffic' },
     { icon: <BusinessCenter />, text: 'Perfil', path: '/profile' },
