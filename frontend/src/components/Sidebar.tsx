@@ -20,7 +20,7 @@ import {
 } from '@mui/material';
 import {
   Traffic,
-  // EventNote, // Temporalmente oculto
+  EventNote,
   Description,
   LocalShipping,
   MenuOpen,
@@ -62,8 +62,7 @@ const menuItems: MenuItem[] = [
       { text: 'Subida Masiva', icon: <CloudUpload />, path: '/mass-upload' },
     ]
   },
-  // Vacaciones temporalmente oculto
-  // { text: 'Vacaciones', icon: <EventNote />, path: '/vacations' },
+  { text: 'Vacaciones', icon: <EventNote />, path: '/vacations' },
   { text: 'Tráfico', icon: <Traffic />, path: '/traffic' },
   { text: 'Órdenes', icon: <LocalShipping />, path: '/orders' },
   { text: 'Gestión de Usuarios', icon: <ManageAccounts />, path: '/users' },
