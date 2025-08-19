@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { DevelopmentModal } from '../components/DevelopmentModal';
 import {
   Box,
   Typography,
@@ -19,13 +20,15 @@ import {
   CircularProgress,
   IconButton,
   Menu,
+  Stack,
   Fade,
   GlobalStyles,
   TextField,
   ToggleButton,
   ToggleButtonGroup,
   Tooltip,
-  Badge,
+  Slide,
+  Collapse,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
@@ -46,21 +49,13 @@ import {
   DateRange,
   ViewList,
   CalendarMonth,
-  ChevronLeft,
-  ChevronRight,
-  NotificationsNone,
-  Check,
-  Close,
-  Delete,
 } from '@mui/icons-material';
-import { Calendar, momentLocalizer, Event, Views } from 'react-big-calendar';
+import { Calendar, momentLocalizer, Event, View, Views } from 'react-big-calendar';
 import moment from 'moment';
 import 'moment/locale/es';
 import 'react-big-calendar/lib/css/react-big-calendar.css';
 import { ModernModal, ModernButton } from '../components/ModernModal';
 import { ModernField, InfoCard, StatusChip } from '../components/ModernFormComponents';
-import { PaginationComponent } from '../components/PaginationComponent';
-import { usePagination } from '../hooks/usePagination';
 
 interface VacationRequest {
   id: number;
@@ -93,15 +88,6 @@ interface CalendarEvent extends Event {
 moment.locale('es');
 const localizer = momentLocalizer(moment);
 
-// Función para formatear mes en español con primera letra mayúscula
-const formatMonthYear = (date: Date) => {
-  const monthNames = [
-    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-  ];
-  return `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
-};
-
 export const Vacations: React.FC = () => {
   const [requests, setRequests] = useState<VacationRequest[]>([]);
   const [loading, setLoading] = useState(false);
@@ -111,14 +97,10 @@ export const Vacations: React.FC = () => {
 
   // Estados para el calendario
   const [viewMode, setViewMode] = useState<'calendar' | 'table'>('table');
+  const [calendarView, setCalendarView] = useState<View>(Views.MONTH);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDayVacations, setSelectedDayVacations] = useState<VacationRequest[]>([]);
   const [dayDetailModal, setDayDetailModal] = useState(false);
-
-  // Estados para las notificaciones
-  const [notificationOpen, setNotificationOpen] = useState(false);
-  const [notificationAnchor, setNotificationAnchor] = useState<null | HTMLElement>(null);
-  const [isAnimating, setIsAnimating] = useState(false);
 
   // Estados para el formulario
   const [openDialog, setOpenDialog] = useState(false);
@@ -134,6 +116,7 @@ export const Vacations: React.FC = () => {
 
   // Estados para administradores (simulado como false para usuarios normales)
   const [isAdmin] = useState(false);
+  const [showDevelopmentModal, setShowDevelopmentModal] = useState(true);
 
   // Datos de ejemplo para el calendario
   useEffect(() => {
@@ -188,108 +171,6 @@ export const Vacations: React.FC = () => {
     ];
     setRequests(sampleRequests);
   }, []);
-
-  // Funciones para navegar en el calendario
-  const handleNavigate = (date: Date) => {
-    setCurrentDate(date);
-  };
-
-  const navigateToMonth = (direction: 'prev' | 'next') => {
-    const newDate = new Date(currentDate);
-    if (direction === 'prev') {
-      newDate.setMonth(newDate.getMonth() - 1);
-    } else {
-      newDate.setMonth(newDate.getMonth() + 1);
-    }
-    setCurrentDate(newDate);
-  };
-
-  const goToToday = () => {
-    setCurrentDate(new Date());
-  };
-
-  // Funciones para las notificaciones
-  const handleNotificationClick = (event: React.MouseEvent<HTMLElement>) => {
-    setNotificationAnchor(event.currentTarget);
-    setNotificationOpen(true);
-    // Activar animación de campanita
-    setIsAnimating(true);
-    setTimeout(() => setIsAnimating(false), 600); // Duración de la animación
-  };
-
-  const handleNotificationClose = () => {
-    setNotificationOpen(false);
-    setNotificationAnchor(null);
-  };
-
-  // Funciones para aceptar/rechazar rápido desde notificaciones
-  const handleQuickApprove = async (requestId: number, event: React.MouseEvent) => {
-    event.stopPropagation();
-    try {
-      // Simular llamada API
-      setRequests(prev => 
-        prev.map(req => 
-          req.id === requestId 
-            ? { ...req, status: 'approved' as const, approvedDate: new Date().toISOString() }
-            : req
-        )
-      );
-      setAlert({
-        type: 'success',
-        message: 'Solicitud aprobada exitosamente'
-      });
-    } catch (error) {
-      setAlert({
-        type: 'error',
-        message: 'Error al aprobar la solicitud'
-      });
-    }
-  };
-
-  const handleQuickReject = async (requestId: number, event: React.MouseEvent) => {
-    event.stopPropagation();
-    try {
-      // Simular llamada API
-      setRequests(prev => 
-        prev.map(req => 
-          req.id === requestId 
-            ? { ...req, status: 'rejected' as const }
-            : req
-        )
-      );
-      setAlert({
-        type: 'success',
-        message: 'Solicitud rechazada'
-      });
-    } catch (error) {
-      setAlert({
-        type: 'error',
-        message: 'Error al rechazar la solicitud'
-      });
-    }
-  };
-
-  // Función para eliminar solicitud
-  const handleDeleteRequest = async (requestId: number) => {
-    try {
-      // Simular llamada API para eliminar
-      setRequests(prev => prev.filter(req => req.id !== requestId));
-      setAlert({
-        type: 'success',
-        message: 'Solicitud eliminada correctamente'
-      });
-    } catch (error) {
-      setAlert({
-        type: 'error',
-        message: 'Error al eliminar la solicitud'
-      });
-    }
-  };
-
-  // Obtener solicitudes pendientes para notificaciones
-  const pendingRequests = useMemo(() => {
-    return requests.filter(request => request.status === 'pending');
-  }, [requests]);
 
   // Convertir requests a eventos del calendario
   const calendarEvents: CalendarEvent[] = useMemo(() => {
@@ -510,19 +391,11 @@ export const Vacations: React.FC = () => {
     return matchesStatus && matchesSearch;
   });
 
-  // Paginación para la tabla de solicitudes
-  const pagination = usePagination({
-    data: filteredRequests,
-    initialItemsPerPage: 10,
-    initialPage: 1
-  });
-
-  // Resetear paginación cuando cambian los filtros
-  React.useEffect(() => {
-    pagination.setCurrentPage(1);
-  }, [searchTerm, filterStatus, pagination.setCurrentPage]);
-
   // Funciones para el calendario
+  const handleNavigate = (newDate: Date) => {
+    setCurrentDate(newDate);
+  };
+
   const handleSelectSlot = (slotInfo: { start: Date; end: Date }) => {
     // Buscar vacaciones para el día seleccionado
     const selectedDay = slotInfo.start;
@@ -559,9 +432,7 @@ export const Vacations: React.FC = () => {
         p: 1,
         display: 'flex',
         flexDirection: 'column',
-        gap: 0.5,
-        overflow: 'hidden',
-        boxSizing: 'border-box'
+        gap: 0.5
       }}>
         <Typography 
           variant="body2" 
@@ -570,8 +441,7 @@ export const Vacations: React.FC = () => {
             color: isToday ? '#501b36' : 'inherit',
             fontSize: '0.875rem',
             textAlign: 'center',
-            mb: 1,
-            flexShrink: 0
+            mb: 1
           }}
         >
           {label}
@@ -583,9 +453,7 @@ export const Vacations: React.FC = () => {
             flexDirection: 'column', 
             gap: 0.25,
             maxHeight: 80,
-            minHeight: 0,
-            overflow: 'hidden',
-            flex: 1
+            overflow: 'hidden'
           }}>
             {vacationUsers.slice(0, 3).map((user) => (
               <Chip
@@ -599,7 +467,6 @@ export const Vacations: React.FC = () => {
                   bgcolor: user.status === 'approved' ? '#4caf50' : 
                           user.status === 'pending' ? '#ff9800' : '#f44336',
                   color: 'white',
-                  flexShrink: 0,
                   '& .MuiChip-label': {
                     px: 0.5,
                   },
@@ -618,8 +485,7 @@ export const Vacations: React.FC = () => {
                   color: '#501b36',
                   fontWeight: 600,
                   textAlign: 'center',
-                  mt: 0.25,
-                  flexShrink: 0
+                  mt: 0.25
                 }}
               >
                 +{vacationUsers.length - 3} más
@@ -737,166 +603,91 @@ export const Vacations: React.FC = () => {
           >
             <Box sx={{ 
               display: 'flex', 
-              gap: 3, 
+              gap: 2, 
               alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap'
+              flexDirection: { xs: 'column', sm: 'row' },
+              justifyContent: 'space-between'
             }}>
-              {/* Lado izquierdo: Filtros (solo en vista tabla) */}
-              <Box sx={{ 
-                display: 'flex',
-                gap: 2,
-                alignItems: 'center',
-                flex: 1,
-                minWidth: { xs: '100%', md: 'auto' }
-              }}>
-                {viewMode === 'table' && (
-                  <>
-                    <TextField
-                      placeholder="Buscar solicitudes por empleado o motivo..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      InputProps={{
-                        startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />
-                      }}
-                      sx={{ 
-                        flex: 1,
-                        maxWidth: 350,
-                        '& .MuiOutlinedInput-root': {
-                          borderRadius: 2,
-                          '&:hover': {
-                            '& .MuiOutlinedInput-notchedOutline': {
-                              borderColor: '#501b36',
-                            },
-                          },
+              <TextField
+                placeholder="Buscar solicitudes por empleado o motivo..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                InputProps={{
+                  startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />
+                }}
+                sx={{ 
+                  flex: 1,
+                  maxWidth: { xs: '100%', sm: 400 },
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                    '&:hover': {
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#501b36',
+                      },
+                    },
+                  },
+                }}
+                size="small"
+              />
+              
+              <Stack direction="row" spacing={1}>
+                <FormControl size="small" sx={{ minWidth: 150 }}>
+                  <InputLabel sx={{ 
+                    '&.Mui-focused': { 
+                      color: '#501b36' 
+                    } 
+                  }}>
+                    Estado
+                  </InputLabel>
+                  <Select
+                    value={filterStatus}
+                    label="Estado"
+                    onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
+                    sx={{
+                      borderRadius: 2,
+                      '&:hover': {
+                        '& .MuiOutlinedInput-notchedOutline': {
+                          borderColor: '#501b36',
                         },
-                      }}
-                      size="small"
-                    />
-                    
-                    <FormControl size="small" sx={{ minWidth: 150 }}>
-                      <InputLabel sx={{ 
-                        '&.Mui-focused': { 
-                          color: '#501b36' 
-                        } 
-                      }}>
-                        Estado
-                      </InputLabel>
-                      <Select
-                        value={filterStatus}
-                        label="Estado"
-                        onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
-                        sx={{
+                      },
+                      '&.Mui-focused': {
+                        '& .MuiOutlinedInput-notchedOutline': {
+                          borderColor: '#501b36',
+                        },
+                      },
+                      '& .MuiSelect-select:focus': {
+                        backgroundColor: 'transparent',
+                      },
+                    }}
+                    MenuProps={{
+                      PaperProps: {
+                        sx: {
                           borderRadius: 2,
-                          '&:hover': {
-                            '& .MuiOutlinedInput-notchedOutline': {
-                              borderColor: '#501b36',
+                          mt: 0.5,
+                          '& .MuiMenuItem-root': {
+                            '&:hover': {
+                              backgroundColor: alpha('#501b36', 0.08),
+                              color: '#501b36',
                             },
-                          },
-                          '&.Mui-focused': {
-                            '& .MuiOutlinedInput-notchedOutline': {
-                              borderColor: '#501b36',
-                            },
-                          },
-                          '& .MuiSelect-select:focus': {
-                            backgroundColor: 'transparent',
-                          },
-                        }}
-                        MenuProps={{
-                          PaperProps: {
-                            sx: {
-                              borderRadius: 2,
-                              mt: 0.5,
-                              '& .MuiMenuItem-root': {
-                                '&:hover': {
-                                  backgroundColor: alpha('#501b36', 0.08),
-                                  color: '#501b36',
-                                },
-                                '&.Mui-selected': {
-                                  backgroundColor: alpha('#501b36', 0.12),
-                                  color: '#501b36',
-                                  '&:hover': {
-                                    backgroundColor: alpha('#501b36', 0.16),
-                                  },
-                                },
+                            '&.Mui-selected': {
+                              backgroundColor: alpha('#501b36', 0.12),
+                              color: '#501b36',
+                              '&:hover': {
+                                backgroundColor: alpha('#501b36', 0.16),
                               },
                             },
                           },
-                        }}
-                      >
-                        <MenuItem value="all">Todas</MenuItem>
-                        <MenuItem value="pending">Pendientes</MenuItem>
-                        <MenuItem value="approved">Aprobadas</MenuItem>
-                        <MenuItem value="rejected">Rechazadas</MenuItem>
-                      </Select>
-                    </FormControl>
-                  </>
-                )}
-              </Box>
-
-              {/* Lado derecho: Controles principales - siempre visibles */}
-              <Box sx={{ 
-                display: 'flex', 
-                gap: 2, 
-                alignItems: 'center',
-                flexShrink: 0
-              }}>
-                {/* Icono de notificaciones */}
-                <Tooltip title="Notificaciones">
-                  <Box 
-                    onClick={handleNotificationClick}
-                    sx={{ 
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      p: 0,
+                        },
+                      },
                     }}
                   >
-                    <Badge 
-                      badgeContent={pendingRequests.length > 0 ? ' ' : 0}
-                      color="error"
-                      variant="dot"
-                      sx={{
-                        '& .MuiBadge-badge': {
-                          backgroundColor: '#d32f2f',
-                          width: '10px',
-                          height: '10px',
-                          borderRadius: '50%',
-                          top: '8px',
-                          right: '8px',
-                          minWidth: 'unset',
-                        }
-                      }}
-                    >
-                      <NotificationsNone 
-                        fontSize="large" 
-                        sx={{ 
-                          color: '#501b36',
-                          '&:hover': {
-                            color: '#3d1429',
-                          },
-                          transition: 'color 0.2s ease-in-out',
-                          animation: isAnimating ? 'bellRing 0.6s ease-in-out' : 'none',
-                          '@keyframes bellRing': {
-                            '0%': { transform: 'rotate(0deg)' },
-                            '10%': { transform: 'rotate(10deg)' },
-                            '20%': { transform: 'rotate(-8deg)' },
-                            '30%': { transform: 'rotate(10deg)' },
-                            '40%': { transform: 'rotate(-8deg)' },
-                            '50%': { transform: 'rotate(6deg)' },
-                            '60%': { transform: 'rotate(-4deg)' },
-                            '70%': { transform: 'rotate(2deg)' },
-                            '80%': { transform: 'rotate(-1deg)' },
-                            '90%': { transform: 'rotate(0deg)' },
-                            '100%': { transform: 'rotate(0deg)' },
-                          },
-                        }} 
-                      />
-                    </Badge>
-                  </Box>
-                </Tooltip>
-                
+                    <MenuItem value="all">Todas</MenuItem>
+                    <MenuItem value="pending">Pendientes</MenuItem>
+                    <MenuItem value="approved">Aprobadas</MenuItem>
+                    <MenuItem value="rejected">Rechazadas</MenuItem>
+                  </Select>
+                </FormControl>
+
                 {/* Toggle Vista Calendar/Table mejorado */}
                 <Box
                   sx={{
@@ -1017,207 +808,27 @@ export const Vacations: React.FC = () => {
                   startIcon={<Add />}
                   onClick={() => setOpenDialog(true)}
                   sx={{
-                    borderRadius: '20px',
-                    px: 2.5,
-                    py: 1,
+                    borderRadius: 2,
+                    px: 3,
                     textTransform: 'none',
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    minWidth: 90,
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    background: 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 70%, #501b36 100%)',
-                    color: 'white',
-                    boxShadow: '0 4px 12px rgba(80,27,54,0.3), 0 2px 4px rgba(80,27,54,0.2)',
-                    '&::before': {
-                      content: '""',
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      background: 'linear-gradient(135deg, rgba(80,27,54,0.1) 0%, rgba(80,27,54,0.05) 100%)',
-                      opacity: 0,
-                      transition: 'opacity 0.3s ease',
-                    },
+                    fontWeight: 600,
+                    backgroundColor: '#501b36',
                     '&:hover': {
-                      background: 'linear-gradient(135deg, #3d1429 0%, #5a1d3a 30%, #6b2545 70%, #3d1429 100%)',
-                      boxShadow: '0 6px 16px rgba(80,27,54,0.4), 0 2px 8px rgba(80,27,54,0.3)',
-                      transform: 'translateY(-1px)',
-                    },
-                    '&:hover::before': {
-                      opacity: 1,
+                      backgroundColor: '#3d1429',
                     },
                   }}
                 >
                   Nueva Solicitud
                 </Button>
-              </Box>
+              </Stack>
             </Box>
           </Paper>
         </Fade>
 
-        {/* Menú de Notificaciones */}
-        <Menu
-          anchorEl={notificationAnchor}
-          open={notificationOpen}
-          onClose={handleNotificationClose}
-          PaperProps={{
-            sx: {
-              borderRadius: 2,
-              mt: 1,
-              minWidth: 350,
-              maxWidth: 400,
-              maxHeight: 400,
-              overflow: 'auto',
-              boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
-              border: '1px solid rgba(0,0,0,0.08)',
-            },
-          }}
-          anchorOrigin={{
-            vertical: 'bottom',
-            horizontal: 'right',
-          }}
-          transformOrigin={{
-            vertical: 'top',
-            horizontal: 'right',
-          }}
-        >
-          <Box sx={{ p: 2 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-              <Typography variant="h6" sx={{ fontWeight: 600, color: '#501b36' }}>
-                Notificaciones
-              </Typography>
-              <Chip 
-                label={`${pendingRequests.length} pendiente${pendingRequests.length !== 1 ? 's' : ''}`}
-                size="small"
-                sx={{ 
-                  bgcolor: alpha('#501b36', 0.1),
-                  color: '#501b36',
-                  fontWeight: 600
-                }}
-              />
-            </Box>
-            
-            {pendingRequests.length === 0 ? (
-              <Box sx={{ 
-                py: 3, 
-                textAlign: 'center',
-                color: 'text.secondary'
-              }}>
-                <NotificationsNone sx={{ fontSize: 48, mb: 1, opacity: 0.3 }} />
-                <Typography variant="body2">
-                  No hay solicitudes pendientes
-                </Typography>
-              </Box>
-            ) : (
-              <Box sx={{ maxHeight: 280, overflow: 'auto' }}>
-                {pendingRequests.map((request) => (
-                  <Box
-                    key={request.id}
-                    sx={{
-                      p: 1.5,
-                      mb: 0.75,
-                      borderRadius: 1.5,
-                      bgcolor: alpha('#fff4e6', 0.5),
-                      border: '1px solid',
-                      borderColor: alpha('#ff9800', 0.2),
-                      transition: 'all 0.2s ease',
-                      '&:hover': {
-                        bgcolor: alpha('#fff4e6', 0.8),
-                        borderColor: alpha('#ff9800', 0.4),
-                      },
-                      '&:last-child': {
-                        mb: 0
-                      }
-                    }}
-                  >
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                      <Box sx={{ flex: 1, minWidth: 0 }}>
-                        <Typography variant="subtitle2" sx={{ 
-                          fontWeight: 600, 
-                          color: '#501b36', 
-                          mb: 0.25,
-                          fontSize: '0.875rem',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap'
-                        }}>
-                          {request.employeeName}
-                        </Typography>
-                        <Typography variant="caption" sx={{ 
-                          color: 'text.secondary', 
-                          display: 'block',
-                          fontSize: '0.75rem',
-                          lineHeight: 1.2
-                        }}>
-                          {new Date(request.startDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} - {new Date(request.endDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} • {request.days} día{request.days !== 1 ? 's' : ''}
-                        </Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 1 }}>
-                        <Chip 
-                          label="PENDIENTE" 
-                          size="small" 
-                          sx={{ 
-                            height: 20,
-                            fontSize: '0.6rem',
-                            fontWeight: 600,
-                            bgcolor: alpha('#ff9800', 0.15),
-                            color: '#f57c00',
-                            border: 'none',
-                            '& .MuiChip-label': {
-                              px: 0.75,
-                            }
-                          }} 
-                        />
-                      </Box>
-                    </Box>
-                    
-                    {/* Botones de acción rápida */}
-                    <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
-                      <IconButton
-                        size="small"
-                        onClick={(e) => handleQuickReject(request.id, e)}
-                        sx={{
-                          width: 28,
-                          height: 28,
-                          bgcolor: alpha('#f44336', 0.1),
-                          color: '#f44336',
-                          '&:hover': {
-                            bgcolor: alpha('#f44336', 0.2),
-                          },
-                        }}
-                      >
-                        <Close sx={{ fontSize: 14 }} />
-                      </IconButton>
-                      <IconButton
-                        size="small"
-                        onClick={(e) => handleQuickApprove(request.id, e)}
-                        sx={{
-                          width: 28,
-                          height: 28,
-                          bgcolor: alpha('#4caf50', 0.1),
-                          color: '#4caf50',
-                          '&:hover': {
-                            bgcolor: alpha('#4caf50', 0.2),
-                          },
-                        }}
-                      >
-                        <Check sx={{ fontSize: 14 }} />
-                      </IconButton>
-                    </Box>
-                  </Box>
-                ))}
-              </Box>
-            )}
-          </Box>
-        </Menu>
-
         {/* Contenido Principal */}
         {viewMode === 'calendar' ? (
-          // Vista Calendario
-          <Fade in timeout={1200}>
+          // Vista Calendario con animación
+          <Fade in={true} timeout={800}>
             <Paper
               elevation={0}
               sx={{
@@ -1225,228 +836,515 @@ export const Vacations: React.FC = () => {
                 overflow: 'hidden',
                 border: '1px solid #e0e0e0',
                 background: '#ffffff',
+                transform: 'translateX(0)',
+                transition: 'all 0.5s ease-in-out',
               }}
             >
-              {/* Header del calendario */}
-              <Box sx={{ 
-                p: 3, 
-                borderBottom: 1, 
-                borderColor: 'divider',
-                background: alpha('#501b36', 0.02),
-              }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: '1' }}>
-                    <CalendarMonth sx={{ color: '#501b36', fontSize: 28 }} />
-                    <Box>
-                      <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36' }}>
-                        Calendario de Vacaciones
-                      </Typography>
-                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                        {filteredRequests.length} solicitud{filteredRequests.length !== 1 ? 'es' : ''} encontrada{filteredRequests.length !== 1 ? 's' : ''}
-                      </Typography>
+                  {/* Header del calendario */}
+                  <Box sx={{ 
+                    p: 3, 
+                    borderBottom: 1, 
+                    borderColor: 'divider',
+                    background: alpha('#501b36', 0.02),
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between'
+                  }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <CalendarMonth sx={{ color: '#501b36', fontSize: 28 }} />
+                      <Box>
+                        <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36' }}>
+                          Calendario de Vacaciones
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                          {filteredRequests.length} solicitud{filteredRequests.length !== 1 ? 'es' : ''} encontrada{filteredRequests.length !== 1 ? 's' : ''} - {moment(currentDate).format('MMMM YYYY')}
+                        </Typography>
+                      </Box>
                     </Box>
-                  </Box>
-                  
-                  {/* Controles de navegación del calendario */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 'none' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <IconButton 
-                        onClick={() => navigateToMonth('prev')}
-                        sx={{ 
-                          bgcolor: alpha('#501b36', 0.08),
-                          color: '#501b36',
-                          '&:hover': { bgcolor: alpha('#501b36', 0.12) },
-                          borderRadius: '12px',
-                          width: 40,
-                          height: 40,
-                        }}
-                      >
-                        <ChevronLeft />
-                      </IconButton>
+
+                    {/* Controles de navegación */}
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                      <Tooltip title="Mes anterior">
+                        <IconButton
+                          onClick={() => {
+                            const newDate = moment(currentDate).subtract(1, 'month').toDate();
+                            setCurrentDate(newDate);
+                          }}
+                          sx={{
+                            color: '#501b36',
+                            backgroundColor: 'rgba(255,255,255,0.8)',
+                            '&:hover': {
+                              backgroundColor: 'rgba(255,255,255,0.95)',
+                              transform: 'scale(1.05)',
+                            },
+                            transition: 'all 0.2s ease',
+                          }}
+                        >
+                          <Schedule sx={{ transform: 'rotate(180deg)' }} />
+                        </IconButton>
+                      </Tooltip>
                       
                       <Button
-                        onClick={goToToday}
-                        variant="outlined"
-                        size="small"
+                        onClick={() => {
+                          const today = new Date();
+                          setCurrentDate(today);
+                        }}
                         sx={{
                           color: '#501b36',
-                          borderColor: alpha('#501b36', 0.3),
-                          bgcolor: 'transparent',
-                          borderRadius: '12px',
-                          minWidth: 60,
+                          fontWeight: 700,
+                          textTransform: 'none',
+                          minWidth: 80,
+                          backgroundColor: 'rgba(255,255,255,0.8)',
+                          borderRadius: 2,
                           px: 2,
                           py: 0.5,
-                          fontSize: '0.875rem',
-                          fontWeight: 600,
-                          textTransform: 'none',
-                          height: 40,
                           '&:hover': {
-                            borderColor: '#501b36',
-                            bgcolor: alpha('#501b36', 0.04),
+                            backgroundColor: 'rgba(255,255,255,0.95)',
+                            transform: 'translateY(-1px)',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
                           },
+                          transition: 'all 0.2s ease',
                         }}
                       >
                         Hoy
                       </Button>
                       
-                      <IconButton 
-                        onClick={() => navigateToMonth('next')}
-                        sx={{ 
-                          bgcolor: alpha('#501b36', 0.08),
-                          color: '#501b36',
-                          '&:hover': { bgcolor: alpha('#501b36', 0.12) },
-                          borderRadius: '12px',
-                          width: 40,
-                          height: 40,
+                      <Tooltip title="Mes siguiente">
+                        <IconButton
+                          onClick={() => {
+                            const newDate = moment(currentDate).add(1, 'month').toDate();
+                            setCurrentDate(newDate);
+                          }}
+                          sx={{
+                            color: '#501b36',
+                            backgroundColor: 'rgba(255,255,255,0.8)',
+                            '&:hover': {
+                              backgroundColor: 'rgba(255,255,255,0.95)',
+                              transform: 'scale(1.05)',
+                            },
+                            transition: 'all 0.2s ease',
+                          }}
+                        >
+                          <Schedule />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  </Box>
+
+                  {/* Calendario */}
+                  <Box sx={{ p: 3 }}>
+                    <GlobalStyles
+                      styles={{
+                        '.rbc-calendar': {
+                          fontFamily: '"Roboto","Helvetica","Arial",sans-serif !important',
+                        },
+                        '.rbc-month-view': {
+                          border: '1px solid #e0e0e0',
+                          borderRadius: '8px',
+                          overflow: 'hidden',
+                        },
+                        '.rbc-header': {
+                          backgroundColor: alpha('#501b36', 0.05) + ' !important',
+                          borderBottom: '1px solid #e0e0e0 !important',
+                          fontWeight: '700 !important',
+                          fontSize: '0.875rem !important',
+                          color: '#501b36 !important',
+                          padding: '12px 8px !important',
+                        },
+                        '.rbc-date-cell': {
+                          padding: '4px !important',
+                          borderRight: '1px solid #e0e0e0 !important',
+                          borderBottom: '1px solid #e0e0e0 !important',
+                          minHeight: '110px !important',
+                          cursor: 'pointer !important',
+                          transition: 'background-color 0.2s ease !important',
+                          position: 'relative !important',
+                        },
+                        '.rbc-date-cell:hover': {
+                          backgroundColor: alpha('#501b36', 0.04) + ' !important',
+                        },
+                        '.rbc-today': {
+                          backgroundColor: alpha('#501b36', 0.08) + ' !important',
+                        },
+                        '.rbc-toolbar': {
+                          marginBottom: '20px !important',
+                          padding: '10px 0 !important',
+                          borderBottom: '1px solid #e0e0e0 !important',
+                        },
+                        '.rbc-toolbar button': {
+                          color: '#501b36 !important',
+                          border: '1px solid #501b36 !important',
+                          backgroundColor: 'transparent !important',
+                          borderRadius: '6px !important',
+                          padding: '8px 16px !important',
+                          fontWeight: '600 !important',
+                          fontSize: '0.875rem !important',
+                          margin: '0 4px !important',
+                        },
+                        '.rbc-toolbar button:hover': {
+                          backgroundColor: alpha('#501b36', 0.08) + ' !important',
+                        },
+                        '.rbc-toolbar button.rbc-active': {
+                          backgroundColor: '#501b36 !important',
+                          color: 'white !important',
+                        },
+                        '.rbc-toolbar .rbc-toolbar-label': {
+                          fontSize: '1.25rem !important',
+                          fontWeight: '700 !important',
+                          color: '#501b36 !important',
+                          flex: '1 !important',
+                          textAlign: 'center !important',
+                        },
+                        '.rbc-event': {
+                          display: 'none !important', // Ocultamos los eventos porque ya mostramos los chips
+                        },
+                        '.rbc-show-more': {
+                          color: '#501b36 !important',
+                          fontWeight: '600 !important',
+                          fontSize: '0.75rem !important',
+                          backgroundColor: alpha('#501b36', 0.1) + ' !important',
+                          borderRadius: '4px !important',
+                          padding: '2px 6px !important',
+                          margin: '2px 1px !important',
+                        },
+                        '.rbc-date-cell button': {
+                          color: '#333 !important',
+                          fontWeight: '500 !important',
+                          fontSize: '0.875rem !important',
+                          padding: '4px 8px !important',
+                          borderRadius: '4px !important',
+                          border: 'none !important',
+                          backgroundColor: 'transparent !important',
+                          width: 'auto !important',
+                          height: 'auto !important',
+                          lineHeight: '1.2 !important',
+                        },
+                        '.rbc-date-cell .rbc-button-link:hover': {
+                          backgroundColor: alpha('#501b36', 0.08) + ' !important',
+                        },
+                        '.rbc-off-range-bg': {
+                          backgroundColor: '#f9f9f9 !important',
+                        },
+                        '.rbc-off-range .rbc-button-link': {
+                          color: '#bbb !important',
+                        },
+                        '.rbc-month-header': {
+                          overflow: 'visible !important',
+                        },
+                        '.rbc-button-link': {
+                          display: 'block !important',
+                          width: '100% !important',
+                          textAlign: 'left !important',
+                          padding: '4px 0 !important',
+                          borderRadius: '4px !important',
+                          position: 'relative !important',
+                        },
+                      }}
+                    />
+                    <Calendar
+                      localizer={localizer}
+                      events={calendarEvents}
+                      startAccessor="start"
+                      endAccessor="end"
+                      style={{ height: 600 }}
+                      view={calendarView}
+                      onView={setCalendarView}
+                      date={currentDate}
+                      onNavigate={handleNavigate}
+                      onSelectSlot={handleSelectSlot}
+                      selectable
+                      eventPropGetter={eventStyleGetter}
+                      components={{
+                        event: CustomEvent,
+                        month: {
+                          dateHeader: CustomDateHeader,
+                        },
+                      }}
+                      messages={{
+                        next: 'Siguiente',
+                        previous: 'Anterior',
+                        today: 'Hoy',
+                        month: 'Mes',
+                        week: 'Semana',
+                        day: 'Día',
+                        agenda: 'Agenda',
+                        date: 'Fecha',
+                        time: 'Hora',
+                        event: 'Evento',
+                        allDay: 'Todo el día',
+                        noEventsInRange: 'No hay eventos en este rango',
+                        showMore: (total) => `+${total} más`,
+                      }}
+                    />
+                  </Box>
+                </Paper>
+              </Fade>
+            </Box>
+          </Slide>
+
+          {/* Vista Tabla */}
+          <Slide
+            direction="right"
+            in={viewMode === 'table'}
+            mountOnEnter
+            unmountOnExit
+            timeout={600}
+          >
+            <Box
+              sx={{
+                position: viewMode === 'table' ? 'relative' : 'absolute',
+                width: '100%',
+                top: viewMode === 'table' ? 0 : 0,
+                zIndex: viewMode === 'table' ? 2 : 1,
+              }}
+            >
+              <Fade in={viewMode === 'table'} timeout={800}>
+                <Paper
+                  elevation={0}
+                  sx={{
+                    borderRadius: 2,
+                    overflow: 'hidden',
+                    border: '1px solid #e0e0e0',
+                    background: '#ffffff',
+                    transform: viewMode === 'table' ? 'translateX(0)' : 'translateX(-100%)',
+                    transition: 'transform 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
+                  }}
+                >
+                  {/* Header de la tabla */}
+                  <Box sx={{ 
+                    p: 3, 
+                    borderBottom: 1, 
+                    borderColor: 'divider',
+                    background: alpha('#501b36', 0.02),
+                  }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                      <DateRange sx={{ color: '#501b36', fontSize: 28 }} />
+                      <Box>
+                        <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36' }}>
+                          Historial de Solicitudes
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                          {filteredRequests.length} solicitud{filteredRequests.length !== 1 ? 'es' : ''} encontrada{filteredRequests.length !== 1 ? 's' : ''}
+                        </Typography>
+                      </Box>
+                    </Box>
+                  </Box>
+
+                  {/* Contenido de solicitudes */}
+                  {loading ? (
+                    <Box sx={{ 
+                      display: 'flex', 
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      p: 6,
+                      gap: 2
+                    }}>
+                      <CircularProgress size={48} sx={{ color: '#501b36' }} />
+                      <Typography variant="h6" sx={{ color: 'text.secondary' }}>
+                        Cargando solicitudes...
+                      </Typography>
+                    </Box>
+                  ) : filteredRequests.length === 0 ? (
+                    <Box sx={{ 
+                      p: 6, 
+                      textAlign: 'center',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 2
+                    }}>
+                      <Box
+                        sx={{
+                          p: 3,
+                          borderRadius: '50%',
+                          bgcolor: alpha('#501b36', 0.1),
+                          mb: 2,
                         }}
                       >
-                        <ChevronRight />
-                      </IconButton>
+                        <EventNote sx={{ fontSize: 48, color: '#501b36' }} />
+                      </Box>
+                      <Typography variant="h5" sx={{ fontWeight: 600, color: 'text.secondary', mb: 1 }}>
+                        No hay solicitudes de vacaciones
+                      </Typography>
+                      <Typography variant="body1" sx={{ color: 'text.secondary', mb: 3, maxWidth: 400 }}>
+                        {searchTerm 
+                          ? `No se encontraron solicitudes que coincidan con "${searchTerm}"`
+                          : filterStatus === 'all'
+                            ? 'Comienza creando tu primera solicitud de vacaciones'
+                            : `No hay solicitudes con estado "${filterStatus === 'pending' ? 'Pendiente' : filterStatus === 'approved' ? 'Aprobada' : 'Rechazada'}"`
+                        }
+                      </Typography>
+                      <Button
+                        variant="contained"
+                        startIcon={<Add />}
+                        onClick={() => setOpenDialog(true)}
+                        sx={{
+                          borderRadius: 2,
+                          px: 4,
+                          py: 1.5,
+                          textTransform: 'none',
+                          fontWeight: 600,
+                          backgroundColor: '#501b36',
+                          '&:hover': {
+                            backgroundColor: '#3d1429',
+                          },
+                        }}
+                      >
+                        Crear Primera Solicitud
+                      </Button>
                     </Box>
-                    
-                    <Typography variant="h6" sx={{ 
-                      fontWeight: 600, 
-                      color: '#501b36',
-                      minWidth: 180,
-                      textAlign: 'center',
-                      ml: 1,
-                    }}>
-                      {formatMonthYear(currentDate)}
-                    </Typography>
-                  </Box>
-                </Box>
-              </Box>
-
-              {/* Calendario */}
-              <Box sx={{ p: 3 }}>
-                <GlobalStyles
-                  styles={{
-                    '.rbc-calendar': {
-                      fontFamily: '"Roboto","Helvetica","Arial",sans-serif !important',
-                    },
-                    '.rbc-month-view': {
-                      border: '1px solid #e0e0e0',
-                      borderRadius: '8px',
-                      overflow: 'hidden',
-                    },
-                    '.rbc-header': {
-                      backgroundColor: alpha('#501b36', 0.05) + ' !important',
-                      borderBottom: '1px solid #e0e0e0 !important',
-                      fontWeight: '700 !important',
-                      fontSize: '0.875rem !important',
-                      color: '#501b36 !important',
-                      padding: '12px 8px !important',
-                    },
-                    '.rbc-date-cell': {
-                      padding: '4px !important',
-                      borderRight: '1px solid #e0e0e0 !important',
-                      borderBottom: '1px solid #e0e0e0 !important',
-                      height: '125px !important',
-                      minHeight: '125px !important',
-                      maxHeight: '125px !important',
-                      cursor: 'pointer !important',
-                      transition: 'background-color 0.2s ease !important',
-                      position: 'relative !important',
-                      overflow: 'hidden !important',
-                      boxSizing: 'border-box !important',
-                    },
-                    '.rbc-date-cell:hover': {
-                      backgroundColor: alpha('#501b36', 0.04) + ' !important',
-                    },
-                    '.rbc-today': {
-                      backgroundColor: alpha('#501b36', 0.15) + ' !important',
-                    },
-                    '.rbc-toolbar': {
-                      display: 'none !important', // Ocultamos completamente la toolbar nativa
-                    },
-                    '.rbc-event': {
-                      display: 'none !important', // Ocultamos los eventos porque ya mostramos los chips
-                    },
-                    '.rbc-show-more': {
-                      color: '#501b36 !important',
-                      fontWeight: '600 !important',
-                      fontSize: '0.75rem !important',
-                      backgroundColor: alpha('#501b36', 0.1) + ' !important',
-                      borderRadius: '4px !important',
-                      padding: '2px 6px !important',
-                      margin: '2px 1px !important',
-                    },
-                    '.rbc-date-cell button': {
-                      color: '#333 !important',
-                      fontWeight: '500 !important',
-                      fontSize: '0.875rem !important',
-                      padding: '4px 8px !important',
-                      borderRadius: '4px !important',
-                      border: 'none !important',
-                      backgroundColor: 'transparent !important',
-                      width: 'auto !important',
-                      height: 'auto !important',
-                      lineHeight: '1.2 !important',
-                    },
-                    '.rbc-date-cell .rbc-button-link:hover': {
-                      backgroundColor: alpha('#501b36', 0.08) + ' !important',
-                    },
-                    '.rbc-off-range-bg': {
-                      backgroundColor: '#f9f9f9 !important',
-                    },
-                    '.rbc-off-range .rbc-button-link': {
-                      color: '#bbb !important',
-                    },
-                    '.rbc-month-header': {
-                      overflow: 'visible !important',
-                    },
-                    '.rbc-button-link': {
-                      display: 'block !important',
-                      width: '100% !important',
-                      textAlign: 'left !important',
-                      padding: '4px 0 !important',
-                      borderRadius: '4px !important',
-                      position: 'relative !important',
-                    },
-                    '.rbc-row-content': {
-                      height: '100% !important',
-                      overflow: 'hidden !important',
-                    },
-                    '.rbc-date-cell > div': {
-                      height: '100% !important',
-                      overflow: 'hidden !important',
-                      boxSizing: 'border-box !important',
-                    },
-                  }}
-                />
-                <Calendar
-                  localizer={localizer}
-                  events={calendarEvents}
-                  startAccessor="start"
-                  endAccessor="end"
-                  style={{ height: 750 }}
-                  view={Views.MONTH}
-                  date={currentDate}
-                  onNavigate={handleNavigate}
-                  toolbar={false}
-                  onSelectSlot={handleSelectSlot}
-                  selectable
-                  eventPropGetter={eventStyleGetter}
-                  components={{
-                    event: CustomEvent,
-                    month: {
-                      dateHeader: CustomDateHeader,
-                    },
-                  }}
-                  messages={{
-                    date: 'Fecha',
-                    time: 'Hora',
-                    event: 'Evento',
-                    allDay: 'Todo el día',
-                    noEventsInRange: 'No hay eventos en este rango',
-                    showMore: (total) => `+${total} más`,
-                  }}
-                />
-              </Box>
-            </Paper>
-          </Fade>
-        ) : (
-          // Vista Tabla (existente)
+                  ) : (
+                    <TableContainer
+                      sx={{
+                        overflowX: 'hidden !important',
+                        '&::-webkit-scrollbar': {
+                          display: 'none',
+                        },
+                        '-ms-overflow-style': 'none',
+                        'scrollbar-width': 'none',
+                      }}
+                    >
+                      <Table>
+                        <TableHead>
+                          <TableRow 
+                            sx={{ 
+                              bgcolor: alpha('#501b36', 0.02),
+                              '& .MuiTableCell-head': {
+                                fontWeight: 700,
+                                color: '#501b36',
+                                borderBottom: `2px solid ${alpha('#501b36', 0.1)}`,
+                                py: 2,
+                              }
+                            }}
+                          >
+                            <TableCell>Empleado</TableCell>
+                            <TableCell>Período</TableCell>
+                            <TableCell>Días</TableCell>
+                            <TableCell>Motivo</TableCell>
+                            <TableCell>Estado</TableCell>
+                            <TableCell>Solicitado</TableCell>
+                            <TableCell align="center">Acciones</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {filteredRequests.map((request) => (
+                            <TableRow 
+                              key={request.id} 
+                              hover
+                              sx={{
+                                transition: 'all 0.2s ease',
+                                '&:hover': {
+                                  bgcolor: alpha('#501b36', 0.02),
+                                  transform: 'translateX(4px)',
+                                },
+                                '& .MuiTableCell-root': {
+                                  borderBottom: `1px solid ${alpha('#501b36', 0.06)}`,
+                                  py: 2,
+                                }
+                              }}
+                            >
+                              <TableCell>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                                  <Box
+                                    sx={{
+                                      p: 1.5,
+                                      borderRadius: 2,
+                                      bgcolor: alpha('#501b36', 0.1),
+                                    }}
+                                  >
+                                    <Business sx={{ color: '#501b36' }} />
+                                  </Box>
+                                  <Box>
+                                    <Typography variant="body1" sx={{ fontWeight: 600, mb: 0.5 }}>
+                                      {request.employeeName}
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                      Colaborador
+                                    </Typography>
+                                  </Box>
+                                </Box>
+                              </TableCell>
+                              <TableCell>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  <CalendarToday sx={{ color: '#757575', fontSize: 16 }} />
+                                  <Box>
+                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                      {formatDate(request.startDate)} - {formatDate(request.endDate)}
+                                    </Typography>
+                                    <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                                      Periodo de vacaciones
+                                    </Typography>
+                                  </Box>
+                                </Box>
+                              </TableCell>
+                              <TableCell>
+                                <Chip 
+                                  label={`${request.days} días`} 
+                                  size="small" 
+                                  variant="outlined"
+                                  sx={{
+                                    borderRadius: 2,
+                                    fontWeight: 600,
+                                    fontSize: '0.75rem',
+                                    borderColor: alpha('#501b36', 0.3),
+                                    color: '#501b36',
+                                  }}
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Typography variant="body2" sx={{ maxWidth: 200, fontWeight: 500 }}>
+                                  {request.reason}
+                                </Typography>
+                                {request.comments && (
+                                  <Typography variant="caption" color="error" display="block" sx={{ mt: 0.5 }}>
+                                    Comentarios: {request.comments}
+                                  </Typography>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                  {getStatusIcon(request.status)}
+                                  <StatusChip status={request.status} size="small" />
+                                </Box>
+                                {request.approvedBy && (
+                                  <Typography variant="caption" color="textSecondary" display="block" sx={{ mt: 0.5 }}>
+                                    Por: {request.approvedBy} el {formatDate(request.approvedDate!)}
+                                  </Typography>
+                                )}
+                              </TableCell>
+                              <TableCell>
+                                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                  {formatDate(request.requestDate)}
+                                </Typography>
+                              </TableCell>
+                              <TableCell align="center">
+                                <IconButton
+                                  size="small"
+                                  onClick={(e) => handleMenuClick(e, request)}
+                                  sx={{
+                                    borderRadius: 2,
+                                    bgcolor: alpha('#501b36', 0.08),
+                                    color: '#501b36',
+                                    '&:hover': {
+                                      bgcolor: alpha('#501b36', 0.12),
+                                    },
+                                  }}
+                                >
+                                  <MoreVert />
+                                </IconButton>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  )}
+                </Paper>
+              </Fade>
+            </Box>
+          </Slide>
+        </Box>
         <Fade in timeout={1200}>
           <Paper
             elevation={0}
@@ -1542,17 +1440,16 @@ export const Vacations: React.FC = () => {
                 </Button>
               </Box>
             ) : (
-              <>
-                <TableContainer
-                  sx={{
-                    overflowX: 'hidden !important',
-                    '&::-webkit-scrollbar': {
-                      display: 'none',
-                    },
-                    '-ms-overflow-style': 'none',
-                    'scrollbar-width': 'none',
-                  }}
-                >
+              <TableContainer
+                sx={{
+                  overflowX: 'hidden !important',
+                  '&::-webkit-scrollbar': {
+                    display: 'none',
+                  },
+                  '-ms-overflow-style': 'none',
+                  'scrollbar-width': 'none',
+                }}
+              >
                 <Table>
                   <TableHead>
                     <TableRow 
@@ -1576,7 +1473,7 @@ export const Vacations: React.FC = () => {
                     </TableRow>
                   </TableHead>
                   <TableBody>
-                    {pagination.paginatedData.map((request) => (
+                    {filteredRequests.map((request) => (
                       <TableRow 
                         key={request.id} 
                         hover
@@ -1687,20 +1584,12 @@ export const Vacations: React.FC = () => {
                   </TableBody>
                 </Table>
               </TableContainer>
-
-              <PaginationComponent
-                currentPage={pagination.currentPage}
-                itemsPerPage={pagination.itemsPerPage}
-                totalItems={filteredRequests.length}
-                onPageChange={pagination.setCurrentPage}
-                onItemsPerPageChange={pagination.setItemsPerPage}
-                corporateColor="#501b36"
-              />
-              </>
             )}
           </Paper>
         </Fade>
-        )}
+            </Box>
+          </Slide>
+        </Box>
 
         {/* Menú contextual */}
         <Menu
@@ -1786,30 +1675,6 @@ export const Vacations: React.FC = () => {
               </MenuItem>
             </>
           )}
-          
-          {/* Opción de eliminar - disponible para todas las solicitudes del usuario */}
-          <MenuItem 
-            onClick={() => {
-              if (selectedRequest) {
-                handleDeleteRequest(selectedRequest.id);
-              }
-              handleCloseMenu();
-            }}
-            sx={{
-              py: 1.5,
-              px: 2,
-              gap: 2,
-              '&:hover': {
-                bgcolor: alpha('#f44336', 0.08),
-                color: '#f44336',
-              },
-            }}
-          >
-            <Delete sx={{ fontSize: 20 }} />
-            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-              Eliminar solicitud
-            </Typography>
-          </MenuItem>
         </Menu>
 
         {/* Diálogo nueva solicitud mejorado */}
@@ -2020,6 +1885,24 @@ export const Vacations: React.FC = () => {
           </Box>
         </ModernModal>
 
+        {/* Modal de desarrollo */}
+        <DevelopmentModal
+          open={showDevelopmentModal}
+          onClose={() => setShowDevelopmentModal(false)}
+          pageTitle="Gestión de Vacaciones"
+          description="Esta funcionalidad está siendo desarrollada para gestionar las solicitudes de vacaciones de forma eficiente."
+          features={[
+            'Solicitud de vacaciones por empleados',
+            'Sistema de aprobación por gerentes',
+            'Calendario de vacaciones integrado',
+            'Notificaciones automáticas',
+            'Historial completo de solicitudes',
+            'Reportes de disponibilidad'
+          ]}
+          estimatedCompletion="Agosto 2025"
+          progressValue={85}
+          corporateColor="#501b36"
+        />
       </Box>
     </>
   );
