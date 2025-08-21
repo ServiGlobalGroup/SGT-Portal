@@ -61,6 +61,9 @@ import { ModernModal, ModernButton } from '../components/ModernModal';
 import { ModernField, InfoCard, StatusChip } from '../components/ModernFormComponents';
 import { PaginationComponent } from '../components/PaginationComponent';
 import { usePagination } from '../hooks/usePagination';
+import { vacationService } from '../services/vacationService';
+import type { VacationRequestCreate } from '../types/vacation';
+import { useAuth } from '../hooks/useAuth';
 
 interface VacationRequest {
   id: number;
@@ -103,6 +106,10 @@ const formatMonthYear = (date: Date) => {
 };
 
 export const Vacations: React.FC = () => {
+  const { user } = useAuth();
+  const role = user?.role || '';
+  const isAdminRole = role === 'ADMINISTRADOR' || role === 'MASTER_ADMIN';
+  const isRestrictedRole = role === 'TRABAJADOR' || role === 'TRAFICO';
   const [requests, setRequests] = useState<VacationRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -128,66 +135,109 @@ export const Vacations: React.FC = () => {
     reason: ''
   });
 
+  // Estilos comunes para botones granate/burdeos
+  const maroonGradient = 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 70%, #501b36 100%)';
+  const maroonGradientHover = 'linear-gradient(135deg, #3d1429 0%, #5a1d3a 30%, #6b2545 70%, #3d1429 100%)';
+  const commonContainedButtonSx = {
+    borderRadius: '20px',
+    px: 2.5,
+    py: 1,
+    textTransform: 'none' as const,
+    fontSize: '0.8rem',
+    fontWeight: 700,
+    minWidth: 90,
+    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+    position: 'relative' as const,
+    overflow: 'hidden' as const,
+    background: maroonGradient,
+    color: 'white',
+    boxShadow: '0 4px 12px rgba(80,27,54,0.3), 0 2px 4px rgba(80,27,54,0.2)',
+    '&::before': {
+      content: '""',
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: 'linear-gradient(135deg, rgba(80,27,54,0.1) 0%, rgba(80,27,54,0.05) 100%)',
+      opacity: 0,
+      transition: 'opacity 0.3s ease',
+    },
+    '&:hover': {
+      background: maroonGradientHover,
+      boxShadow: '0 6px 16px rgba(80,27,54,0.4), 0 2px 8px rgba(80,27,54,0.3)',
+      transform: 'translateY(-1px)',
+    },
+    '&:hover::before': {
+      opacity: 1,
+    },
+    '&.Mui-disabled': {
+      background: maroonGradient,
+      opacity: 0.6,
+      color: 'white',
+    },
+  } as const;
+
   // Estados para filtros
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [alert, setAlert] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+  // Alcance de lista para administradores: 'mine' (propias) | 'all' (todas)
+  const [scope, setScope] = useState<'mine' | 'all'>('mine');
 
   // Estados para administradores (simulado como false para usuarios normales)
-  const [isAdmin] = useState(false);
+  const isAdmin = isAdminRole;
+  const [error, setError] = useState<string | null>(null);
 
-  // Datos de ejemplo para el calendario
+  // Función para cargar las solicitudes desde el API
+  const loadRequests = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const useAll = isAdminRole && scope === 'all';
+      const params = !useAll && user?.id ? { user_id: user.id } : undefined;
+      const data = await vacationService.getVacationRequests(params);
+      // Convertir el formato de la API al formato local
+      const convertedRequests: VacationRequest[] = data.map((apiRequest: any) => ({
+        id: apiRequest.id,
+        employeeName: apiRequest.employee_name || 'Usuario',
+        startDate: apiRequest.start_date.toISOString().split('T')[0],
+        endDate: apiRequest.end_date.toISOString().split('T')[0],
+        reason: apiRequest.reason,
+        status: apiRequest.status,
+        days: apiRequest.duration_days,
+        requestDate: apiRequest.created_at ? apiRequest.created_at.toISOString().split('T')[0] : '',
+        approvedBy: apiRequest.reviewer_name || '',
+        approvedDate: apiRequest.reviewed_at ? apiRequest.reviewed_at.toISOString().split('T')[0] : '',
+        comments: apiRequest.admin_response || ''
+      }));
+      setRequests(convertedRequests);
+    } catch (err) {
+      console.error('Error loading vacation requests:', err);
+      setError('Error al cargar las solicitudes de vacaciones');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Cargar datos al montar el componente
   useEffect(() => {
-    const sampleRequests: VacationRequest[] = [
-      {
-        id: 1,
-        employeeName: "Juan Pérez",
-        startDate: "2025-08-25",
-        endDate: "2025-08-29",
-        reason: "Vacaciones familiares",
-        status: "approved",
-        days: 5,
-        requestDate: "2025-08-10",
-        approvedBy: "Ana García",
-        approvedDate: "2025-08-12"
-      },
-      {
-        id: 2,
-        employeeName: "María López",
-        startDate: "2025-09-02",
-        endDate: "2025-09-06",
-        reason: "Descanso personal",
-        status: "pending",
-        days: 5,
-        requestDate: "2025-08-15"
-      },
-      {
-        id: 3,
-        employeeName: "Carlos Ruiz",
-        startDate: "2025-09-15",
-        endDate: "2025-09-22",
-        reason: "Viaje al extranjero",
-        status: "approved",
-        days: 8,
-        requestDate: "2025-08-05",
-        approvedBy: "Ana García",
-        approvedDate: "2025-08-08"
-      },
-      {
-        id: 4,
-        employeeName: "Ana Martín",
-        startDate: "2025-08-30",
-        endDate: "2025-09-01",
-        reason: "Asuntos personales",
-        status: "rejected",
-        days: 3,
-        requestDate: "2025-08-18",
-        approvedBy: "Ana García",
-        approvedDate: "2025-08-19",
-        comments: "Periodo ocupado, solicitar otro momento"
-      }
-    ];
-    setRequests(sampleRequests);
-  }, []);
+    loadRequests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, user?.id, isAdminRole]);
+
+  // Para administradores: si el alcance es 'mine', forzar vista tabla y ocultar controles de calendario/notificaciones
+  useEffect(() => {
+    if (isAdminRole && scope === 'mine' && viewMode !== 'table') {
+      setViewMode('table');
+    }
+  }, [isAdminRole, scope, viewMode]);
+
+  // Forzar vista 'tabla' para roles restringidos
+  useEffect(() => {
+    if (isRestrictedRole && viewMode !== 'table') {
+      setViewMode('table');
+    }
+  }, [isRestrictedRole, viewMode]);
 
   // Funciones para navegar en el calendario
   const handleNavigate = (date: Date) => {
@@ -226,11 +276,12 @@ export const Vacations: React.FC = () => {
   const handleQuickApprove = async (requestId: number, event: React.MouseEvent) => {
     event.stopPropagation();
     try {
-      // Simular llamada API
+      setLoading(true);
+      await vacationService.updateVacationStatus(requestId, 'approved');
       setRequests(prev => 
         prev.map(req => 
           req.id === requestId 
-            ? { ...req, status: 'approved' as const, approvedDate: new Date().toISOString() }
+            ? { ...req, status: 'approved' as const, approvedDate: new Date().toISOString().split('T')[0] }
             : req
         )
       );
@@ -238,18 +289,22 @@ export const Vacations: React.FC = () => {
         type: 'success',
         message: 'Solicitud aprobada exitosamente'
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error approving vacation request:', error);
       setAlert({
         type: 'error',
-        message: 'Error al aprobar la solicitud'
+        message: error.response?.data?.detail || 'Error al aprobar la solicitud'
       });
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleQuickReject = async (requestId: number, event: React.MouseEvent) => {
     event.stopPropagation();
     try {
-      // Simular llamada API
+      setLoading(true);
+      await vacationService.updateVacationStatus(requestId, 'rejected');
       setRequests(prev => 
         prev.map(req => 
           req.id === requestId 
@@ -261,28 +316,35 @@ export const Vacations: React.FC = () => {
         type: 'success',
         message: 'Solicitud rechazada'
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error rejecting vacation request:', error);
       setAlert({
         type: 'error',
-        message: 'Error al rechazar la solicitud'
+        message: error.response?.data?.detail || 'Error al rechazar la solicitud'
       });
+    } finally {
+      setLoading(false);
     }
   };
 
   // Función para eliminar solicitud
   const handleDeleteRequest = async (requestId: number) => {
     try {
-      // Simular llamada API para eliminar
+      setLoading(true);
+      await vacationService.deleteVacationRequest(requestId);
       setRequests(prev => prev.filter(req => req.id !== requestId));
       setAlert({
         type: 'success',
         message: 'Solicitud eliminada correctamente'
       });
-    } catch (error) {
+    } catch (error: any) {
+      console.error('Error deleting vacation request:', error);
       setAlert({
         type: 'error',
-        message: 'Error al eliminar la solicitud'
+        message: error?.response?.data?.detail || 'Error al eliminar la solicitud'
       });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -436,25 +498,30 @@ export const Vacations: React.FC = () => {
     setSelectedRequest(null);
   };
 
-  const loadRequests = () => {
-    setLoading(true);
-    // Simular carga de datos
-    setTimeout(() => {
-      setLoading(false);
-    }, 1000);
-  };
-
-  const handleSubmitRequest = () => {
+  const handleSubmitRequest = async () => {
     if (!newRequest.startDate || !newRequest.endDate || !newRequest.reason.trim()) {
       setAlert({ type: 'error', message: 'Por favor completa todos los campos' });
       return;
     }
 
+    console.log('Valores del formulario:', {
+      startDate_string: newRequest.startDate,
+      endDate_string: newRequest.endDate,
+      reason: newRequest.reason
+    });
+
     const startDate = new Date(newRequest.startDate);
     const endDate = new Date(newRequest.endDate);
     
+    console.log('Fechas convertidas a Date objects:', {
+      startDate_obj: startDate,
+      endDate_obj: endDate,
+      startDate_iso: startDate.toISOString(),
+      endDate_iso: endDate.toISOString()
+    });
+    
     if (startDate >= endDate) {
-      setAlert({ type: 'error', message: 'La fecha de fin debe ser posterior a la fecha de inicio' });
+      setAlert({ type: 'error', message: `La fecha de fin (${newRequest.endDate}) debe ser posterior a la fecha de inicio (${newRequest.startDate})` });
       return;
     }
 
@@ -465,41 +532,87 @@ export const Vacations: React.FC = () => {
       return;
     }
 
-    const days = calculateDays(newRequest.startDate, newRequest.endDate);
+    try {
+      setLoading(true);
+      
+      // Debug: Verificar las fechas antes de enviar
+      console.log('Frontend enviando:', {
+        newRequest_startDate: newRequest.startDate,
+        newRequest_endDate: newRequest.endDate,
+        startDate_obj: startDate,
+        endDate_obj: endDate
+      });
+      
+      const requestData: VacationRequestCreate = {
+        start_date: startDate,
+        end_date: endDate,
+        reason: newRequest.reason.trim()
+      };
 
-    const request: VacationRequest = {
-      id: Date.now(),
-      employeeName: "Usuario Actual", // En una app real sería del contexto del usuario
-      startDate: newRequest.startDate,
-      endDate: newRequest.endDate,
-      reason: newRequest.reason,
-      status: 'pending',
-      days,
-      requestDate: new Date().toISOString().split('T')[0]
-    };
+      const createdRequest = await vacationService.createVacationRequest(requestData);
+      
+      // Convertir la respuesta del API al formato local
+      const newLocalRequest: VacationRequest = {
+        id: createdRequest.id!,
+        employeeName: createdRequest.employee_name || 'Usuario Actual',
+        startDate: createdRequest.start_date.toISOString().split('T')[0],
+        endDate: createdRequest.end_date.toISOString().split('T')[0],
+        reason: createdRequest.reason,
+        status: createdRequest.status,
+        days: createdRequest.duration_days ?? calculateDays(
+          createdRequest.start_date.toISOString().split('T')[0],
+          createdRequest.end_date.toISOString().split('T')[0]
+        ),
+        requestDate: createdRequest.created_at ? createdRequest.created_at.toISOString().split('T')[0] : '',
+        approvedBy: createdRequest.reviewer_name || '',
+        approvedDate: createdRequest.reviewed_at ? createdRequest.reviewed_at.toISOString().split('T')[0] : '',
+        comments: createdRequest.admin_response || ''
+      };
 
-    setRequests(prev => [request, ...prev]);
-    setOpenDialog(false);
-    setNewRequest({ startDate: '', endDate: '', reason: '' });
-    setAlert({ type: 'success', message: 'Solicitud de vacaciones enviada exitosamente' });
+      setRequests(prev => [newLocalRequest, ...prev]);
+      setOpenDialog(false);
+      setNewRequest({ startDate: '', endDate: '', reason: '' });
+      setAlert({ type: 'success', message: 'Solicitud de vacaciones enviada exitosamente' });
+    } catch (error: any) {
+      console.error('Error creating vacation request:', error);
+      setAlert({ 
+        type: 'error', 
+        message: error.response?.data?.detail || 'Error al enviar la solicitud de vacaciones'
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleUpdateStatus = (id: number, status: 'approved' | 'rejected', comments?: string) => {
-    setRequests(prev => prev.map(req => 
-      req.id === id 
-        ? { 
-            ...req, 
-            status, 
-            approvedBy: 'Admin',
-            approvedDate: new Date().toISOString().split('T')[0],
-            comments: comments || req.comments
-          }
-        : req
-    ));
-    setAlert({ 
-      type: 'success', 
-      message: `Solicitud ${status === 'approved' ? 'aprobada' : 'rechazada'} exitosamente` 
-    });
+  const handleUpdateStatus = async (id: number, status: 'approved' | 'rejected', comments?: string) => {
+    try {
+      setLoading(true);
+      await vacationService.updateVacationStatus(id, status, comments);
+      
+      setRequests(prev => prev.map(req => 
+        req.id === id 
+          ? { 
+              ...req, 
+              status, 
+              approvedBy: 'Admin',
+              approvedDate: new Date().toISOString().split('T')[0],
+              comments: comments || req.comments
+            }
+          : req
+      ));
+      setAlert({ 
+        type: 'success', 
+        message: `Solicitud ${status === 'approved' ? 'aprobada' : 'rechazada'} exitosamente` 
+      });
+    } catch (error: any) {
+      console.error('Error updating vacation status:', error);
+      setAlert({ 
+        type: 'error', 
+        message: error.response?.data?.detail || 'Error al actualizar el estado de la solicitud'
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Filtrar solicitudes
@@ -697,8 +810,8 @@ export const Vacations: React.FC = () => {
                     <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400 }}>
                       Gestiona tus solicitudes de vacaciones de forma eficiente
                     </Typography>
-                  </Box>
                 </Box>
+              </Box>
               </Box>
             </Paper>
           </Fade>
@@ -723,6 +836,25 @@ export const Vacations: React.FC = () => {
           </Fade>
         )}
 
+        {/* Error de conexión */}
+        {error && (
+          <Fade in timeout={400}>
+            <Alert 
+              severity="warning" 
+              sx={{ 
+                mb: 3,
+                borderRadius: 2,
+                '& .MuiAlert-icon': {
+                  fontSize: 24
+                }
+              }} 
+              onClose={() => setError(null)}
+            >
+              {error}
+            </Alert>
+          </Fade>
+        )}
+
         {/* Panel de Control */}
         <Fade in timeout={1000}>
           <Paper
@@ -735,13 +867,13 @@ export const Vacations: React.FC = () => {
               background: '#ffffff',
             }}
           >
-            <Box sx={{ 
-              display: 'flex', 
-              gap: 3, 
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap'
-            }}>
+              <Box sx={{ 
+                display: 'flex', 
+                gap: 3, 
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap'
+              }}>
               {/* Lado izquierdo: Filtros (solo en vista tabla) */}
               <Box sx={{ 
                 display: 'flex',
@@ -832,6 +964,93 @@ export const Vacations: React.FC = () => {
                     </FormControl>
                   </>
                 )}
+
+                {isAdminRole && (
+                  <Box
+                    sx={{
+                      p: 0.5,
+                      borderRadius: 3,
+                      background: 'linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%)',
+                      border: '2px solid #e0e0e0',
+                      boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)',
+                      display: 'inline-block',
+                    }}
+                  >
+                    <ToggleButtonGroup
+                      value={scope}
+                      exclusive
+                      onChange={(_, val) => {
+                        if (val) setScope(val);
+                      }}
+                      size="small"
+                      sx={{
+                        '& .MuiToggleButtonGroup-grouped': {
+                          border: 'none',
+                          '&:not(:first-of-type)': {
+                            borderRadius: 3,
+                            marginLeft: '4px',
+                          },
+                          '&:first-of-type': {
+                            borderRadius: 3,
+                          },
+                        },
+                        '& .MuiToggleButton-root': {
+                          borderRadius: '20px !important',
+                          px: 2.5,
+                          py: 1,
+                          textTransform: 'none',
+                          fontSize: '0.8rem',
+                          fontWeight: 700,
+                          border: 'none !important',
+                          minWidth: 90,
+                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                          position: 'relative',
+                          overflow: 'hidden',
+                          '&::before': {
+                            content: '""',
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            background: 'linear-gradient(135deg, rgba(80,27,54,0.1) 0%, rgba(80,27,54,0.05) 100%)',
+                            opacity: 0,
+                            transition: 'opacity 0.3s ease',
+                          },
+                          '&:hover::before': {
+                            opacity: 1,
+                          },
+                          '&.Mui-selected': {
+                            background: 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 70%, #501b36 100%)',
+                            color: 'white',
+                            boxShadow: '0 4px 12px rgba(80,27,54,0.3), 0 2px 4px rgba(80,27,54,0.2)',
+                            transform: 'translateY(-1px)',
+                            '&:hover': {
+                              background: 'linear-gradient(135deg, #3d1429 0%, #5a1d3a 30%, #6b2545 70%, #3d1429 100%)',
+                              boxShadow: '0 6px 16px rgba(80,27,54,0.4), 0 2px 8px rgba(80,27,54,0.3)',
+                            },
+                            '&::before': {
+                              opacity: 0,
+                            },
+                          },
+                          '&:not(.Mui-selected)': {
+                            color: '#501b36',
+                            backgroundColor: 'rgba(255,255,255,0.8)',
+                            backdropFilter: 'blur(10px)',
+                            '&:hover': {
+                              backgroundColor: 'rgba(255,255,255,0.95)',
+                              transform: 'translateY(-0.5px)',
+                              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                            },
+                          },
+                        },
+                      }}
+                    >
+                      <ToggleButton value="mine">Mías</ToggleButton>
+                      <ToggleButton value="all">Todas</ToggleButton>
+                    </ToggleButtonGroup>
+                  </Box>
+                )}
               </Box>
 
               {/* Lado derecho: Controles principales - siempre visibles */}
@@ -842,223 +1061,186 @@ export const Vacations: React.FC = () => {
                 flexShrink: 0
               }}>
                 {/* Icono de notificaciones */}
-                <Tooltip title="Notificaciones">
-                  <Box 
-                    onClick={handleNotificationClick}
-                    sx={{ 
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      cursor: 'pointer',
-                      p: 0,
-                    }}
-                  >
-                    <Badge 
-                      badgeContent={pendingRequests.length > 0 ? ' ' : 0}
-                      color="error"
-                      variant="dot"
-                      sx={{
-                        '& .MuiBadge-badge': {
-                          backgroundColor: '#d32f2f',
-                          width: '10px',
-                          height: '10px',
-                          borderRadius: '50%',
-                          top: '8px',
-                          right: '8px',
-                          minWidth: 'unset',
-                        }
+                {isAdminRole && scope === 'all' && (
+                  <Tooltip title="Notificaciones">
+                    <Box 
+                      onClick={handleNotificationClick}
+                      sx={{ 
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        cursor: 'pointer',
+                        p: 0,
                       }}
                     >
-                      <NotificationsNone 
-                        fontSize="large" 
-                        sx={{ 
-                          color: '#501b36',
-                          '&:hover': {
-                            color: '#3d1429',
-                          },
-                          transition: 'color 0.2s ease-in-out',
-                          animation: isAnimating ? 'bellRing 0.6s ease-in-out' : 'none',
-                          '@keyframes bellRing': {
-                            '0%': { transform: 'rotate(0deg)' },
-                            '10%': { transform: 'rotate(10deg)' },
-                            '20%': { transform: 'rotate(-8deg)' },
-                            '30%': { transform: 'rotate(10deg)' },
-                            '40%': { transform: 'rotate(-8deg)' },
-                            '50%': { transform: 'rotate(6deg)' },
-                            '60%': { transform: 'rotate(-4deg)' },
-                            '70%': { transform: 'rotate(2deg)' },
-                            '80%': { transform: 'rotate(-1deg)' },
-                            '90%': { transform: 'rotate(0deg)' },
-                            '100%': { transform: 'rotate(0deg)' },
-                          },
-                        }} 
-                      />
-                    </Badge>
-                  </Box>
-                </Tooltip>
+                      <Badge 
+                        badgeContent={pendingRequests.length > 0 ? ' ' : 0}
+                        color="error"
+                        variant="dot"
+                        sx={{
+                          '& .MuiBadge-badge': {
+                            backgroundColor: '#d32f2f',
+                            width: '10px',
+                            height: '10px',
+                            borderRadius: '50%',
+                            top: '8px',
+                            right: '8px',
+                            minWidth: 'unset',
+                          }
+                        }}
+                      >
+                        <NotificationsNone 
+                          fontSize="large" 
+                          sx={{ 
+                            color: '#501b36',
+                            '&:hover': {
+                              color: '#3d1429',
+                            },
+                            transition: 'color 0.2s ease-in-out',
+                            animation: isAnimating ? 'bellRing 0.6s ease-in-out' : 'none',
+                            '@keyframes bellRing': {
+                              '0%': { transform: 'rotate(0deg)' },
+                              '10%': { transform: 'rotate(10deg)' },
+                              '20%': { transform: 'rotate(-8deg)' },
+                              '30%': { transform: 'rotate(10deg)' },
+                              '40%': { transform: 'rotate(-8deg)' },
+                              '50%': { transform: 'rotate(6deg)' },
+                              '60%': { transform: 'rotate(-4deg)' },
+                              '70%': { transform: 'rotate(2deg)' },
+                              '80%': { transform: 'rotate(-1deg)' },
+                              '90%': { transform: 'rotate(0deg)' },
+                              '100%': { transform: 'rotate(0deg)' },
+                            },
+                          }} 
+                        />
+                      </Badge>
+                    </Box>
+                  </Tooltip>
+                )}
                 
                 {/* Toggle Vista Calendar/Table mejorado */}
-                <Box
-                  sx={{
-                    p: 0.5,
-                    borderRadius: 3,
-                    background: 'linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%)',
-                    border: '2px solid #e0e0e0',
-                    boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)',
-                    display: 'inline-block',
-                  }}
-                >
-                  <ToggleButtonGroup
-                    value={viewMode}
-                    exclusive
-                    onChange={(_, newView) => {
-                      if (newView !== null) {
-                        setViewMode(newView);
-                      }
-                    }}
-                    size="small"
+                {isAdminRole && scope === 'all' && (
+                  <Box
                     sx={{
-                      '& .MuiToggleButtonGroup-grouped': {
-                        border: 'none',
-                        '&:not(:first-of-type)': {
-                          borderRadius: 3,
-                          marginLeft: '4px',
-                        },
-                        '&:first-of-type': {
-                          borderRadius: 3,
-                        },
-                      },
-                      '& .MuiToggleButton-root': {
-                        borderRadius: '20px !important',
-                        px: 2.5,
-                        py: 1,
-                        textTransform: 'none',
-                        fontSize: '0.8rem',
-                        fontWeight: 700,
-                        border: 'none !important',
-                        minWidth: 90,
-                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                        position: 'relative',
-                        overflow: 'hidden',
-                        '&::before': {
-                          content: '""',
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          background: 'linear-gradient(135deg, rgba(80,27,54,0.1) 0%, rgba(80,27,54,0.05) 100%)',
-                          opacity: 0,
-                          transition: 'opacity 0.3s ease',
-                        },
-                        '&:hover::before': {
-                          opacity: 1,
-                        },
-                        '&.Mui-selected': {
-                          background: 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 70%, #501b36 100%)',
-                          color: 'white',
-                          boxShadow: '0 4px 12px rgba(80,27,54,0.3), 0 2px 4px rgba(80,27,54,0.2)',
-                          transform: 'translateY(-1px)',
-                          '&:hover': {
-                            background: 'linear-gradient(135deg, #3d1429 0%, #5a1d3a 30%, #6b2545 70%, #3d1429 100%)',
-                            boxShadow: '0 6px 16px rgba(80,27,54,0.4), 0 2px 8px rgba(80,27,54,0.3)',
-                          },
-                          '&::before': {
-                            opacity: 0,
-                          },
-                        },
-                        '&:not(.Mui-selected)': {
-                          color: '#501b36',
-                          backgroundColor: 'rgba(255,255,255,0.8)',
-                          backdropFilter: 'blur(10px)',
-                          '&:hover': {
-                            backgroundColor: 'rgba(255,255,255,0.95)',
-                            transform: 'translateY(-0.5px)',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-                          },
-                        },
-                      },
+                      p: 0.5,
+                      borderRadius: 3,
+                      background: 'linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%)',
+                      border: '2px solid #e0e0e0',
+                      boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)',
+                      display: 'inline-block',
                     }}
                   >
-                    <ToggleButton value="table">
-                      <ViewList sx={{ mr: 0.5, fontSize: 18 }} />
-                      Lista
-                    </ToggleButton>
-                    <ToggleButton value="calendar">
-                      <CalendarMonth sx={{ mr: 0.5, fontSize: 18 }} />
-                      Calendario
-                    </ToggleButton>
-                  </ToggleButtonGroup>
-                </Box>
+                    <ToggleButtonGroup
+                      value={viewMode}
+                      exclusive
+                      onChange={(_, newView) => {
+                        if (newView !== null) {
+                          setViewMode(newView);
+                        }
+                      }}
+                      size="small"
+                      sx={{
+                        '& .MuiToggleButtonGroup-grouped': {
+                          border: 'none',
+                          '&:not(:first-of-type)': {
+                            borderRadius: 3,
+                            marginLeft: '4px',
+                          },
+                          '&:first-of-type': {
+                            borderRadius: 3,
+                          },
+                        },
+                        '& .MuiToggleButton-root': {
+                          borderRadius: '20px !important',
+                          px: 2.5,
+                          py: 1,
+                          textTransform: 'none',
+                          fontSize: '0.8rem',
+                          fontWeight: 700,
+                          border: 'none !important',
+                          minWidth: 90,
+                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                          position: 'relative',
+                          overflow: 'hidden',
+                          '&::before': {
+                            content: '""',
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                            background: 'linear-gradient(135deg, rgba(80,27,54,0.1) 0%, rgba(80,27,54,0.05) 100%)',
+                            opacity: 0,
+                            transition: 'opacity 0.3s ease',
+                          },
+                          '&:hover::before': {
+                            opacity: 1,
+                          },
+                          '&.Mui-selected': {
+                            background: 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 70%, #501b36 100%)',
+                            color: 'white',
+                            boxShadow: '0 4px 12px rgba(80,27,54,0.3), 0 2px 4px rgba(80,27,54,0.2)',
+                            transform: 'translateY(-1px)',
+                            '&:hover': {
+                              background: 'linear-gradient(135deg, #3d1429 0%, #5a1d3a 30%, #6b2545 70%, #3d1429 100%)',
+                              boxShadow: '0 6px 16px rgba(80,27,54,0.4), 0 2px 8px rgba(80,27,54,0.3)',
+                            },
+                            '&::before': {
+                              opacity: 0,
+                            },
+                          },
+                          '&:not(.Mui-selected)': {
+                            color: '#501b36',
+                            backgroundColor: 'rgba(255,255,255,0.8)',
+                            backdropFilter: 'blur(10px)',
+                            '&:hover': {
+                              backgroundColor: 'rgba(255,255,255,0.95)',
+                              transform: 'translateY(-0.5px)',
+                              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                            },
+                          },
+                        },
+                      }}
+                    >
+                      <ToggleButton value="table">
+                        <ViewList sx={{ mr: 0.5, fontSize: 18 }} />
+                        Lista
+                      </ToggleButton>
+                      <ToggleButton value="calendar">
+                        <CalendarMonth sx={{ mr: 0.5, fontSize: 18 }} />
+                        Calendario
+                      </ToggleButton>
+                    </ToggleButtonGroup>
+                  </Box>
+                )}
                 
                 <Button
-                  variant="outlined"
+                  variant="contained"
                   startIcon={<Refresh />}
                   onClick={loadRequests}
                   disabled={loading}
-                  sx={{
-                    borderRadius: 2,
-                    px: 3,
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    borderColor: '#501b36',
-                    color: '#501b36',
-                    '&:hover': {
-                      borderColor: '#3d1429',
-                      bgcolor: alpha('#501b36', 0.04),
-                    },
-                  }}
+                  sx={commonContainedButtonSx}
                 >
                   {loading ? 'Actualizando...' : 'Actualizar'}
                 </Button>
 
-                <Button
-                  variant="contained"
-                  startIcon={<Add />}
-                  onClick={() => setOpenDialog(true)}
-                  sx={{
-                    borderRadius: '20px',
-                    px: 2.5,
-                    py: 1,
-                    textTransform: 'none',
-                    fontSize: '0.8rem',
-                    fontWeight: 700,
-                    minWidth: 90,
-                    transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                    position: 'relative',
-                    overflow: 'hidden',
-                    background: 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 70%, #501b36 100%)',
-                    color: 'white',
-                    boxShadow: '0 4px 12px rgba(80,27,54,0.3), 0 2px 4px rgba(80,27,54,0.2)',
-                    '&::before': {
-                      content: '""',
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      background: 'linear-gradient(135deg, rgba(80,27,54,0.1) 0%, rgba(80,27,54,0.05) 100%)',
-                      opacity: 0,
-                      transition: 'opacity 0.3s ease',
-                    },
-                    '&:hover': {
-                      background: 'linear-gradient(135deg, #3d1429 0%, #5a1d3a 30%, #6b2545 70%, #3d1429 100%)',
-                      boxShadow: '0 6px 16px rgba(80,27,54,0.4), 0 2px 8px rgba(80,27,54,0.3)',
-                      transform: 'translateY(-1px)',
-                    },
-                    '&:hover::before': {
-                      opacity: 1,
-                    },
-                  }}
-                >
-                  Nueva Solicitud
-                </Button>
+                {(!isAdminRole || scope === 'mine') && (
+                  <Button
+                    variant="contained"
+                    startIcon={<Add />}
+                    onClick={() => setOpenDialog(true)}
+                    sx={commonContainedButtonSx}
+                  >
+                    Nueva Solicitud
+                  </Button>
+                )}
               </Box>
             </Box>
           </Paper>
         </Fade>
 
         {/* Menú de Notificaciones */}
+        {isAdminRole && scope === 'all' && (
         <Menu
           anchorEl={notificationAnchor}
           open={notificationOpen}
@@ -1154,6 +1336,25 @@ export const Vacations: React.FC = () => {
                         }}>
                           {new Date(request.startDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} - {new Date(request.endDate).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} • {request.days} día{request.days !== 1 ? 's' : ''}
                         </Typography>
+                        {/* Preview ligera del motivo */}
+                        {request.reason && (
+                          <Typography
+                            variant="caption"
+                            title={request.reason}
+                            noWrap
+                            sx={{
+                              color: 'text.secondary',
+                              display: 'block',
+                              fontSize: '0.75rem',
+                              lineHeight: 1.2,
+                              mt: 0.25,
+                              opacity: 0.9,
+                              maxWidth: '100%'
+                            }}
+                          >
+                            {request.reason}
+                          </Typography>
+                        )}
                       </Box>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 1 }}>
                         <Chip 
@@ -1212,7 +1413,8 @@ export const Vacations: React.FC = () => {
               </Box>
             )}
           </Box>
-        </Menu>
+  </Menu>
+  )}
 
         {/* Contenido Principal */}
         {viewMode === 'calendar' ? (
@@ -1234,8 +1436,8 @@ export const Vacations: React.FC = () => {
                 borderColor: 'divider',
                 background: alpha('#501b36', 0.02),
               }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: '1' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1, minWidth: 280 }}>
                     <CalendarMonth sx={{ color: '#501b36', fontSize: 28 }} />
                     <Box>
                       <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36' }}>
@@ -1248,8 +1450,7 @@ export const Vacations: React.FC = () => {
                   </Box>
                   
                   {/* Controles de navegación del calendario */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 'none' }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <IconButton 
                         onClick={() => navigateToMonth('prev')}
                         sx={{ 
@@ -1266,25 +1467,9 @@ export const Vacations: React.FC = () => {
                       
                       <Button
                         onClick={goToToday}
-                        variant="outlined"
+                        variant="contained"
                         size="small"
-                        sx={{
-                          color: '#501b36',
-                          borderColor: alpha('#501b36', 0.3),
-                          bgcolor: 'transparent',
-                          borderRadius: '12px',
-                          minWidth: 60,
-                          px: 2,
-                          py: 0.5,
-                          fontSize: '0.875rem',
-                          fontWeight: 600,
-                          textTransform: 'none',
-                          height: 40,
-                          '&:hover': {
-                            borderColor: '#501b36',
-                            bgcolor: alpha('#501b36', 0.04),
-                          },
-                        }}
+                        sx={{ ...commonContainedButtonSx, height: 40, borderRadius: '12px' }}
                       >
                         Hoy
                       </Button>
@@ -1314,7 +1499,6 @@ export const Vacations: React.FC = () => {
                       {formatMonthYear(currentDate)}
                     </Typography>
                   </Box>
-                </Box>
               </Box>
 
               {/* Calendario */}
@@ -1522,24 +1706,16 @@ export const Vacations: React.FC = () => {
                       : `No hay solicitudes con estado "${filterStatus === 'pending' ? 'Pendiente' : filterStatus === 'approved' ? 'Aprobada' : 'Rechazada'}"`
                   }
                 </Typography>
-                <Button
-                  variant="contained"
-                  startIcon={<Add />}
-                  onClick={() => setOpenDialog(true)}
-                  sx={{
-                    borderRadius: 2,
-                    px: 4,
-                    py: 1.5,
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    backgroundColor: '#501b36',
-                    '&:hover': {
-                      backgroundColor: '#3d1429',
-                    },
-                  }}
-                >
-                  Crear Primera Solicitud
-                </Button>
+                {(!isAdminRole || scope === 'mine') && (
+                  <Button
+                    variant="contained"
+                    startIcon={<Add />}
+                    onClick={() => setOpenDialog(true)}
+                    sx={commonContainedButtonSx}
+                  >
+                    Crear Primera Solicitud
+                  </Button>
+                )}
               </Box>
             ) : (
               <>
@@ -1738,7 +1914,7 @@ export const Vacations: React.FC = () => {
               Ver detalles
             </Typography>
           </MenuItem>
-          {isAdmin && selectedRequest?.status === 'pending' && (
+          {isAdmin && selectedRequest?.status === 'pending' && scope !== 'all' && (
             <>
               <MenuItem 
                 onClick={() => {

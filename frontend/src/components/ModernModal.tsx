@@ -301,6 +301,26 @@ export const ModernButton: React.FC<{
     const primaryColor = getPrimaryColor();
     
     if (variant === 'contained') {
+      // Para color primario (granate) o customColor granate aplicamos el gradiente y sombras modernas
+      if (color === 'primary' || primaryColor.toLowerCase() === '#501b36') {
+        return {
+          background: 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 70%, #501b36 100%)',
+          color: 'white',
+          boxShadow: '0 4px 12px rgba(80,27,54,0.3), 0 2px 4px rgba(80,27,54,0.2)',
+          '&:hover': {
+            background: 'linear-gradient(135deg, #3d1429 0%, #5a1d3a 30%, #6b2545 70%, #3d1429 100%)',
+            transform: 'translateY(-1px)',
+            boxShadow: '0 6px 16px rgba(80,27,54,0.4), 0 2px 8px rgba(80,27,54,0.3)',
+          },
+          '&:active': {
+            transform: 'translateY(0)',
+          },
+          '&:disabled': {
+            opacity: 0.6,
+          },
+        };
+      }
+      // Para otros colores mantenemos el comportamiento sólido
       return {
         backgroundColor: primaryColor,
         color: 'white',

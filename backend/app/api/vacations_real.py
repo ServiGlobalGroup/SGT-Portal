@@ -1,5 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi import status as http_status
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import extract
 from app.database.connection import get_db
@@ -13,14 +12,13 @@ from app.models.schemas import (
 )
 from app.api.auth import get_current_user
 from datetime import datetime, date
-from typing import List, Optional, Any, cast
-import calendar
+from typing import List, Optional
 
 router = APIRouter()
 
 @router.get("/", response_model=List[VacationRequestResponse])
 async def get_vacation_requests(
-    status: Optional[str] = None,
+    status_filter: Optional[str] = None,
     user_id: Optional[int] = None,
     year: Optional[int] = None,
     db: Session = Depends(get_db),
@@ -43,16 +41,8 @@ async def get_vacation_requests(
         query = query.filter(VacationRequest.user_id == user_id)
     
     # Filtro por estado
-    if status:
-        # Validar y normalizar estado al Enum
-        try:
-            status_enum = VacationStatus(status)
-        except ValueError:
-            raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail="Estado no válido"
-            )
-        query = query.filter(VacationRequest.status == status_enum)
+    if status_filter:
+        query = query.filter(VacationRequest.status == status_filter)
     
     # Filtro por año
     if year:
@@ -63,26 +53,26 @@ async def get_vacation_requests(
     # Ordenar por fecha de creación descendente
     requests = query.order_by(VacationRequest.created_at.desc()).all()
     
-    # Formatear respuesta con datos adicionales
+    # Convertir a respuesta
     response = []
     for req in requests:
-        req_dict = {
-            "id": req.id,
-            "user_id": req.user_id,
-            "start_date": req.start_date,
-            "end_date": req.end_date,
-            "reason": req.reason,
-            "status": req.status,
-            "admin_response": req.admin_response,
-            "reviewed_by": req.reviewed_by,
-            "reviewed_at": req.reviewed_at,
-            "created_at": req.created_at,
-            "updated_at": req.updated_at,
-            "duration_days": req.duration_days,
-            "employee_name": req.user.full_name if req.user else None,
-            "reviewer_name": req.reviewer.full_name if req.reviewer else None
-        }
-        response.append(VacationRequestResponse(**req_dict))
+        response_item = VacationRequestResponse(
+            id=req.id,
+            user_id=req.user_id,
+            start_date=req.start_date,
+            end_date=req.end_date,
+            reason=req.reason,
+            status=req.status,
+            admin_response=req.admin_response,
+            reviewed_by=req.reviewed_by,
+            reviewed_at=req.reviewed_at,
+            created_at=req.created_at,
+            updated_at=req.updated_at,
+            duration_days=req.duration_days,
+            employee_name=req.user.full_name if req.user else None,
+            reviewer_name=req.reviewer.full_name if req.reviewer else None
+        )
+        response.append(response_item)
     
     return response
 
@@ -98,30 +88,29 @@ async def create_vacation_request(
     """
     
     # Validaciones adicionales
-    # Validar por fecha (ignorar hora) para evitar falsos negativos por zona horaria
-    if request.start_date.date() < date.today():
+    if request.start_date < datetime.now():
         raise HTTPException(
-            status_code=http_status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="La fecha de inicio no puede ser anterior a hoy"
         )
     
     if request.end_date < request.start_date:
         raise HTTPException(
-            status_code=http_status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="La fecha de fin debe ser posterior a la fecha de inicio"
         )
     
     # Verificar si ya existe una solicitud en las mismas fechas
     overlapping = db.query(VacationRequest).filter(
         VacationRequest.user_id == current_user.id,
-        VacationRequest.status.in_([VacationStatus.PENDING, VacationStatus.APPROVED]),
+        VacationRequest.status.in_(['pending', 'approved']),
         VacationRequest.start_date <= request.end_date,
         VacationRequest.end_date >= request.start_date
     ).first()
     
     if overlapping:
         raise HTTPException(
-            status_code=http_status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Ya existe una solicitud de vacaciones en ese período"
         )
     
@@ -143,107 +132,22 @@ async def create_vacation_request(
         joinedload(VacationRequest.user)
     ).filter(VacationRequest.id == db_request.id).first()
     
-    assert db_request is not None
-    return {
-        "id": db_request.id,
-        "user_id": db_request.user_id,
-        "start_date": db_request.start_date,
-        "end_date": db_request.end_date,
-        "reason": db_request.reason,
-        "status": db_request.status,
-        "admin_response": db_request.admin_response,
-        "reviewed_by": db_request.reviewed_by,
-        "reviewed_at": db_request.reviewed_at,
-        "created_at": db_request.created_at,
-        "updated_at": db_request.updated_at,
-        "duration_days": db_request.duration_days,
-        "employee_name": db_request.user.full_name if db_request.user else None,
-        "reviewer_name": None,
-    }
-
-@router.put("/{request_id}", response_model=VacationRequestResponse)
-async def update_vacation_request(
-    request_id: int,
-    request_update: VacationRequestUpdate,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Actualiza una solicitud de vacaciones.
-    Los usuarios pueden editar sus propias solicitudes pendientes.
-    Los administradores pueden cambiar el estado y añadir respuestas.
-    """
-    
-    db_request = db.query(VacationRequest).filter(
-        VacationRequest.id == request_id
-    ).first()
-    
-    if not db_request:
-        raise HTTPException(
-            status_code=http_status.HTTP_404_NOT_FOUND,
-            detail="Solicitud no encontrada"
-        )
-    
-    # Verificar permisos
-    is_admin = current_user.role.value in ['ADMINISTRADOR', 'MASTER_ADMIN']
-    is_owner = cast(bool, db_request.user_id == current_user.id)
-    
-    if not (is_admin or is_owner):
-        raise HTTPException(
-            status_code=http_status.HTTP_403_FORBIDDEN,
-            detail="No tienes permisos para modificar esta solicitud"
-        )
-    
-    # Los usuarios regulares solo pueden editar solicitudes pendientes
-    if not is_admin and cast(bool, db_request.status != VacationStatus.PENDING):
-        raise HTTPException(
-            status_code=http_status.HTTP_400_BAD_REQUEST,
-            detail="Solo se pueden modificar solicitudes pendientes"
-        )
-    
-    # Actualizar campos
-    update_data = request_update.dict(exclude_unset=True)
-    
-    if 'status' in update_data and not is_admin:
-        raise HTTPException(
-            status_code=http_status.HTTP_403_FORBIDDEN,
-            detail="Solo los administradores pueden cambiar el estado"
-        )
-    
-    # Si es admin cambiando el estado, registrar la revisión
-    if is_admin and 'status' in update_data and cast(bool, update_data['status'] != db_request.status):
-        update_data['reviewed_by'] = current_user.id
-        update_data['reviewed_at'] = datetime.now()
-    
-    for field, value in update_data.items():
-        setattr(db_request, field, value)
-    
-    db.commit()
-    db.refresh(db_request)
-    
-    # Cargar relaciones para la respuesta
-    db_request = db.query(VacationRequest).options(
-        joinedload(VacationRequest.user),
-        joinedload(VacationRequest.reviewer)
-    ).filter(VacationRequest.id == request_id).first()
-    
-    assert db_request is not None
-    return {
-        "id": db_request.id,
-        "user_id": db_request.user_id,
-        "start_date": db_request.start_date,
-        "end_date": db_request.end_date,
-        "reason": db_request.reason,
-        "status": db_request.status,
-        "admin_response": db_request.admin_response,
-        "reviewed_by": db_request.reviewed_by,
-        "reviewed_at": db_request.reviewed_at,
-        "created_at": db_request.created_at,
-        "updated_at": db_request.updated_at,
-        "duration_days": db_request.duration_days,
-        "employee_name": db_request.user.full_name if db_request.user else None,
-        "reviewer_name": db_request.reviewer.full_name if db_request.reviewer else None,
-    }
+    return VacationRequestResponse(
+        id=db_request.id,
+        user_id=db_request.user_id,
+        start_date=db_request.start_date,
+        end_date=db_request.end_date,
+        reason=db_request.reason,
+        status=db_request.status,
+        admin_response=db_request.admin_response,
+        reviewed_by=db_request.reviewed_by,
+        reviewed_at=db_request.reviewed_at,
+        created_at=db_request.created_at,
+        updated_at=db_request.updated_at,
+        duration_days=db_request.duration_days,
+        employee_name=db_request.user.full_name if db_request.user else None,
+        reviewer_name=None
+    )
 
 @router.delete("/{request_id}")
 async def delete_vacation_request(
@@ -263,24 +167,24 @@ async def delete_vacation_request(
     
     if not db_request:
         raise HTTPException(
-            status_code=http_status.HTTP_404_NOT_FOUND,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Solicitud no encontrada"
         )
     
     # Verificar permisos
     is_admin = current_user.role.value in ['ADMINISTRADOR', 'MASTER_ADMIN']
-    is_owner = cast(bool, db_request.user_id == current_user.id)
+    is_owner = db_request.user_id == current_user.id
     
     if not (is_admin or is_owner):
         raise HTTPException(
-            status_code=http_status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="No tienes permisos para eliminar esta solicitud"
         )
     
     # Los usuarios regulares solo pueden eliminar solicitudes pendientes
-    if not is_admin and cast(bool, db_request.status != VacationStatus.PENDING):
+    if not is_admin and db_request.status != VacationStatus.PENDING:
         raise HTTPException(
-            status_code=http_status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Solo se pueden eliminar solicitudes pendientes"
         )
     
@@ -292,7 +196,7 @@ async def delete_vacation_request(
 @router.put("/{request_id}/status")
 async def update_vacation_status(
     request_id: int, 
-    status: str,
+    status_value: str,
     admin_response: Optional[str] = None,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
@@ -305,16 +209,16 @@ async def update_vacation_status(
     # Verificar permisos de administrador
     if current_user.role.value not in ['ADMINISTRADOR', 'MASTER_ADMIN']:
         raise HTTPException(
-            status_code=http_status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo los administradores pueden cambiar el estado de las solicitudes"
         )
     
     # Validar estado
     try:
-        vacation_status = VacationStatus(status)
+        vacation_status = VacationStatus(status_value)
     except ValueError:
         raise HTTPException(
-            status_code=http_status.HTTP_400_BAD_REQUEST,
+            status_code=status.HTTP_400_BAD_REQUEST,
             detail="Estado no válido"
         )
     
@@ -325,18 +229,17 @@ async def update_vacation_status(
     
     if not db_request:
         raise HTTPException(
-            status_code=http_status.HTTP_404_NOT_FOUND,
+            status_code=status.HTTP_404_NOT_FOUND,
             detail="Solicitud no encontrada"
         )
     
     # Actualizar el estado
-    dbr: Any = db_request
-    dbr.status = vacation_status
-    dbr.reviewed_by = current_user.id
-    dbr.reviewed_at = datetime.now()
+    db_request.status = vacation_status
+    db_request.reviewed_by = current_user.id
+    db_request.reviewed_at = datetime.now()
     
     if admin_response:
-        dbr.admin_response = admin_response
+        db_request.admin_response = admin_response
     
     db.commit()
     
@@ -398,7 +301,7 @@ async def get_pending_requests_for_admin(
     # Verificar permisos de administrador
     if current_user.role.value not in ['ADMINISTRADOR', 'MASTER_ADMIN']:
         raise HTTPException(
-            status_code=http_status.HTTP_403_FORBIDDEN,
+            status_code=status.HTTP_403_FORBIDDEN,
             detail="Solo los administradores pueden acceder a esta información"
         )
     
@@ -411,22 +314,22 @@ async def get_pending_requests_for_admin(
     
     response = []
     for req in requests:
-        req_dict = {
-            "id": req.id,
-            "user_id": req.user_id,
-            "start_date": req.start_date,
-            "end_date": req.end_date,
-            "reason": req.reason,
-            "status": req.status,
-            "admin_response": req.admin_response,
-            "reviewed_by": req.reviewed_by,
-            "reviewed_at": req.reviewed_at,
-            "created_at": req.created_at,
-            "updated_at": req.updated_at,
-            "duration_days": req.duration_days,
-            "employee_name": req.user.full_name if req.user else None,
-            "reviewer_name": None
-        }
-        response.append(VacationRequestResponse(**req_dict))
+        response_item = VacationRequestResponse(
+            id=req.id,
+            user_id=req.user_id,
+            start_date=req.start_date,
+            end_date=req.end_date,
+            reason=req.reason,
+            status=req.status,
+            admin_response=req.admin_response,
+            reviewed_by=req.reviewed_by,
+            reviewed_at=req.reviewed_at,
+            created_at=req.created_at,
+            updated_at=req.updated_at,
+            duration_days=req.duration_days,
+            employee_name=req.user.full_name if req.user else None,
+            reviewer_name=None
+        )
+        response.append(response_item)
     
     return response

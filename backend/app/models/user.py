@@ -1,5 +1,6 @@
 from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Enum
 from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
 from app.database.connection import Base
 import enum
 import os
@@ -155,6 +156,9 @@ class User(Base):
         except Exception as e:
             print(f"Error eliminando carpeta del usuario {self.dni_nie}: {str(e)}")
             return False
+    
+    # Relaciones
+    vacation_requests = relationship("VacationRequest", foreign_keys="VacationRequest.user_id", back_populates="user")
 
 class UploadHistory(Base):
     """

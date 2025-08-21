@@ -15,6 +15,64 @@ class TrafficData(BaseModel):
     visitors: int
     duration: float
 
+from pydantic import BaseModel, validator
+from datetime import datetime
+from typing import Optional, List
+from enum import Enum
+
+class VacationStatus(str, Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+class VacationRequestBase(BaseModel):
+    start_date: datetime
+    end_date: datetime
+    reason: str
+
+    @validator('end_date')
+    def end_date_must_be_after_start_date(cls, v, values, **kwargs):
+        if 'start_date' in values and v < values['start_date']:
+            raise ValueError('La fecha de fin debe ser posterior a la fecha de inicio')
+        return v
+
+class VacationRequestCreate(VacationRequestBase):
+    pass
+
+class VacationRequestUpdate(BaseModel):
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    reason: Optional[str] = None
+    status: Optional[VacationStatus] = None
+    admin_response: Optional[str] = None
+
+class VacationRequestResponse(VacationRequestBase):
+    id: int
+    user_id: int
+    status: VacationStatus
+    admin_response: Optional[str] = None
+    reviewed_by: Optional[int] = None
+    reviewed_at: Optional[datetime] = None
+    created_at: datetime
+    updated_at: datetime
+    
+    # Campos calculados
+    duration_days: Optional[int] = None
+    employee_name: Optional[str] = None
+    reviewer_name: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+class VacationStats(BaseModel):
+    total_requests: int
+    pending: int
+    approved: int
+    rejected: int
+    current_year_total: int
+    current_year_approved: int
+
+# Mantener el schema anterior para compatibilidad temporal
 class VacationRequest(BaseModel):
     id: Optional[int] = None
     employee_name: str

@@ -48,11 +48,18 @@ app.include_router(settings.router, prefix="/api", tags=["settings"])
 @app.get("/health")
 async def health_check():
     """Endpoint para verificar el estado de la aplicación y la base de datos"""
-    db_status = check_database_connection()
-    return {
-        "status": "healthy" if db_status else "unhealthy",
-        "database": "connected" if db_status else "disconnected"
-    }
+    try:
+        db_status = check_database_connection()
+        return {
+            "status": "healthy" if db_status else "unhealthy",
+            "database": "connected" if db_status else "disconnected"
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "database": "error",
+            "error": str(e)
+        }
 
 # ---------- Static Frontend (Vite build) ----------
 # Resolver ruta absoluta al directorio dist de Vite
