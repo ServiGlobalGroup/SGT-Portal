@@ -64,6 +64,8 @@ import { usePagination } from '../hooks/usePagination';
 import { vacationService } from '../services/vacationService';
 import type { VacationRequestCreate } from '../types/vacation';
 import { useAuth } from '../hooks/useAuth';
+import { useDeviceType } from '../hooks/useDeviceType';
+import { MobileVacations } from './mobile/MobileVacations';
 
 interface VacationRequest {
   id: number;
@@ -110,6 +112,12 @@ export const Vacations: React.FC = () => {
   const role = user?.role || '';
   const isAdminRole = role === 'ADMINISTRADOR' || role === 'MASTER_ADMIN';
   const isRestrictedRole = role === 'TRABAJADOR' || role === 'TRAFICO';
+  const { useMobileVersion } = useDeviceType();
+
+  // Versión móvil optimizada
+  if (useMobileVersion) {
+    return <MobileVacations />;
+  }
   const [requests, setRequests] = useState<VacationRequest[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
@@ -1748,8 +1756,8 @@ export const Vacations: React.FC = () => {
                     '&::-webkit-scrollbar': {
                       display: 'none',
                     },
-                    '-ms-overflow-style': 'none',
-                    'scrollbar-width': 'none',
+                    msOverflowStyle: 'none',
+                    scrollbarWidth: 'none',
                   }}
                 >
                 <Table>

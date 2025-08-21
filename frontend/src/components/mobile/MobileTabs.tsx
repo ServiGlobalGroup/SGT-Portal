@@ -11,6 +11,7 @@ import {
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { Search, FilterList } from '@mui/icons-material';
+import { maroonGradient, maroonGradientHover } from '../../theme/mobileStyles';
 
 interface TabOption {
   id: string;
@@ -104,19 +105,20 @@ export const MobileTabs: React.FC<MobileTabsProps> = ({
                 flexShrink: 0,
                 ...(activeTab === option.id
                   ? {
-                      bgcolor: corporateColor,
+                      background: maroonGradient,
                       color: 'white',
+                      borderColor: 'transparent',
                       boxShadow: `0 2px 8px ${alpha(corporateColor, 0.3)}`,
                       '&:hover': {
-                        bgcolor: corporateColor,
+                        background: maroonGradientHover,
                         boxShadow: `0 4px 12px ${alpha(corporateColor, 0.4)}`,
                       },
                     }
                   : {
-                      borderColor: alpha(corporateColor, 0.3),
+                      borderColor: alpha(corporateColor, 0.35),
                       color: corporateColor,
                       '&:hover': {
-                        bgcolor: alpha(corporateColor, 0.05),
+                        bgcolor: alpha(corporateColor, 0.06),
                         borderColor: corporateColor,
                       },
                     }),
@@ -226,7 +228,9 @@ export const MobileTabs: React.FC<MobileTabsProps> = ({
                   overflow: 'hidden',
                   ...(activeTab === option.id
                     ? {
-                        bgcolor: corporateColor,
+                        bgcolor: 'transparent',
+                        background: maroonGradient,
+                        backgroundImage: maroonGradient,
                         color: 'white',
                         transform: 'translateY(-1px)',
                         boxShadow: `0 6px 16px ${alpha(corporateColor, 0.4)}`,
@@ -237,8 +241,12 @@ export const MobileTabs: React.FC<MobileTabsProps> = ({
                           left: 0,
                           right: 0,
                           bottom: 0,
-                          background: `linear-gradient(135deg, transparent 0%, ${alpha('#fff', 0.1)} 50%, transparent 100%)`,
+                          background: `linear-gradient(135deg, transparent 0%, ${alpha('#fff', 0.12)} 50%, transparent 100%)`,
                           pointerEvents: 'none',
+                        },
+                        '&:hover': {
+                          background: maroonGradientHover,
+                          backgroundImage: maroonGradientHover,
                         }
                       }
                     : {
@@ -274,7 +282,7 @@ export const MobileTabs: React.FC<MobileTabsProps> = ({
                           top: -6,
                           right: -8,
                           bgcolor: activeTab === option.id 
-                            ? 'rgba(255,255,255,0.9)' 
+                            ? 'rgba(255,255,255,0.95)' 
                             : '#f44336',
                           color: activeTab === option.id ? corporateColor : 'white',
                           borderRadius: '50%',
@@ -286,7 +294,7 @@ export const MobileTabs: React.FC<MobileTabsProps> = ({
                           fontSize: '0.65rem',
                           fontWeight: 700,
                           border: activeTab === option.id 
-                            ? `1.5px solid ${corporateColor}`
+                            ? `1.5px solid ${alpha(corporateColor, 0.3)}`
                             : '1.5px solid white',
                           boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
                         }}

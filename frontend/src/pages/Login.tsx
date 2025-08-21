@@ -249,14 +249,10 @@ const Login: React.FC = () => {
 
   // Pre-carga de imágenes del carrusel para evitar parpadeos
   useEffect(() => {
-    const preload = carouselImages.map((src) => {
+    carouselImages.forEach((src) => {
       const img = new Image();
       img.src = src;
-      return img;
     });
-    return () => {
-      // Nada específico que limpiar, pero mantenemos la forma por consistencia
-    };
   }, [carouselImages]);
 
   // Validación de contraseña
@@ -273,7 +269,13 @@ const Login: React.FC = () => {
   const handleInputChange = (field: keyof LoginCredentials) => (
     event: React.ChangeEvent<HTMLInputElement>
   ) => {
-    const value = event.target.value;
+    let value = event.target.value;
+    
+    // Transformar DNI/NIE a mayúsculas automáticamente
+    if (field === 'username') {
+      value = value.toUpperCase();
+    }
+    
     setCredentials(prev => ({
       ...prev,
       [field]: value

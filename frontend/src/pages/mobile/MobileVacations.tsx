@@ -34,8 +34,12 @@ import {
   Work,
   DateRange,
 } from '@mui/icons-material';
-import { DevelopmentModal } from '../../components/DevelopmentModal';
-import { MobileTabs } from '../../components/mobile/MobileTabs';
+import { mobileContainedButtonSx as sharedMobileContainedBtn, maroonGradient, maroonGradientHover } from '../../theme/mobileStyles';
+import { ModernModal } from '../../components/ModernModal';
+import { ModernField } from '../../components/ModernFormComponents';
+import { vacationService } from '../../services/vacationService';
+import { useAuth } from '../../hooks/useAuth';
+import { MobileFilters } from '../../components/mobile/MobileFilters';
 import { MobilePagination } from '../../components/mobile/MobilePagination';
 import { MobileLoading } from '../../components/mobile/MobileLoading';
 
@@ -63,53 +67,17 @@ interface AlertState {
 }
 
 export const MobileVacations: React.FC = () => {
+  const { user } = useAuth();
   // Estados principales
-  const [vacationRequests, setVacationRequests] = useState<VacationRequest[]>([
-    {
-      id: 1,
-      employeeName: 'María García',
-      startDate: '2025-08-20',
-      endDate: '2025-08-27',
-      reason: 'Vacaciones familiares de verano',
-      status: 'pending',
-      days: 8,
-      requestDate: '2025-07-15',
-      type: 'personal'
-    },
-    {
-      id: 2,
-      employeeName: 'Carlos López',
-      startDate: '2025-09-10',
-      endDate: '2025-09-12',
-      reason: 'Asuntos personales',
-      status: 'approved',
-      days: 3,
-      requestDate: '2025-07-20',
-      approvedBy: 'Admin',
-      approvedDate: '2025-07-22',
-      type: 'personal'
-    },
-    {
-      id: 3,
-      employeeName: 'Ana Martínez',
-      startDate: '2025-08-05',
-      endDate: '2025-08-07',
-      reason: 'Cita médica',
-      status: 'rejected',
-      days: 3,
-      requestDate: '2025-07-10',
-      approvedBy: 'Admin',
-      approvedDate: '2025-07-12',
-      comments: 'Insuficiente antelación',
-      type: 'sick'
-    }
-  ]);
+  const [vacationRequests, setVacationRequests] = useState<VacationRequest[]>([]);
   
   const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [currentStatus, setCurrentStatus] = useState<VacationStatus>('all');
   const [searchTerm, setSearchTerm] = useState('');
   const [paginationLoading, setPaginationLoading] = useState(false);
-  const [showDevelopmentModal, setShowDevelopmentModal] = useState(true);
+  const [openDialog, setOpenDialog] = useState(false);
+  const [newRequest, setNewRequest] = useState({ startDate: '', endDate: '', reason: '' });
 
   // Estados de UI
   const [alert, setAlert] = useState<AlertState | null>(null);
@@ -124,6 +92,8 @@ export const MobileVacations: React.FC = () => {
   });
 
   const corporateColor = '#501b36';
+  // Estética de botón contenida (granate/burdeos) como el toggle Mías/Todas (desktop)
+  const mobileContainedButtonSx = sharedMobileContainedBtn;
 
   // Efectos
   useEffect(() => {
@@ -135,17 +105,33 @@ export const MobileVacations: React.FC = () => {
     }
   }, [alert]);
 
+  // Cargar solicitudes al montar
+  useEffect(() => {
+    loadVacationRequests();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Funciones principales
   const loadVacationRequests = async () => {
     setLoading(true);
     try {
-      // Simular carga de datos
-      await new Promise(resolve => setTimeout(resolve, 800));
-      
-      setAlert({
-        type: 'success',
-        message: 'Solicitudes de vacaciones cargadas exitosamente'
-      });
+      const params = user?.id ? { user_id: user.id } : undefined;
+      const data = await vacationService.getVacationRequests(params);
+      const mapped: VacationRequest[] = data.map((api: any) => ({
+        id: api.id,
+        employeeName: api.employee_name || 'Yo',
+        startDate: api.start_date.toISOString().split('T')[0],
+        endDate: api.end_date.toISOString().split('T')[0],
+        reason: api.reason,
+        status: api.status,
+        days: api.duration_days || Math.max(1, Math.ceil((api.end_date.getTime() - api.start_date.getTime()) / (1000*60*60*24)) + 1),
+        requestDate: api.created_at ? api.created_at.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        approvedBy: api.reviewer_name || undefined,
+        approvedDate: api.reviewed_at ? api.reviewed_at.toISOString().split('T')[0] : undefined,
+        comments: api.admin_response || undefined,
+        type: 'personal',
+      }));
+      setVacationRequests(mapped);
     } catch (err: any) {
       console.error('Error loading vacation requests:', err);
       setAlert({
@@ -168,7 +154,7 @@ export const MobileVacations: React.FC = () => {
   // Paginación
   const requestsPagination = usePagination({
     data: filteredRequests,
-    initialItemsPerPage: 6,
+  initialItemsPerPage: 8,
     initialPage: 1
   });
 
@@ -188,32 +174,12 @@ export const MobileVacations: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Configuración de pestañas
-  const tabOptions = [
-    {
-      id: 'all',
-      label: 'Todas',
-      count: vacationRequests.length,
-      icon: <EventNote sx={{ fontSize: 18 }} />,
-    },
-    {
-      id: 'pending',
-      label: 'Pendientes',
-      count: vacationRequests.filter(r => r.status === 'pending').length,
-      icon: <HourglassEmpty sx={{ fontSize: 18 }} />,
-    },
-    {
-      id: 'approved',
-      label: 'Aprobadas',
-      count: vacationRequests.filter(r => r.status === 'approved').length,
-      icon: <CheckCircle sx={{ fontSize: 18 }} />,
-    },
-    {
-      id: 'rejected',
-      label: 'Rechazadas',
-      count: vacationRequests.filter(r => r.status === 'rejected').length,
-      icon: <Cancel sx={{ fontSize: 18 }} />,
-    },
+  // Opciones de filtro de estado (estilo MobileFilters)
+  const statusOptions = [
+    { value: 'all', label: 'Todas' },
+    { value: 'pending', label: 'Pendientes' },
+    { value: 'approved', label: 'Aprobadas' },
+    { value: 'rejected', label: 'Rechazadas' },
   ];
 
   // Funciones auxiliares
@@ -483,23 +449,9 @@ export const MobileVacations: React.FC = () => {
         variant="contained"
         startIcon={<Add />}
         sx={{
-          borderRadius: 2,
-          px: 3,
-          py: 1,
-          textTransform: 'none',
-          fontWeight: 600,
-          bgcolor: corporateColor,
-          '&:hover': {
-            bgcolor: alpha(corporateColor, 0.8),
-          },
+          ...mobileContainedButtonSx,
         }}
-        onClick={() => {
-          setSnackbar({
-            open: true,
-            message: 'Función disponible próximamente',
-            severity: 'info'
-          });
-        }}
+  onClick={() => setOpenDialog(true)}
       >
         Nueva Solicitud
       </Button>
@@ -587,25 +539,61 @@ export const MobileVacations: React.FC = () => {
           </Fade>
         )}
 
-        {/* Pestañas con búsqueda integrada */}
-        <Fade in timeout={1000}>
-          <Box sx={{ mb: 3 }}>
-            <MobileTabs
-              options={tabOptions}
-              activeTab={currentStatus}
-              onChange={(tabId) => setCurrentStatus(tabId as VacationStatus)}
+        {/* Búsqueda simple (sin acordeón de filtros) */}
+        <Fade in timeout={900}>
+          <Box sx={{ mb: 2 }}>
+            <MobileFilters
+              searchTerm={searchTerm}
+              onSearchChange={setSearchTerm}
               corporateColor={corporateColor}
-              variant="pills"
-              searchProps={{
-                searchTerm,
-                onSearchChange: setSearchTerm,
-                placeholder: "Buscar solicitudes...",
-                showFilter: true,
-                onFilterClick: () => {
-                  console.log('Filtro clickeado');
-                }
-              }}
+              searchPlaceholder="Buscar solicitudes..."
             />
+          </Box>
+        </Fade>
+
+        {/* Selector de estado como chips (plano y rápido) */}
+        <Fade in timeout={950}>
+          <Box sx={{ mb: 2, px: 0 }}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 0.75, width: '100%' }}>
+              {statusOptions.map(opt => {
+                const selected = currentStatus === (opt.value as VacationStatus);
+                return (
+                  <Chip
+                    key={opt.value}
+                    label={opt.label}
+                    size="small"
+                    onClick={() => setCurrentStatus(opt.value as VacationStatus)}
+                    clickable
+                    variant={selected ? 'filled' : 'outlined'}
+                    sx={{
+                      width: '100%',
+                      justifyContent: 'center',
+                      borderRadius: 1.25,
+                      fontWeight: 800,
+                      fontSize: '0.72rem',
+                      height: 26,
+                      px: 0.25,
+                      '& .MuiChip-label': { px: 0.5, letterSpacing: 0.2 },
+                      ...(selected
+                        ? {
+                            background: maroonGradient,
+                            color: '#fff',
+                            borderColor: 'transparent',
+                            boxShadow: '0 4px 12px rgba(80,27,54,0.25)'
+                          }
+                        : {
+                            borderColor: alpha(corporateColor, 0.5),
+                            color: corporateColor,
+                          }
+                      ),
+                      '&:hover': selected
+                        ? { background: maroonGradientHover }
+                        : { bgcolor: alpha(corporateColor, 0.06) },
+                    }}
+                  />
+                );
+              })}
+            </Box>
           </Box>
         </Fade>
 
@@ -630,10 +618,13 @@ export const MobileVacations: React.FC = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <Box>
                   <Typography variant="h6" sx={{ fontWeight: 600, color: corporateColor, fontSize: '1.1rem' }}>
-                    {currentStatus === 'all' ? 'Todas las Solicitudes' : `Solicitudes ${getStatusText(currentStatus)}s`}
+                    Solicitudes
                   </Typography>
                   <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
                     {filteredRequests.length} solicitud{filteredRequests.length !== 1 ? 'es' : ''}
+                    {currentStatus !== 'all' && (<>
+                      {' '}• Estado: {getStatusText(currentStatus)}
+                    </>)}
                     {requestsPagination.totalPages > 1 && (
                       <>
                         {' '} • Página {requestsPagination.currentPage} de {requestsPagination.totalPages}
@@ -717,51 +708,128 @@ export const MobileVacations: React.FC = () => {
             variant="contained"
             size="large"
             startIcon={<Add />}
-            onClick={() => {
-              setSnackbar({
-                open: true,
-                message: 'Función de nueva solicitud disponible próximamente',
-                severity: 'info'
-              });
-            }}
+            onClick={() => setOpenDialog(true)}
             sx={{
+              ...mobileContainedButtonSx,
               borderRadius: 3,
               px: 3,
               py: 1.5,
-              textTransform: 'none',
-              fontWeight: 600,
-              bgcolor: corporateColor,
-              boxShadow: '0 4px 12px rgba(80, 27, 54, 0.3)',
-              '&:hover': {
-                bgcolor: alpha(corporateColor, 0.8),
-                boxShadow: '0 6px 16px rgba(80, 27, 54, 0.4)',
-              },
             }}
           >
             Nueva Solicitud
           </Button>
         </Box>
 
-        {/* Modal de desarrollo */}
-        <DevelopmentModal
-          open={showDevelopmentModal}
-          onClose={() => setShowDevelopmentModal(false)}
-          pageTitle="Gestión de Vacaciones Móvil"
-          description="Esta funcionalidad móvil está siendo desarrollada para gestionar las solicitudes de vacaciones de forma optimizada en dispositivos móviles."
-          features={[
-            'Interfaz optimizada para móviles',
-            'Solicitud de vacaciones simplificada',
-            'Vista de calendario integrada',
-            'Notificaciones push',
-            'Filtros avanzados por estado',
-            'Exportación a calendario personal'
-          ]}
-          estimatedCompletion="Agosto 2025"
-          progressValue={75}
-          corporateColor={corporateColor}
-        />
+        {/* Modal Nueva Solicitud */}
+        <ModernModal
+          open={openDialog}
+          onClose={() => setOpenDialog(false)}
+          title="Nueva Solicitud de Vacaciones"
+          subtitle="Completa los detalles de tu ausencia"
+          icon={<CalendarToday />}
+          headerColor={corporateColor}
+        >
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <ModernField
+              label="Fecha inicio"
+              type="date"
+              value={newRequest.startDate}
+              onChange={(value) => setNewRequest(prev => ({ ...prev, startDate: String(value) }))}
+              fullWidth
+              helperText="Selecciona la fecha de inicio"
+              min={new Date().toISOString().split('T')[0]}
+            />
+            <ModernField
+              label="Fecha fin"
+              type="date"
+              value={newRequest.endDate}
+              onChange={(value) => setNewRequest(prev => ({ ...prev, endDate: String(value) }))}
+              fullWidth
+              helperText="Selecciona la fecha de fin"
+              min={newRequest.startDate || new Date().toISOString().split('T')[0]}
+            />
+            <ModernField
+              label="Motivo"
+              placeholder="Describe el motivo de tu solicitud"
+              type="multiline"
+              rows={3}
+              value={newRequest.reason}
+              onChange={(value) => setNewRequest(prev => ({ ...prev, reason: String(value) }))}
+              fullWidth
+            />
+            <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 1 }}>
+              <Button onClick={() => setOpenDialog(false)}>Cancelar</Button>
+              <Button
+                variant="contained"
+                disabled={submitting}
+                onClick={async () => {
+                  try {
+                    // Validación mínima
+                    if (!newRequest.startDate || !newRequest.endDate || !newRequest.reason.trim()) {
+                      setSnackbar({ open: true, message: 'Completa todos los campos', severity: 'warning' });
+                      return;
+                    }
+                    const start = new Date(newRequest.startDate);
+                    const end = new Date(newRequest.endDate);
 
-        {/* Snackbar para notificaciones */}
+                    // Normalizar día actual sin horas
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+
+                    if (start < today) {
+                      setSnackbar({ open: true, message: 'La fecha de inicio no puede ser anterior a hoy', severity: 'warning' });
+                      return;
+                    }
+
+                    if (end <= start) {
+                      setSnackbar({ open: true, message: 'La fecha de fin debe ser posterior a la fecha de inicio', severity: 'warning' });
+                      return;
+                    }
+
+                    // Validar solapamientos con solicitudes existentes (pendientes o aprobadas)
+                    const hasOverlap = vacationRequests.some(r => {
+                      if (r.status === 'rejected') return false;
+                      const rStart = new Date(r.startDate);
+                      const rEnd = new Date(r.endDate);
+                      return rStart <= end && rEnd >= start;
+                    });
+                    if (hasOverlap) {
+                      setSnackbar({ open: true, message: 'Ya existe una solicitud de vacaciones en ese período', severity: 'warning' });
+                      return;
+                    }
+
+                    setSubmitting(true);
+
+                    // Llamada a API
+                    await vacationService.createVacationRequest({
+                      start_date: start,
+                      end_date: end,
+                      reason: newRequest.reason.trim(),
+                    });
+
+                    // Refrescar lista desde el backend para asegurar consistencia
+                    await loadVacationRequests();
+
+                    setOpenDialog(false);
+                    setNewRequest({ startDate: '', endDate: '', reason: '' });
+                    setSnackbar({ open: true, message: 'Solicitud enviada', severity: 'success' });
+                  } catch (error: any) {
+                    console.error('Error creando solicitud:', error);
+                    const backendDetail = error?.response?.data?.detail;
+                    setSnackbar({ open: true, message: backendDetail || 'Error al crear la solicitud', severity: 'error' });
+                  } finally {
+                    setSubmitting(false);
+                  }
+                }}
+                sx={mobileContainedButtonSx}
+              >
+                {submitting ? 'Enviando…' : 'Enviar'}
+              </Button>
+            </Box>
+          </Box>
+        </ModernModal>
+
+  {/* Snackbar para notificaciones */}
         <Snackbar
           open={snackbar.open}
           autoHideDuration={6000}

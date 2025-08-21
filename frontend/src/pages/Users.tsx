@@ -1683,7 +1683,7 @@ export const Users: React.FC = () => {
                   fullWidth
                   label="Nombre"
                   value={editUserData.first_name}
-                  onChange={(e) => setEditUserData(prev => ({ ...prev, first_name: e.target.value }))}
+                  onChange={(e) => setEditUserData(prev => ({ ...prev, first_name: e.target.value.toUpperCase() }))}
                   disabled={editUserLoading}
                   required
                   sx={{
@@ -1713,7 +1713,7 @@ export const Users: React.FC = () => {
                   fullWidth
                   label="Apellidos"
                   value={editUserData.last_name}
-                  onChange={(e) => setEditUserData(prev => ({ ...prev, last_name: e.target.value }))}
+                  onChange={(e) => setEditUserData(prev => ({ ...prev, last_name: e.target.value.toUpperCase() }))}
                   disabled={editUserLoading}
                   required
                   sx={{
@@ -2009,7 +2009,7 @@ export const Users: React.FC = () => {
             <ModernField
               label="Nombre"
               value={createUserData.first_name}
-              onChange={(value) => setCreateUserData(prev => ({ ...prev, first_name: String(value) }))}
+              onChange={(value) => setCreateUserData(prev => ({ ...prev, first_name: String(value).toUpperCase() }))}
               required
               startIcon={<Person />}
               placeholder="Nombre del empleado"
@@ -2018,7 +2018,7 @@ export const Users: React.FC = () => {
             <ModernField
               label="Apellidos"
               value={createUserData.last_name}
-              onChange={(value) => setCreateUserData(prev => ({ ...prev, last_name: String(value) }))}
+              onChange={(value) => setCreateUserData(prev => ({ ...prev, last_name: String(value).toUpperCase() }))}
               required
               startIcon={<Person />}
               placeholder="Apellidos del empleado"

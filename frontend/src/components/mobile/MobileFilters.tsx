@@ -22,6 +22,7 @@ import {
   FilterList,
   ExpandMore,
 } from '@mui/icons-material';
+import { mobileContainedButtonSx } from '../../theme/mobileStyles';
 
 interface MobileFiltersProps {
   searchTerm: string;
@@ -64,6 +65,25 @@ export const MobileFilters: React.FC<MobileFiltersProps> = ({
     (filterOptions?.status?.value !== 'all') ||
     (filterOptions?.department?.value !== 'all') ||
     (filterOptions?.documentType?.value !== 'all');
+
+  // Estética común tipo granate (centralizada)
+  const containedBtnSx = mobileContainedButtonSx;
+  const outlinedBtnSx = {
+    borderRadius: '20px',
+    px: 2.5,
+    py: 1,
+    textTransform: 'none' as const,
+    fontSize: '0.85rem',
+    fontWeight: 700,
+    minWidth: 90,
+    borderWidth: 2,
+    borderColor: alpha(corporateColor, 0.5),
+    color: corporateColor,
+    '&:hover': {
+      borderColor: corporateColor,
+      bgcolor: alpha(corporateColor, 0.06),
+    },
+  } as const;
 
   return (
     <Paper
@@ -241,18 +261,7 @@ export const MobileFilters: React.FC<MobileFiltersProps> = ({
                       onClick={onClearFilters}
                       disabled={!hasActiveFilters}
                       size="small"
-                      sx={{
-                        flex: 1,
-                        borderRadius: 1.5,
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        borderColor: alpha(corporateColor, 0.5),
-                        color: corporateColor,
-                        '&:hover': {
-                          borderColor: corporateColor,
-                          bgcolor: alpha(corporateColor, 0.04),
-                        },
-                      }}
+                      sx={{ flex: 1, ...outlinedBtnSx }}
                     >
                       Limpiar
                     </Button>
@@ -265,16 +274,7 @@ export const MobileFilters: React.FC<MobileFiltersProps> = ({
                       onClick={onRefresh}
                       disabled={loading}
                       size="small"
-                      sx={{
-                        flex: 1,
-                        borderRadius: 1.5,
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        bgcolor: corporateColor,
-                        '&:hover': {
-                          bgcolor: alpha(corporateColor, 0.8),
-                        },
-                      }}
+                      sx={{ flex: 1, ...containedBtnSx }}
                     >
                       {loading ? 'Actualizando...' : 'Actualizar'}
                     </Button>

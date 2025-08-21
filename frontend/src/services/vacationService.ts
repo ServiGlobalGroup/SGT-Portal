@@ -53,10 +53,15 @@ export const vacationService = {
         end_date: request.end_date.toISOString().split('T')[0],
         reason: request.reason
       };
+      const headers = { 
+        'Content-Type': 'application/json',
+        ...getAuthHeaders(),
+      };
+      // Debug
+      console.debug('[vacationService.createVacationRequest] Payload:', requestData);
+      console.debug('[vacationService.createVacationRequest] Headers has Authorization:', Boolean((headers as any).Authorization));
       
-      const response = await axios.post(API_BASE, requestData, {
-        headers: getAuthHeaders(),
-      });
+      const response = await axios.post(API_BASE, requestData, { headers });
       
       return {
         ...response.data,
@@ -68,7 +73,10 @@ export const vacationService = {
         reviewed_at: response.data.reviewed_at ? new Date(response.data.reviewed_at) : undefined,
       };
     } catch (error) {
-      console.error('Error creating vacation request:', error);
+      // Mostrar detalle del backend si existe
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const e: any = error as any;
+      console.error('Error creating vacation request:', e?.response?.status, e?.response?.data || e);
       throw error;
     }
   },
