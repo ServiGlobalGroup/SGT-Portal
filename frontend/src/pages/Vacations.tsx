@@ -355,18 +355,26 @@ export const Vacations: React.FC = () => {
 
   // Convertir requests a eventos del calendario
   const calendarEvents: CalendarEvent[] = useMemo(() => {
-    return requests.map(request => ({
-      id: request.id,
-      title: `${request.employeeName} - ${request.reason}`,
-      start: new Date(request.startDate),
-      end: new Date(request.endDate),
-      resource: {
-        type: request.status === 'approved' ? 'vacation' : request.status === 'pending' ? 'pending' : 'rejected',
-        employeeName: request.employeeName,
-        reason: request.reason,
-        status: request.status
-      }
-    }));
+    return requests
+      .filter(request => {
+        const st = String(request.status || '').toLowerCase().trim();
+        return st === 'pending' || st === 'approved';
+      })
+      .map(request => {
+        const st = String(request.status || '').toLowerCase().trim() as 'pending' | 'approved';
+        return ({
+          id: request.id,
+          title: `${request.employeeName} - ${request.reason}`,
+          start: new Date(request.startDate),
+          end: new Date(request.endDate),
+          resource: {
+            type: st === 'approved' ? 'vacation' : 'pending',
+            employeeName: request.employeeName,
+            reason: request.reason,
+            status: st,
+          }
+        });
+      });
   }, [requests]);
 
   // Auto-hide alert
@@ -382,6 +390,16 @@ export const Vacations: React.FC = () => {
     let backgroundColor = '#501b36';
     let borderColor = '#501b36';
     let color = 'white';
+
+    // Salvaguarda: ocultar cualquier evento rechazado
+    const st = String(event.resource?.status || '').toLowerCase().trim();
+    if (st === 'rejected') {
+      return {
+        style: {
+          display: 'none',
+        },
+      };
+    }
 
     if (event.resource) {
       switch (event.resource.status) {
@@ -637,9 +655,11 @@ export const Vacations: React.FC = () => {
 
   // Funciones para el calendario
   const handleSelectSlot = (slotInfo: { start: Date; end: Date }) => {
-    // Buscar vacaciones para el día seleccionado
+    // Buscar vacaciones (solo pendientes/aprobadas) para el día seleccionado
     const selectedDay = slotInfo.start;
     const dayVacations = filteredRequests.filter(req => {
+      const st = String(req.status || '').toLowerCase().trim();
+      if (st !== 'pending' && st !== 'approved') return false;
       const startDate = new Date(req.startDate);
       const endDate = new Date(req.endDate);
       return selectedDay >= startDate && selectedDay <= endDate;
@@ -652,7 +672,10 @@ export const Vacations: React.FC = () => {
   };
 
   const getDayVacationUsers = (date: Date) => {
+    // Solo mostrar pendientes/aprobadas en los chips del calendario
     return filteredRequests.filter(req => {
+      const st = String(req.status || '').toLowerCase().trim();
+      if (st !== 'pending' && st !== 'approved') return false;
       const startDate = new Date(req.startDate);
       const endDate = new Date(req.endDate);
       return date >= startDate && date <= endDate;
