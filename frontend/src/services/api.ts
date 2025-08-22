@@ -350,7 +350,8 @@ export const usersAPI = {
 
   // Obtener estadísticas de usuarios
   getUserStats: () => 
-    api.get('/api/users/stats').then(res => res.data),
+  // Endpoint corregido: el backend expone /api/users/stats/summary
+  api.get('/api/users/stats/summary').then(res => res.data),
 };
 
 // API para archivos de usuario

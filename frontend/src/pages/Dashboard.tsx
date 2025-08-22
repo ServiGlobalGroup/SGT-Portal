@@ -137,7 +137,10 @@ export const Dashboard: React.FC = () => {
 
       setStats(statsRes);
       setRecentActivity(activityRes.activities || []);
-      if (usersRes) setUserStats(usersRes);
+      if (usersRes) {
+        console.log('User stats cargados:', usersRes); // DEBUG: verificar estructura
+        setUserStats(usersRes);
+      }
       if (availableRes) setAvailableWorkers(availableRes);
 
       if (user?.role === 'ADMINISTRADOR' || user?.role === 'MASTER_ADMIN') {
@@ -367,6 +370,9 @@ export const Dashboard: React.FC = () => {
                 ) : userStats ? (
                   (() => {
                     const entries = Object.entries(userStats.roles || {});
+                    if (entries.length === 0) {
+                      return <Typography color="text.secondary">Sin datos de roles</Typography>;
+                    }
                     const total = entries.reduce((acc, [, c]) => acc + Number(c), 0) || 0;
                     const roleColors: Record<string, string> = {
                       TRABAJADOR: '#7d2d52',
@@ -596,9 +602,9 @@ export const Dashboard: React.FC = () => {
                 border: '1px solid #e0e0e0',
                 background: '#ffffff',
                 overflow: 'hidden',
-                height: '100%',
                 display: 'flex',
                 flexDirection: 'column',
+                height: { xs: 'auto', md: 500 },
               }}
             >
               <Box sx={{ p: 3, borderBottom: '1px solid', borderColor: 'divider' }}>
@@ -616,8 +622,47 @@ export const Dashboard: React.FC = () => {
                   </IconButton>
                 </Box>
               </Box>
-              <Box sx={{ p: 0, flex: 1 }}>
+              <Box sx={{
+                p: 0,
+                flex: 1,
+                overflowY: 'auto',
+                position: 'relative',
+                // Scrollbar minimalista
+                scrollbarWidth: 'thin', // Firefox
+                scrollbarColor: 'rgba(0,0,0,0.25) transparent',
+                '&::-webkit-scrollbar': {
+                  width: 6,
+                },
+                '&::-webkit-scrollbar-track': {
+                  background: 'transparent',
+                },
+                '&::-webkit-scrollbar-thumb': {
+                  background: 'rgba(0,0,0,0.18)',
+                  borderRadius: 8,
+                  transition: 'background 0.25s ease',
+                },
+                '&:hover::-webkit-scrollbar-thumb': {
+                  background: 'rgba(0,0,0,0.32)',
+                },
+                '&::-webkit-scrollbar-thumb:active': {
+                  background: 'rgba(0,0,0,0.45)',
+                },
+                // Modo accesible: si prefiere contraste alto podríamos reforzar (placeholder para futuro)
+              }}>
                 <RecentActivity activities={recentActivity as any} loading={loading} />
+                {/* Gradiente de desvanecimiento inferior para indicar scroll */}
+                <Box
+                  sx={{
+                    display: { xs: 'none', md: 'block' },
+                    pointerEvents: 'none',
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    height: 32,
+                    background: 'linear-gradient(to bottom, rgba(255,255,255,0), #ffffff 60%)',
+                  }}
+                />
               </Box>
             </Paper>
 

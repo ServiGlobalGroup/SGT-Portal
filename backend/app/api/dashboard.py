@@ -1,7 +1,13 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, Query
 from fastapi.responses import JSONResponse
 from app.models.schemas import DashboardStats
 from app.services.payroll_pdf_service import PayrollPDFProcessor
+from sqlalchemy.orm import Session
+from app.database.connection import get_db
+from app.models.activity_log import ActivityLog
+from app.models.user import User, UserRole
+from app.models.vacation import VacationRequest, VacationStatus
+from sqlalchemy import and_
 from app.config import settings
 from datetime import datetime
 import tempfile
@@ -23,9 +29,62 @@ async def get_dashboard_stats():
     )
 
 @router.get("/recent-activity")
-async def get_recent_activity():
+async def get_recent_activity(limit: int = Query(20, ge=1, le=100), db: Session = Depends(get_db)):
+    """Devuelve la actividad reciente real desde activity_log.
+
+    Args:
+        limit: número máximo de registros a devolver (1-100).
+    """
+    try:
+        rows = (
+            db.query(ActivityLog)
+            .order_by(ActivityLog.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        return {"activities": [r.to_activity_item() for r in rows]}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error obteniendo actividad: {e}")
+
+@router.get("/available-workers")
+async def get_available_workers(
+    target_date: str = Query(..., description="Fecha objetivo YYYY-MM-DD"),
+    db: Session = Depends(get_db)
+):
+    """Devuelve trabajadores (rol TRABAJADOR) activos y no de vacaciones en la fecha dada.
+
+    Formato de respuesta:
+    { "date": "YYYY-MM-DD", "available": [ {id, full_name, dni_nie} ] }
+    """
+    # Validar fecha
+    from datetime import datetime
+    try:
+        day = datetime.strptime(target_date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Formato de fecha inválido. Use YYYY-MM-DD")
+
+    vacation_user_ids = [
+        uid for (uid,) in db.query(VacationRequest.user_id).filter(
+            VacationRequest.status == VacationStatus.APPROVED,
+            VacationRequest.start_date <= day,
+            VacationRequest.end_date >= day,
+        ).all()
+    ]
+
+    query_workers = db.query(User).filter(
+        User.role == UserRole.TRABAJADOR,
+        User.is_active == True,  # noqa: E712
+    )
+    if vacation_user_ids:
+        query_workers = query_workers.filter(User.id.notin_(vacation_user_ids))
+    workers = query_workers.order_by(User.last_name.asc(), User.first_name.asc()).all()
+
     return {
-        "activities": []
+        "date": target_date,
+        "available": [
+            {"id": u.id, "full_name": u.full_name, "dni_nie": u.dni_nie}
+            for u in workers
+        ],
     }
 
 @router.post("/process-payroll-pdf")

@@ -20,7 +20,10 @@ const QuickActions: React.FC = () => (
       border: '1px solid',
       borderColor: 'divider',
       overflow: 'hidden',
-      height: 'fit-content',
+      // Ajuste para igualar la altura del panel de Actividad Reciente
+      display: 'flex',
+      flexDirection: 'column',
+      height: { xs: 'auto', md: 500 },
     }}
   >
     <Box sx={{ p: 3, borderBottom: '1px solid', borderColor: 'divider' }}>
@@ -29,8 +32,8 @@ const QuickActions: React.FC = () => (
       </Typography>
     </Box>
     
-    <Box sx={{ p: 3 }}>
-      <Stack spacing={2}>
+    <Box sx={{ p: 3, flex: 1, display: 'flex' }}>
+      <Stack spacing={2} sx={{ width: '100%', alignSelf: 'flex-start' }}>
         <Button
           variant="outlined"
           fullWidth
@@ -46,7 +49,7 @@ const QuickActions: React.FC = () => (
           Ver Documentos
         </Button>
         
-        <Button
+  <Button
           variant="outlined"
           fullWidth
           startIcon={<People />}
@@ -61,7 +64,7 @@ const QuickActions: React.FC = () => (
           Gestionar Usuarios
         </Button>
         
-        <Button
+  <Button
           variant="outlined"
           fullWidth
           startIcon={<CalendarToday />}
