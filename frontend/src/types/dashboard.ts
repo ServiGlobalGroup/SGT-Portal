@@ -17,19 +17,12 @@ export interface AvailableWorkersResponse {
   available: { id: number; full_name: string; dni_nie: string }[];
 }
 
-export interface RecentActivityItem {
-  id: number;
-  user_name: string;
-  action: string;
-  timestamp: string;
-  type: 'upload' | 'approval' | 'login' | 'update' | string;
-}
 
 export interface DashboardDataState {
   stats: DashboardStats | null;
   userStats: UserStatsSummary | null;
   available: AvailableWorkersResponse | null;
-  activity: RecentActivityItem[];
+  activity: any[]; // actividad reciente eliminada (placeholder)
   pendingVacation: any[]; // TODO: refine to vacation type subset
   loading: boolean;
   error: string | null;

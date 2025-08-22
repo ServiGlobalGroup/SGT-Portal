@@ -28,7 +28,6 @@ import {
   Assessment,
   People,
   Description,
-  Refresh,
   NotificationsNone,
   Check,
   Close,
@@ -43,20 +42,18 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 // Sin gráfico pesado: usaremos tarjetas con barras de progreso
 import { useAuth } from '../hooks/useAuth';
 import StatsCard from '../components/dashboard/StatsCards';
-import RecentActivity from '../components/dashboard/RecentActivity';
 import QuickActions from '../components/dashboard/QuickActions';
 import { usersAPI } from '../services/api';
 import { dashboardService } from '../services/dashboardService';
 import { vacationService } from '../services/vacationService';
 import { ModernModal, ModernButton } from '../components/ModernModal';
-import { DashboardStats as IDashboardStats, RecentActivityItem, AvailableWorkersResponse, UserStatsSummary, PENDING_POLL_MS } from '../types/dashboard';
+import { DashboardStats as IDashboardStats, AvailableWorkersResponse, UserStatsSummary, PENDING_POLL_MS } from '../types/dashboard';
 
 // Tipos reemplazados por interfaces en types/dashboard
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const [stats, setStats] = useState<IDashboardStats | null>(null);
-  const [recentActivity, setRecentActivity] = useState<RecentActivityItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notifAnchor, setNotifAnchor] = useState<null | HTMLElement>(null);
@@ -127,16 +124,14 @@ export const Dashboard: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      const [statsRes, activityRes, _vacRes, usersRes, availableRes] = await Promise.all([
+    const [statsRes, _vacRes, usersRes, availableRes] = await Promise.all([
   dashboardService.getStats(),
-  dashboardService.getRecentActivity(),
         vacationService.getVacationStats().catch(() => null),
         usersAPI.getUserStats().catch(() => null),
   dashboardService.getAvailableWorkers(selectedDate).catch(() => null),
       ]);
 
-      setStats(statsRes);
-      setRecentActivity(activityRes.activities || []);
+  setStats(statsRes);
       if (usersRes) {
         console.log('User stats cargados:', usersRes); // DEBUG: verificar estructura
         setUserStats(usersRes);
@@ -585,87 +580,9 @@ export const Dashboard: React.FC = () => {
           </Box>
         </Fade>
 
-        {/* Recent Activity and Quick Actions */}
+        {/* Quick Actions (actividad reciente eliminada) */}
         <Fade in timeout={1200}>
-          <Box
-            sx={{
-              display: 'grid',
-              gridTemplateColumns: { xs: '1fr', md: '2fr 1fr' },
-              gap: 3,
-              alignItems: 'stretch',
-            }}
-          >
-            <Paper
-              elevation={0}
-              sx={{
-                borderRadius: 2,
-                border: '1px solid #e0e0e0',
-                background: '#ffffff',
-                overflow: 'hidden',
-                display: 'flex',
-                flexDirection: 'column',
-                height: { xs: 'auto', md: 500 },
-              }}
-            >
-              <Box sx={{ p: 3, borderBottom: '1px solid', borderColor: 'divider' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                    Actividad Reciente
-                  </Typography>
-                  <IconButton
-                    onClick={loadDashboardData}
-                    size="small"
-                    disabled={loading}
-                    sx={{ '&:hover': { backgroundColor: 'rgba(80, 27, 54, 0.04)' } }}
-                  >
-                    <Refresh />
-                  </IconButton>
-                </Box>
-              </Box>
-              <Box sx={{
-                p: 0,
-                flex: 1,
-                overflowY: 'auto',
-                position: 'relative',
-                // Scrollbar minimalista
-                scrollbarWidth: 'thin', // Firefox
-                scrollbarColor: 'rgba(0,0,0,0.25) transparent',
-                '&::-webkit-scrollbar': {
-                  width: 6,
-                },
-                '&::-webkit-scrollbar-track': {
-                  background: 'transparent',
-                },
-                '&::-webkit-scrollbar-thumb': {
-                  background: 'rgba(0,0,0,0.18)',
-                  borderRadius: 8,
-                  transition: 'background 0.25s ease',
-                },
-                '&:hover::-webkit-scrollbar-thumb': {
-                  background: 'rgba(0,0,0,0.32)',
-                },
-                '&::-webkit-scrollbar-thumb:active': {
-                  background: 'rgba(0,0,0,0.45)',
-                },
-                // Modo accesible: si prefiere contraste alto podríamos reforzar (placeholder para futuro)
-              }}>
-                <RecentActivity activities={recentActivity as any} loading={loading} />
-                {/* Gradiente de desvanecimiento inferior para indicar scroll */}
-                <Box
-                  sx={{
-                    display: { xs: 'none', md: 'block' },
-                    pointerEvents: 'none',
-                    position: 'absolute',
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    height: 32,
-                    background: 'linear-gradient(to bottom, rgba(255,255,255,0), #ffffff 60%)',
-                  }}
-                />
-              </Box>
-            </Paper>
-
+          <Box sx={{ mb: 4 }}>
             <QuickActions />
           </Box>
         </Fade>

@@ -4,7 +4,6 @@ from app.models.schemas import DashboardStats
 from app.services.payroll_pdf_service import PayrollPDFProcessor
 from sqlalchemy.orm import Session
 from app.database.connection import get_db
-from app.models.activity_log import ActivityLog
 from app.models.user import User, UserRole
 from app.models.vacation import VacationRequest, VacationStatus
 from sqlalchemy import and_
@@ -28,23 +27,6 @@ async def get_dashboard_stats():
         pending_requests=12
     )
 
-@router.get("/recent-activity")
-async def get_recent_activity(limit: int = Query(20, ge=1, le=100), db: Session = Depends(get_db)):
-    """Devuelve la actividad reciente real desde activity_log.
-
-    Args:
-        limit: número máximo de registros a devolver (1-100).
-    """
-    try:
-        rows = (
-            db.query(ActivityLog)
-            .order_by(ActivityLog.created_at.desc())
-            .limit(limit)
-            .all()
-        )
-        return {"activities": [r.to_activity_item() for r in rows]}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error obteniendo actividad: {e}")
 
 @router.get("/available-workers")
 async def get_available_workers(
