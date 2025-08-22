@@ -11,6 +11,7 @@ from app.models.schemas import (
     VacationRequestResponse, 
     VacationStats
 )
+from app.services.activity_service import ActivityService
 from app.api.auth import get_current_user
 from datetime import datetime, date
 from typing import List, Optional, Any, cast
@@ -137,6 +138,28 @@ async def create_vacation_request(
     db.add(db_request)
     db.commit()
     db.refresh(db_request)
+
+    # Log actividad
+    try:
+        days = (request.end_date.date() - request.start_date.date()).days + 1
+        owner_is_actor = True  # siempre creación propia
+        msg = f"Creó solicitud de vacaciones ({days} días)" if owner_is_actor else f"Solicitud de vacaciones creada ({days} días)"
+        ActivityService.log_from_user(
+            db,
+            user=current_user,
+            event_type=ActivityService.EVENT_VACATION_CREATED,
+            message=msg,
+            entity_type="vacation_request",
+            entity_id=str(db_request.id),
+            meta={
+                "request_id": db_request.id,
+                "start_date": request.start_date.isoformat(),
+                "end_date": request.end_date.isoformat(),
+                "days": days,
+            },
+        )
+    except Exception:
+        pass
     
     # Cargar relaciones para la respuesta
     db_request = db.query(VacationRequest).options(
@@ -220,6 +243,30 @@ async def update_vacation_request(
     
     db.commit()
     db.refresh(db_request)
+
+    # Log actualización
+    try:
+        is_owner = is_owner  # ya calculado arriba
+        campo_texto = ", ".join(update_data.keys()) if update_data else "sin cambios"
+        if is_owner:
+            msg = f"Actualizó su solicitud de vacaciones ({campo_texto})"
+        else:
+            empleado = db_request.user.full_name if db_request.user else "usuario"
+            msg = f"Actualizó solicitud de vacaciones de {empleado} ({campo_texto})"
+        ActivityService.log_from_user(
+            db,
+            user=current_user,
+            event_type=ActivityService.EVENT_VACATION_UPDATED,
+            message=msg,
+            entity_type="vacation_request",
+            entity_id=str(db_request.id),
+            meta={
+                "request_id": db_request.id,
+                "updated_fields": list(update_data.keys()),
+            },
+        )
+    except Exception:
+        pass
     
     # Cargar relaciones para la respuesta
     db_request = db.query(VacationRequest).options(
@@ -286,6 +333,19 @@ async def delete_vacation_request(
     
     db.delete(db_request)
     db.commit()
+    try:
+        msg = "Eliminó su solicitud de vacaciones" if is_owner else f"Eliminó solicitud de vacaciones de {db_request.user.full_name if db_request and db_request.user else 'usuario'}"
+        ActivityService.log_from_user(
+            db,
+            user=current_user,
+            event_type=ActivityService.EVENT_VACATION_UPDATED,
+            message=msg,
+            entity_type="vacation_request",
+            entity_id=str(request_id),
+            meta={"request_id": request_id},
+        )
+    except Exception:
+        pass
     
     return {"message": "Solicitud eliminada correctamente"}
 
@@ -339,6 +399,28 @@ async def update_vacation_status(
         dbr.admin_response = admin_response
     
     db.commit()
+    try:
+        # Obtener nombre del solicitante para mensaje amigable
+        owner_user = db.query(User).filter(User.id == dbr.user_id).first()
+        empleado_nombre = owner_user.full_name if owner_user else "usuario"
+        status_map = {"APPROVED": "aprobada", "REJECTED": "rechazada", "PENDING": "pendiente"}
+        status_txt = status_map.get(vacation_status.value, vacation_status.value.lower())
+        # Si el admin cambia la solicitud de otra persona, incluir el nombre
+        if current_user.id != getattr(owner_user, 'id', None):
+            msg = f"Solicitud de vacaciones de {empleado_nombre} {status_txt}"
+        else:
+            msg = f"Solicitud de vacaciones {status_txt}"
+        ActivityService.log_from_user(
+            db,
+            user=current_user,
+            event_type=ActivityService.EVENT_VACATION_STATUS,
+            message=msg,
+            entity_type="vacation_request",
+            entity_id=str(request_id),
+            meta={"request_id": request_id, "status": vacation_status.value, "admin_response": admin_response},
+        )
+    except Exception:
+        pass
     
     return {"message": "Estado actualizado correctamente"}
 

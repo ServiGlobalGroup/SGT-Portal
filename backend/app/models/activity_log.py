@@ -37,10 +37,15 @@ class ActivityLog(Base):
             event_type_val = "OTHER"
         type_mapped = mapping.get(event_type_val, "update")
         created_at_val = getattr(self, "created_at", None)
+        user_display = getattr(self, "actor_name", None) or getattr(self, "actor_dni", None) or "Usuario"
+        msg = getattr(self, "message", "")
+        # Evitar repetir el nombre dentro del mensaje si ya se muestra arriba
+        if msg.lower().startswith(user_display.lower()):
+            msg = msg[len(user_display):].lstrip(" -:–") or msg
         return {
             "id": getattr(self, "id", None),
-            "user_name": getattr(self, "actor_name", None) or getattr(self, "actor_dni", None) or "Usuario",
-            "action": getattr(self, "message", ""),
+            "user_name": user_display,
+            "action": msg,
             "type": type_mapped,
             "timestamp": created_at_val.isoformat() if created_at_val else None,
         }

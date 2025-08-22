@@ -22,10 +22,19 @@ export interface DashboardDataState {
   stats: DashboardStats | null;
   userStats: UserStatsSummary | null;
   available: AvailableWorkersResponse | null;
-  activity: any[]; // actividad reciente eliminada (placeholder)
+  activity: ActivityItem[];
   pendingVacation: any[]; // TODO: refine to vacation type subset
   loading: boolean;
   error: string | null;
 }
 
 export const PENDING_POLL_MS = 30000;
+
+// Tipos de actividad (reexport para conveniencia)
+export interface ActivityItem {
+  id: number;
+  user_name: string;
+  action: string;
+  type: string;
+  timestamp: string;
+}

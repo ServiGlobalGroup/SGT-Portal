@@ -43,6 +43,7 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import { useAuth } from '../hooks/useAuth';
 import StatsCard from '../components/dashboard/StatsCards';
 import QuickActions from '../components/dashboard/QuickActions';
+import RecentActivity from '../components/dashboard/RecentActivity';
 import { usersAPI } from '../services/api';
 import { dashboardService } from '../services/dashboardService';
 import { vacationService } from '../services/vacationService';
@@ -580,10 +581,15 @@ export const Dashboard: React.FC = () => {
           </Box>
         </Fade>
 
-        {/* Quick Actions (actividad reciente eliminada) */}
+        {/* Quick Actions + Actividad Reciente */}
         <Fade in timeout={1200}>
-          <Box sx={{ mb: 4 }}>
-            <QuickActions />
+          <Box sx={{ mb: 4, display: 'grid', gap: 3, gridTemplateColumns: { xs: '1fr', md: '2fr 1fr' }, alignItems: 'stretch' }}>
+            <Box sx={{ minHeight: { md: 500 } }}>
+              <RecentActivity />
+            </Box>
+            <Box sx={{ minHeight: { md: 500 } }}>
+              <QuickActions />
+            </Box>
           </Box>
         </Fade>
 

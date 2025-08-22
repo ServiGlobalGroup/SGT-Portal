@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
 from app.database.connection import get_db
 from app.models.user import User, MasterAdminUser, UserRole
+from app.services.activity_service import ActivityService
 from app.models.user_schemas import UserLogin, Token, TokenData, UserResponse
 from app.services.user_service import UserService
 from app.config import settings
@@ -99,7 +100,9 @@ def user_to_response(user, is_master=False) -> UserResponse:
         
         return UserResponse(**user_data)
 
-def create_access_token(data: dict, expires_delta: timedelta = None):
+from typing import Optional, Any, cast
+
+def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """
     Crea un token JWT de acceso.
     """
@@ -126,10 +129,10 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
-        dni_nie: str = payload.get("sub")
+        dni_nie = payload.get("sub")  # type: ignore[assignment]
         if dni_nie is None:
             raise credentials_exception
-        token_data = TokenData(dni_nie=dni_nie)
+        token_data = TokenData(dni_nie=cast(str, dni_nie))
     except JWTError:
         raise credentials_exception
     
@@ -139,11 +142,11 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
         return master_user
     
     # Usuario normal de la base de datos
-    user = UserService.get_user_by_dni(db, dni_nie=token_data.dni_nie)
+    user = UserService.get_user_by_dni(db, dni_nie=cast(str, token_data.dni_nie))
     if user is None:
         raise credentials_exception
     
-    if not user.is_active:
+    if bool(getattr(user, "is_active", False)) is False:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Usuario inactivo"
@@ -155,7 +158,7 @@ async def get_current_active_user(current_user: User = Depends(get_current_user)
     """
     Verifica que el usuario actual esté activo.
     """
-    if not current_user.is_active:
+    if bool(getattr(current_user, "is_active", False)) is False:
         raise HTTPException(status_code=400, detail="Usuario inactivo")
     return current_user
 
@@ -183,7 +186,7 @@ def authenticate_user(db: Session, dni_nie: str, password: str):
     if not user:
         return False
     
-    if not UserService.verify_password(password, user.hashed_password):
+    if not UserService.verify_password(password, cast(str, user.hashed_password)):
         return False
     
     return user
@@ -212,6 +215,19 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
     # Usar la función auxiliar para crear la respuesta
     user_response = user_to_response(user, isinstance(user, MasterAdminUser))
     
+    # Registrar actividad (login)
+    try:
+        ActivityService.log_from_user(
+            db,
+            user=user,
+            event_type=ActivityService.EVENT_LOGIN,
+            message="Inició sesión",
+            meta={"username": form_data.username},
+        )
+    except Exception:
+        # Evitar que un fallo de logging bloquee login
+        pass
+
     return Token(
         access_token=access_token,
         token_type="bearer",
