@@ -17,6 +17,9 @@ export enum Permission {
   // Módulo Vacaciones
   VIEW_VACATIONS = 'view_vacations',
   MANAGE_VACATIONS = 'manage_vacations',
+
+  // Módulo Dietas (solo administradores)
+  VIEW_DIETAS = 'view_dietas',
   
   // Módulo Tráfico
   VIEW_TRAFFIC = 'view_traffic',
@@ -49,6 +52,7 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     Permission.MANAGE_ORDERS,
     Permission.VIEW_VACATIONS,
     Permission.MANAGE_VACATIONS,
+  Permission.VIEW_DIETAS,
     Permission.VIEW_TRAFFIC,
     Permission.MANAGE_TRAFFIC,
     Permission.VIEW_USERS,
@@ -81,6 +85,7 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     // Permission.MANAGE_ORDERS - REMOVIDO: Administradores no gestionan órdenes
     Permission.VIEW_VACATIONS,
     Permission.MANAGE_VACATIONS,
+  Permission.VIEW_DIETAS,
     Permission.VIEW_TRAFFIC,
     Permission.MANAGE_TRAFFIC,
     Permission.VIEW_USERS,
@@ -137,6 +142,8 @@ export const canAccessRoute = (user: User | null, route: string): boolean => {
       return hasPermission(user, Permission.VIEW_USERS);
     case '/gestor':
       return hasPermission(user, Permission.VIEW_GESTOR);
+    case '/dietas':
+      return hasPermission(user, Permission.VIEW_DIETAS);
     case '/settings':
       // Solo el usuario maestro puede acceder a configuración
       return user.role === 'MASTER_ADMIN';

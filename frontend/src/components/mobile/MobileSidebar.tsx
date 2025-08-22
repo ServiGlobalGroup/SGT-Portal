@@ -27,6 +27,8 @@ import {
   Receipt,
   RestaurantMenu,
 } from '@mui/icons-material';
+import { useAuth } from '../../hooks/useAuth';
+import { hasPermission, Permission } from '../../utils/permissions';
 
 interface MobileSidebarProps {
   open: boolean;
@@ -45,11 +47,13 @@ export const MobileSidebar: React.FC<MobileSidebarProps> = ({
   userRole = 'Empleado',
   onNavigate,
 }) => {
+  const { user } = useAuth();
   const menuItems = [
     { icon: <Dashboard />, text: 'Dashboard', path: '/dashboard' },
     { icon: <Description />, text: 'Mis Documentos', path: '/documents' },
     { icon: <Receipt />, text: 'Nóminas', path: '/payroll' },
-    { icon: <RestaurantMenu />, text: 'Dietas', path: '/dietas' },
+    // Mostrar Dietas solo si tiene permiso
+    ...(hasPermission(user, Permission.VIEW_DIETAS) ? [{ icon: <RestaurantMenu />, text: 'Dietas', path: '/dietas' }] : []),
     // Vacaciones temporalmente oculto
     // { icon: <CalendarToday />, text: 'Vacaciones', path: '/vacations' },
     { icon: <Assignment />, text: 'Permisos', path: '/permissions' },

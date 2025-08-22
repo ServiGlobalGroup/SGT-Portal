@@ -12,6 +12,7 @@ const MassUpload = lazy(() => import('./pages/MassUpload').then(m => ({ default:
 const Traffic = lazy(() => import('./pages/Traffic').then(m => ({ default: m.Traffic })));
 const Vacations = lazy(() => import('./pages/Vacations').then(m => ({ default: m.Vacations })));
 const Documents = lazy(() => import('./pages/Documents').then(m => ({ default: m.Documents })));
+const Dietas = lazy(() => import('./pages/Dietas').then(m => ({ default: m.Dietas })));
 const Orders = lazy(() => import('./pages/Orders').then(m => ({ default: m.Orders })));
 const Users = lazy(() => import('./pages/Users'));
 const DocumentationPanel = lazy(() => import('./pages/DocumentationPanel'));
@@ -83,6 +84,11 @@ function App() {
                     <Route path="/documents" element={
                       <ProtectedRoute>
                         <Documents />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/dietas" element={
+                      <ProtectedRoute>
+                        <Dietas />
                       </ProtectedRoute>
                     } />
                     <Route path="/orders" element={
