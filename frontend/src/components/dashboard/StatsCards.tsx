@@ -92,20 +92,27 @@ const StatsCard: React.FC<StatsCardProps> = ({
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
             <Box
               sx={{
-                p: 1.5,
-                borderRadius: 2,
+                width: 56,
+                height: 56,
+                borderRadius: '50%',
                 backgroundColor: alpha(color, 0.15),
                 color: color,
                 mr: 2,
                 boxShadow: `0 2px 6px ${alpha(color,0.25)}`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
                 transition: 'background-color .3s ease, transform .3s ease',
+                flexShrink: 0,
+                position: 'relative',
+                '& svg': { fontSize: 28 },
               }}
               className="stats-icon"
             >
               {icon}
             </Box>
-            <Box sx={{ flex: 1 }}>
-              <Typography variant="h4" sx={{ fontWeight: 700, color: 'text.primary', lineHeight: 1 }}>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, color: 'text.primary', lineHeight: 1, display: 'flex', alignItems: 'center' }}>
                 {value.toLocaleString()}
               </Typography>
             </Box>

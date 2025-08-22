@@ -95,7 +95,9 @@ interface CalendarEvent extends Event {
 }
 
 // Configurar moment en español
+// Asegurar que la semana comienza en lunes (dow:1) y locale español completo
 moment.locale('es');
+moment.updateLocale('es', { week: { dow: 1, doy: 4 } });
 const localizer = momentLocalizer(moment);
 
 // Función para formatear mes en español con primera letra mayúscula
@@ -370,11 +372,15 @@ export const Vacations: React.FC = () => {
       })
       .map(request => {
         const st = String(request.status || '').toLowerCase().trim() as 'pending' | 'approved';
+        // react-big-calendar interpreta end como exclusivo, por eso el último día no se mostraba.
+        const start = new Date(request.startDate);
+        const endInclusive = new Date(request.endDate);
+        endInclusive.setDate(endInclusive.getDate() + 1); // incluir el último día visualmente
         return ({
           id: request.id,
           title: `${request.employeeName} - ${request.reason}`,
-          start: new Date(request.startDate),
-          end: new Date(request.endDate),
+          start,
+          end: endInclusive,
           resource: {
             type: st === 'approved' ? 'vacation' : 'pending',
             employeeName: request.employeeName,
@@ -669,8 +675,10 @@ export const Vacations: React.FC = () => {
       const st = String(req.status || '').toLowerCase().trim();
       if (st !== 'pending' && st !== 'approved') return false;
       const startDate = new Date(req.startDate);
-      const endDate = new Date(req.endDate);
-      return selectedDay >= startDate && selectedDay <= endDate;
+  const endDate = new Date(req.endDate);
+  // Incluir día final (endDate inclusive)
+  endDate.setHours(23,59,59,999);
+  return selectedDay >= startDate && selectedDay <= endDate;
     });
     
     if (dayVacations.length > 0) {
@@ -685,8 +693,9 @@ export const Vacations: React.FC = () => {
       const st = String(req.status || '').toLowerCase().trim();
       if (st !== 'pending' && st !== 'approved') return false;
       const startDate = new Date(req.startDate);
-      const endDate = new Date(req.endDate);
-      return date >= startDate && date <= endDate;
+  const endDate = new Date(req.endDate);
+  endDate.setHours(23,59,59,999); // asegurar inclusión del último día
+  return date >= startDate && date <= endDate;
     });
   };
 
@@ -1647,6 +1656,19 @@ export const Vacations: React.FC = () => {
                     month: {
                       dateHeader: CustomDateHeader,
                     },
+                  }}
+                  culture="es"
+                  formats={{
+                    monthHeaderFormat: (date) => moment(date).locale('es').format('MMMM YYYY'),
+                    // Encabezados de días: usar abreviaturas españolas consistentes
+                    // Opciones habituales: ["L", "M", "X", "J", "V", "S", "D"] o ["Lu","Ma","Mi","Ju","Vi","Sa","Do"]
+                    // Elegimos 2 letras (segunda en minúscula salvo X) para claridad visual.
+                    weekdayFormat: (date) => {
+                      const map = ['Lu','Ma','Mi','Ju','Vi','Sa','Do'];
+                      const day = moment(date).isoWeekday(); // 1..7
+                      return map[day-1];
+                    },
+                    dayFormat: (date) => moment(date).locale('es').format('D'),
                   }}
                   messages={{
                     date: 'Fecha',
