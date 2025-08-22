@@ -15,7 +15,9 @@ class Settings(BaseSettings):
     # Evitar vacío para operaciones criptográficas básicas en desarrollo
     secret_key: str = os.getenv("SECRET_KEY", "change-me")
     algorithm: str = "HS256"
-    access_token_expire_minutes: int = 30
+    # Duración del access token (se puede aumentar para reducir re-logins).
+    # Con el nuevo endpoint /api/auth/refresh se recomienda un valor moderado (ej. 60) y refresco deslizante.
+    access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
     
     # Master Admin User (Hidden in code, not in database)
     master_admin_username: str = "admin01"

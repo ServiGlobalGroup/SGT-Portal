@@ -1,4 +1,4 @@
-import React, { createContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useState, useEffect, useCallback, useRef } from 'react';
 import type { ReactNode } from 'react';
 import type { User } from '../types';
 import { } from '../types';
@@ -31,6 +31,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const refreshTimerRef = useRef<number | null>(null);
 
   const isAuthenticated = !!user && !!token;
 
@@ -51,6 +52,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           'Authorization': `Bearer ${token}`,
         },
       }).catch(console.error);
+    }
+
+    if (refreshTimerRef.current) {
+      window.clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
     }
   }, [token]);
 
@@ -82,7 +88,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const verifyToken = async (tokenToVerify: string): Promise<boolean> => {
     try {
-  const response = await fetch(`${API_BASE_URL}/api/auth/verify-token`, {
+      const response = await fetch(`${API_BASE_URL}/api/auth/verify-token`, {
         headers: {
           'Authorization': `Bearer ${tokenToVerify}`,
         },
@@ -95,6 +101,38 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const scheduleRefresh = useCallback((expiresInSeconds: number) => {
+    if (refreshTimerRef.current) {
+      window.clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
+    // Refrescar 1 minuto antes de expirar (o a los 5 min si el tiempo es mayor)
+    const refreshIn = Math.max(30, expiresInSeconds - 60); // al menos 30s de margen
+    refreshTimerRef.current = window.setTimeout(async () => {
+      try {
+        if (!token) return;
+        const res = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          localStorage.setItem('access_token', data.access_token);
+          localStorage.setItem('user_data', JSON.stringify(data.user));
+          setToken(data.access_token);
+          setUser(data.user);
+          // Reprogramar siguiente refresh
+          scheduleRefresh(data.expires_in || 3600);
+        } else {
+          // Si falla, efectuar logout silencioso
+          logout();
+        }
+      } catch {
+        logout();
+      }
+    }, refreshIn * 1000);
+  }, [token, logout]);
+
   const login = async (username: string, password: string): Promise<void> => {
     setIsLoading(true);
     
@@ -103,7 +141,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       formData.append('username', username);
       formData.append('password', password);
 
-  const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
         body: formData,
       });
@@ -121,8 +159,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       setToken(data.access_token);
       setUser(data.user);
-
-      // No hacemos redirección aquí, React Router se encarga
+      if (data.expires_in) scheduleRefresh(data.expires_in);
     } catch (error) {
       // Limpiar cualquier dato previo en caso de error
       localStorage.removeItem('access_token');

@@ -264,3 +264,20 @@ async def verify_token(current_user = Depends(get_current_active_user)):
         "role": current_user.role.value if is_special else current_user.role.value,
         "system_user": is_special  # Menos obvio que "is_master"
     }
+
+@router.post("/refresh", response_model=Token)
+async def refresh_token(current_user = Depends(get_current_active_user)):
+    """Renueva el token de acceso antes de que expire (sesión deslizante).
+    Mientras el usuario siga activo y haga peticiones periódicas (o el frontend refresque automáticamente),
+    la sesión puede mantenerse indefinidamente. Si se desea mayor seguridad a futuro, sustituir por refresh tokens separados.
+    """
+    # Emitimos un nuevo access token con la ventana estándar
+    access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    new_token = create_access_token(data={"sub": current_user.dni_nie}, expires_delta=access_token_expires)
+    user_response = user_to_response(current_user, isinstance(current_user, MasterAdminUser))
+    return Token(
+        access_token=new_token,
+        token_type="bearer",
+        expires_in=settings.access_token_expire_minutes * 60,
+        user=user_response
+    )
