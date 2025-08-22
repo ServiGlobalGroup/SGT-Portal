@@ -40,6 +40,7 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { canAccessRoute, getRoleText, hasPermission, Permission } from '../utils/permissions';
+// Eliminado import de ColorModeContext tras retirar dark mode
 
 const drawerWidth = 280;
 const collapsedWidth = 80;

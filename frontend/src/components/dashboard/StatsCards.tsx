@@ -5,6 +5,7 @@ import {
   Typography,
   CircularProgress,
   Fade,
+  Tooltip,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
@@ -19,31 +20,68 @@ interface StatsCardProps {
   icon: React.ReactNode;
   color: string;
   loading?: boolean;
+  details?: React.ReactNode;
+  onClick?: () => void;
+  tooltip?: string;
 }
 
-const StatsCard: React.FC<StatsCardProps> = ({ 
-  title, 
-  value, 
-  change, 
-  icon, 
-  color, 
-  loading = false 
+const StatsCard: React.FC<StatsCardProps> = ({
+  title,
+  value,
+  change,
+  icon,
+  color,
+  loading = false,
+  details,
+  onClick,
+  tooltip,
 }) => (
-  <Paper
-    elevation={0}
-    sx={{
-      p: 3,
-      borderRadius: 2,
-      border: '1px solid',
-      borderColor: 'divider',
-      height: '100%',
-      transition: 'all 0.2s ease',
-      '&:hover': {
-        boxShadow: `0 4px 20px ${alpha(color, 0.1)}`,
-        transform: 'translateY(-2px)',
-      },
-    }}
-  >
+  <Tooltip title={tooltip || ''} disableHoverListener={!tooltip} arrow placement="top">
+    <Paper
+      elevation={0}
+      sx={{
+        p: 3,
+        borderRadius: 3,
+        border: '1px solid transparent',
+        background: 'linear-gradient(180deg, #ffffff 0%, #fafafa 100%)',
+        position: 'relative',
+        height: '100%',
+        transition: 'all 0.3s ease',
+        cursor: onClick ? 'pointer' : 'default',
+        '&:before': {
+          content: '""',
+            position: 'absolute',
+            inset: 0,
+            borderRadius: 3,
+            padding: '1px',
+            background: `linear-gradient(135deg, ${alpha(color,0.35)}, rgba(255,255,255,0))`,
+            WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+            WebkitMaskComposite: 'xor',
+            pointerEvents: 'none',
+            opacity: 0.25,
+        },
+        '&:hover': {
+          boxShadow: `0 6px 24px ${alpha(color, 0.18)}`,
+          transform: 'translateY(-3px)',
+        },
+        '&:hover .stats-icon': {
+          animation: 'pulse 1.4s ease-in-out infinite',
+        },
+        '@keyframes pulse': {
+          '0%,100%': { transform: 'scale(1)' },
+          '50%': { transform: 'scale(1.07)' },
+        },
+      }}
+      onClick={onClick}
+      role={onClick ? 'button' : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={(e) => {
+        if (onClick && (e.key === 'Enter' || e.key === ' ')) {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+    >
     {loading ? (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
         <CircularProgress size={24} />
@@ -56,24 +94,36 @@ const StatsCard: React.FC<StatsCardProps> = ({
               sx={{
                 p: 1.5,
                 borderRadius: 2,
-                backgroundColor: alpha(color, 0.1),
+                backgroundColor: alpha(color, 0.15),
                 color: color,
                 mr: 2,
+                boxShadow: `0 2px 6px ${alpha(color,0.25)}`,
+                transition: 'background-color .3s ease, transform .3s ease',
               }}
+              className="stats-icon"
             >
               {icon}
             </Box>
             <Box sx={{ flex: 1 }}>
-              <Typography variant="h4" sx={{ fontWeight: 700, color: 'text.primary' }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, color: 'text.primary', lineHeight: 1 }}>
                 {value.toLocaleString()}
               </Typography>
             </Box>
           </Box>
-          
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+
+          <Typography variant="body2" color="text.secondary" sx={{ mb: details ? 0.5 : 1, fontWeight: 500, letterSpacing: .2 }}>
             {title}
           </Typography>
-          
+          {details && (
+            <Typography
+              variant="caption"
+              color="text.secondary"
+              sx={{ display: 'block', mb: 1, lineHeight: 1.4 }}
+            >
+              {details}
+            </Typography>
+          )}
+
           {change !== undefined && (
             <Box sx={{ display: 'flex', alignItems: 'center' }}>
               {change > 0 ? (
@@ -95,7 +145,8 @@ const StatsCard: React.FC<StatsCardProps> = ({
         </Box>
       </Fade>
     )}
-  </Paper>
+    </Paper>
+  </Tooltip>
 );
 
 export default StatsCard;
