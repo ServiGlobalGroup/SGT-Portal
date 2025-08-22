@@ -15,6 +15,7 @@ class UserBase(BaseModel):
     department: str = Field(..., min_length=2, max_length=100, description="Departamento")
     position: Optional[str] = Field(None, max_length=100, description="Puesto de trabajo")
     role: UserRole = Field(default=UserRole.TRABAJADOR, description="Rol del usuario")
+    worker_type: str = Field(default="antiguo", pattern="^(antiguo|nuevo)$", description="Clasificación del trabajador (antiguo/nuevo)")
     
     @field_validator('dni_nie')
     @classmethod
@@ -49,6 +50,7 @@ class UserUpdate(BaseModel):
     department: Optional[str] = Field(None, min_length=2, max_length=100)
     position: Optional[str] = Field(None, max_length=100)
     role: Optional[UserRole] = None
+    worker_type: Optional[str] = Field(None, pattern="^(antiguo|nuevo)$")
     hire_date: Optional[datetime] = None
     birth_date: Optional[datetime] = None
     address: Optional[str] = None

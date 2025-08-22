@@ -82,6 +82,7 @@ class UserService:
             role=user_create.role,
             department=user_create.department,
             position=user_create.position,
+            worker_type=user_create.worker_type if user_create.role == UserRole.TRABAJADOR else 'antiguo',
             hire_date=user_create.hire_date,
             birth_date=user_create.birth_date,
             address=user_create.address,
@@ -123,6 +124,9 @@ class UserService:
             update_data["hashed_password"] = UserService.hash_password(update_data.pop("password"))
         
         for field, value in update_data.items():
+            if field == 'worker_type' and getattr(db_user, 'role') != UserRole.TRABAJADOR:
+                # Ignorar cambios de worker_type para roles que no son trabajadores
+                continue
             setattr(db_user, field, value)
         
         db.commit()

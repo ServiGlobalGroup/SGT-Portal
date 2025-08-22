@@ -69,6 +69,7 @@ interface User {
   role: 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR';
   department: string;
   position?: string;
+  worker_type?: 'antiguo' | 'nuevo';
   is_active: boolean;
   created_at: string;
   full_name: string;
@@ -120,6 +121,7 @@ export const Users: React.FC = () => {
     role: 'TRABAJADOR' as 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR',
     department: '',
     position: '',
+  worker_type: 'antiguo' as 'antiguo' | 'nuevo',
     password: '',
     confirmPassword: ''
   });
@@ -160,7 +162,8 @@ export const Users: React.FC = () => {
     phone: '',
     role: 'TRABAJADOR' as 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR',
     department: '',
-    position: ''
+  position: '',
+  worker_type: 'antiguo' as 'antiguo' | 'nuevo'
   });
   const [editUserLoading, setEditUserLoading] = useState(false);
 
@@ -458,7 +461,8 @@ export const Users: React.FC = () => {
       phone: user.phone || '',
       role: user.role,
       department: user.department || '',
-      position: user.position || ''
+  position: user.position || '',
+  worker_type: user.worker_type || 'antiguo'
     });
     setOpenEditModal(true);
     handleCloseMenu();
@@ -474,7 +478,8 @@ export const Users: React.FC = () => {
       phone: '',
       role: 'TRABAJADOR',
       department: '',
-      position: ''
+  position: '',
+  worker_type: 'antiguo'
     });
   };
 
@@ -538,6 +543,7 @@ export const Users: React.FC = () => {
       role: 'TRABAJADOR',
       department: '',
       position: '',
+  worker_type: 'antiguo',
       password: '',
       confirmPassword: ''
     });
@@ -1060,6 +1066,7 @@ export const Users: React.FC = () => {
                       <TableCell>Usuario</TableCell>
                       <TableCell>Email</TableCell>
                       <TableCell>Rol</TableCell>
+                      <TableCell>Tipo</TableCell>
                       <TableCell>Departamento</TableCell>
                       <TableCell>Estado</TableCell>
                       <TableCell align="center">Acciones</TableCell>
@@ -1126,6 +1133,21 @@ export const Users: React.FC = () => {
                               fontSize: '0.75rem',
                             }}
                           />
+                        </TableCell>
+                        <TableCell>
+                          {user.role === 'TRABAJADOR' && (
+                            <Chip
+                              label={user.worker_type === 'nuevo' ? 'Nuevo' : 'Antiguo'}
+                              size="small"
+                              variant="outlined"
+                              color={user.worker_type === 'nuevo' ? 'success' : 'default'}
+                              sx={{
+                                borderRadius: 2,
+                                fontWeight: 600,
+                                fontSize: '0.65rem',
+                              }}
+                            />
+                          )}
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2">{user.department}</Typography>
@@ -1824,6 +1846,31 @@ export const Users: React.FC = () => {
                     </MenuItem>
                   </Select>
                 </FormControl>
+                {editUserData.role === 'TRABAJADOR' && (
+                  <FormControl fullWidth>
+                    <InputLabel sx={{ fontWeight: 600, '&.Mui-focused': { color: '#501b36' } }}>
+                      Tipo Trabajador
+                    </InputLabel>
+                    <Select
+                      value={editUserData.worker_type}
+                      label="Tipo Trabajador"
+                      onChange={(e) => setEditUserData(prev => ({ ...prev, worker_type: e.target.value as 'antiguo' | 'nuevo' }))}
+                      disabled={editUserLoading}
+                      sx={{
+                        borderRadius: 2,
+                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                          borderColor: '#501b36',
+                        },
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                          borderColor: '#501b36',
+                        },
+                      }}
+                    >
+                      <MenuItem value="antiguo">Antiguo</MenuItem>
+                      <MenuItem value="nuevo">Nuevo</MenuItem>
+                    </Select>
+                  </FormControl>
+                )}
                 <TextField
                   fullWidth
                   label="Departamento"
@@ -2055,6 +2102,21 @@ export const Users: React.FC = () => {
               helperText="Nivel de acceso del usuario"
             />
           </Box>
+          {createUserData.role === 'TRABAJADOR' && (
+            <Box sx={{ mt: 1 }}>
+              <ModernField
+                label="Tipo de Trabajador"
+                type="select"
+                value={createUserData.worker_type}
+                onChange={(value) => setCreateUserData(prev => ({ ...prev, worker_type: value as 'antiguo' | 'nuevo' }))}
+                options={[
+                  { value: 'antiguo', label: 'Antiguo' },
+                  { value: 'nuevo', label: 'Nuevo' },
+                ]}
+                helperText="Clasificación para dietas / cálculos"
+              />
+            </Box>
+          )}
 
           {/* Configuración de acceso */}
           <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36', mb: 2, mt: 3 }}>
@@ -2219,6 +2281,12 @@ export const Users: React.FC = () => {
                   value: createUserData.role === 'ADMINISTRADOR' ? 'Administrador' : 
                         createUserData.role === 'TRAFICO' ? 'Tráfico' : 'Trabajador'
                 }
+                ,
+                ...(createUserData.role === 'TRABAJADOR' ? [{
+                  icon: <People sx={{ fontSize: 16 }} />,
+                  label: 'Tipo',
+                  value: createUserData.worker_type === 'nuevo' ? 'Nuevo' : 'Antiguo'
+                }] : [])
               ]}
             />
           )}

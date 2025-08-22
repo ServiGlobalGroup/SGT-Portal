@@ -69,6 +69,8 @@ class User(Base):
     role = Column(Enum(UserRole), nullable=False, default=UserRole.TRABAJADOR, comment="Rol en el sistema")
     department = Column(String(100), nullable=False, comment="Departamento")
     position = Column(String(100), nullable=True, comment="Puesto de trabajo")
+    # Identificador de trabajador (solo relevante para rol TRABAJADOR): 'antiguo' | 'nuevo'
+    worker_type = Column(String(10), nullable=False, server_default='antiguo', comment="Clasificación del trabajador: antiguo/nuevo")
     
     # Fechas importantes
     hire_date = Column(DateTime, nullable=True, comment="Fecha de contratación")
@@ -99,17 +101,16 @@ class User(Base):
     
     def __repr__(self):
         return f"<User(dni_nie='{self.dni_nie}', email='{self.email}', name='{self.first_name} {self.last_name}')>"
-    
     @property
     def full_name(self):
         """Retorna el nombre completo del usuario"""
-        return f"{self.first_name} {self.last_name}"
-    
+        return f"{self.first_name} {self.last_name}".strip()
+
     @property
     def initials(self):
         """Retorna las iniciales del usuario para el avatar"""
-        first_initial = self.first_name[0].upper() if self.first_name else ""
-        last_initial = self.last_name[0].upper() if self.last_name else ""
+        first_initial = (self.first_name or '')[:1].upper()
+        last_initial = (self.last_name or '')[:1].upper()
         return f"{first_initial}{last_initial}"
     
     def create_user_folder(self, base_path: str) -> str:

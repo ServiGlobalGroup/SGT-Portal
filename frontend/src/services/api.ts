@@ -299,6 +299,7 @@ export const usersAPI = {
     role: 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR';
     department: string;
     position?: string;
+  worker_type?: 'antiguo' | 'nuevo';
     hire_date?: string;
     birth_date?: string;
     address?: string;
@@ -328,6 +329,7 @@ export const usersAPI = {
     postal_code: string;
     emergency_contact_name: string;
     emergency_contact_phone: string;
+  worker_type: 'antiguo' | 'nuevo';
   }>) => api.put(`/api/users/${id}`, userData).then(res => res.data),
 
   // Desactivar usuario (soft delete)

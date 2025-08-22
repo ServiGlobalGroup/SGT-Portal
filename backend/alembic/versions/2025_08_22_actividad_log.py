@@ -1,7 +1,7 @@
 """create activity_log table
 
 Revision ID: activity_log_20250822
-Revises: 
+Revises: add_worker_type_20250822
 Create Date: 2025-08-22
 """
 from alembic import op
@@ -9,7 +9,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = 'activity_log_20250822'
-down_revision = None
+down_revision = 'add_worker_type_20250822'
 branch_labels = None
 depends_on = None
 

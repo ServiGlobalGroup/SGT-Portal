@@ -11,7 +11,8 @@ from sqlalchemy.dialects.postgresql import UUID
 
 # revision identifiers, used by Alembic.
 revision = 'add_vacation_requests'
-down_revision = 'a946082cf036'
+# Encadenado correctamente después de migrate_roles para evitar ramas múltiples
+down_revision = '2025_07_30_migrate_roles'
 branch_labels = None
 depends_on = None
 
