@@ -235,35 +235,62 @@ export const Dashboard: React.FC = () => {
                 borderRadius: 3,
                 position: 'relative',
                 overflow: 'hidden',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\"60\" height=\"60\" viewBox=\"0 0 60 60\" xmlns=\"http://www.w3.org/2000/svg\"%3E%3Cg fill=\"none\" fill-rule=\"evenodd\"%3E%3Cg fill=\"%23ffffff\" fill-opacity=\"0.1\"%3E%3Cpath d=\"m36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
+                },
               }}
             >
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Box>
-                  <Typography variant="h4" sx={{ fontWeight: 700 }}>
-                    Panel de control
-                  </Typography>
-                  <Typography variant="body2" sx={{ opacity: 0.9 }}>
-                    Resumen general
-                  </Typography>
+              <Box sx={{ position: 'relative', zIndex: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1.5, justifyContent: 'space-between', flexWrap: 'wrap' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <Box
+                      sx={{
+                        p: 2,
+                        bgcolor: 'rgba(255, 255, 255, 0.2)',
+                        borderRadius: 2,
+                        backdropFilter: 'blur(10px)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <Assessment sx={{ fontSize: 32 }} />
+                    </Box>
+                    <Box>
+                      <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
+                        Panel de control
+                      </Typography>
+                      <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400 }}>
+                        Resumen general del sistema
+                      </Typography>
+                    </Box>
+                  </Box>
+                  {(user?.role === 'ADMINISTRADOR' || user?.role === 'MASTER_ADMIN') && (
+                    <Button
+                      size="small"
+                      variant="contained"
+                      onClick={(e) => setNotifAnchor(e.currentTarget)}
+                      startIcon={<NotificationsNone />}
+                      sx={{
+                        textTransform: 'none',
+                        borderRadius: 999,
+                        backgroundColor: '#c62828',
+                        '&:hover': { backgroundColor: '#b71c1c' },
+                        minWidth: 'auto',
+                        color: 'white',
+                        fontWeight: 600,
+                      }}
+                    >
+                      ({pendingVacation.length})
+                    </Button>
+                  )}
                 </Box>
-                {(user?.role === 'ADMINISTRADOR' || user?.role === 'MASTER_ADMIN') && (
-                  <Button
-                    size="small"
-                    variant="contained"
-                    onClick={(e) => setNotifAnchor(e.currentTarget)}
-                    startIcon={<NotificationsNone />}
-                    sx={{
-                      textTransform: 'none',
-                      borderRadius: 999,
-                      backgroundColor: '#c62828',
-                      '&:hover': { backgroundColor: '#b71c1c' },
-                      minWidth: 'auto',
-                      color: 'white',
-                    }}
-                  >
-                    ({pendingVacation.length})
-                  </Button>
-                )}
               </Box>
             </Paper>
           </Fade>
