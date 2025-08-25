@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Typography, Paper, Alert, TextField, Autocomplete, MenuItem, IconButton, Tooltip, Divider, Button, Table, TableHead, TableRow, TableCell, TableBody, Chip, Stack, Fade, GlobalStyles, Dialog, DialogTitle, DialogContent, DialogActions, Tabs, Tab, Snackbar, Alert as MuiAlert } from '@mui/material';
+import { Box, Typography, Paper, Alert, TextField, Autocomplete, MenuItem, IconButton, Tooltip, Divider, Button, Table, TableHead, TableRow, TableCell, TableBody, Chip, Stack, Fade, GlobalStyles, Dialog, DialogTitle, DialogContent, DialogActions, Snackbar, Alert as MuiAlert, ToggleButtonGroup, ToggleButton } from '@mui/material';
 import { useAuth } from '../hooks/useAuth';
 import { hasPermission, Permission } from '../utils/permissions';
 import { usersAPI } from '../services/api';
 import type { User } from '../types';
 import { calculateDietas, DIETA_RATES, DietaConceptInput, DietaCalculationResult, findKilometerRangeAntiguo } from '../config/dietas';
 import { dietasAPI } from '../services/api';
-import { Add, Delete, Calculate, RestaurantMenu, History, FiberNew, Close, ArrowUpward, ArrowDownward, PictureAsPdf, Download } from '@mui/icons-material';
+import { Add, Delete, Calculate, RestaurantMenu, History, FiberNew, Close, ArrowUpward, ArrowDownward, PictureAsPdf, ArrowDropDown } from '@mui/icons-material';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -23,6 +23,15 @@ interface DietaRecordRow {
   created_at: string;
   user_name?: string;
 }
+
+// Icono Excel SVG inline reutilizable
+const ExcelIcon: React.FC<{ size?: number }> = ({ size = 18 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect x="3" y="4" width="13" height="16" rx="2" fill="#1D6F42" />
+    <path d="M16 6H19C19.5523 6 20 6.44772 20 7V17C20 17.5523 19.5523 18 19 18H16" stroke="#1D6F42" strokeWidth="2" strokeLinejoin="round"/>
+    <path d="M8.25 15L10.5 11.5L8.25 8H10.05L11.4 10.41L12.75 8H14.55L12.3 11.5L14.55 15H12.75L11.4 12.59L10.05 15H8.25Z" fill="white" />
+  </svg>
+);
 
 export const Dietas: React.FC = () => {
   const { user } = useAuth();
@@ -183,6 +192,39 @@ export const Dietas: React.FC = () => {
       doc.save(`dietas_${fecha.replace(/[:/]/g,'-')}.pdf`);
     } finally { exportingRef.current = false; }
   };
+
+  // Estilo reutilizable para inputs tipo "pill" en filtros de registros
+  const pillFieldSx = {
+    '& .MuiInputBase-root': {
+      borderRadius: 999,
+      background: '#fafbfc',
+      boxShadow: 'inset 0 0 0 1px #cfd3d7',
+      transition: 'box-shadow .25s, background .25s',
+      px: 1.4,
+      minHeight: 42,
+      '&:hover': {
+        background: '#f5f6f7',
+        boxShadow: 'inset 0 0 0 1px #b9bdc1'
+      },
+      '&.Mui-focused': {
+        background: '#fff',
+        boxShadow: 'inset 0 0 0 2px #5c2340'
+      },
+      '&.Mui-disabled': { opacity: .6 },
+      '& input::-webkit-input-placeholder': { opacity: .75 },
+      '&:hover input::-webkit-input-placeholder': { opacity: .55 }
+    },
+    '& .MuiOutlinedInput-notchedOutline': { display: 'none' },
+    '& .MuiInputLabel-root': {
+      mt: 0,
+      px: 0.6,
+      transform: 'translate(14px, 12px) scale(1)',
+      transition: 'all .2s',
+      '&.MuiInputLabel-shrink': { transform: 'translate(12px, -8px) scale(.82)', background:'#fafbfc', borderRadius:8, padding:'0 4px' },
+      '&.Mui-focused': { color: '#5c2340', background:'#fff' }
+    },
+    '& .MuiInputBase-input': { pt: '10px', pb: '10px' }
+  } as const;
 
   const loadRecords = () => {
     setRecordsLoading(true);
@@ -410,13 +452,89 @@ export const Dietas: React.FC = () => {
           </Fade>
         </Box>
 
-        {/* Tabs */}
-        <Paper sx={{ mb:3, borderRadius:3, bgcolor:'transparent', boxShadow:'none' }}>
-          <Tabs value={tab} onChange={(_,v)=>{setTab(v);}} variant="scrollable" scrollButtons allowScrollButtonsMobile>
-            <Tab label="Cálculo" />
-            <Tab label="Registros" />
-          </Tabs>
-        </Paper>
+        {/* Selector estilo Vacations (Mías / Todas) adaptado */}
+        <Box sx={{ mb:4, display:'flex', justifyContent:'flex-start' }}>
+          <Box
+            sx={{
+              p: 0.5,
+              borderRadius: 3,
+              background: 'linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%)',
+              border: '2px solid #e0e0e0',
+              boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)',
+              display: 'inline-block'
+            }}
+          >
+            <ToggleButtonGroup
+              value={tab}
+              exclusive
+              onChange={(_,v)=> { if(v!==null) setTab(v); }}
+              size="small"
+              sx={{
+                '& .MuiToggleButtonGroup-grouped': {
+                  border: 'none',
+                  '&:not(:first-of-type)': {
+                    borderRadius: 3,
+                    marginLeft: '4px'
+                  },
+                  '&:first-of-type': { borderRadius: 3 }
+                },
+                '& .MuiToggleButton-root': {
+                  borderRadius: '20px !important',
+                  px: 2.5,
+                  py: 1,
+                  textTransform: 'none',
+                  fontSize: '0.8rem',
+                  fontWeight: 700,
+                  border: 'none !important',
+                  minWidth: 110,
+                  transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  '&::before': {
+                    content: '""',
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    background: 'linear-gradient(135deg, rgba(80,27,54,0.1) 0%, rgba(80,27,54,0.05) 100%)',
+                    opacity: 0,
+                    transition: 'opacity 0.3s ease'
+                  },
+                  '&:hover::before': { opacity: 1 },
+                  '&.Mui-selected': {
+                    background: 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 70%, #501b36 100%)',
+                    color: 'white',
+                    boxShadow: '0 4px 12px rgba(80,27,54,0.3), 0 2px 4px rgba(80,27,54,0.2)',
+                    transform: 'translateY(-1px)',
+                    '&:hover': {
+                      background: 'linear-gradient(135deg, #3d1429 0%, #5a1d3a 30%, #6b2545 70%, #3d1429 100%)',
+                      boxShadow: '0 6px 16px rgba(80,27,54,0.4), 0 2px 8px rgba(80,27,54,0.3)'
+                    },
+                    '&::before': { opacity: 0 }
+                  },
+                  '&:not(.Mui-selected)': {
+                    color: '#501b36',
+                    backgroundColor: 'rgba(255,255,255,0.8)',
+                    backdropFilter: 'blur(10px)',
+                    '&:hover': {
+                      backgroundColor: 'rgba(255,255,255,0.95)',
+                      transform: 'translateY(-0.5px)',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                    }
+                  }
+                }
+              }}
+            >
+              <ToggleButton value={0}>
+                <Calculate sx={{ mr:0.6, fontSize:18 }} /> Cálculo
+              </ToggleButton>
+              <ToggleButton value={1}>
+                <History sx={{ mr:0.6, fontSize:18 }} /> Registros
+              </ToggleButton>
+            </ToggleButtonGroup>
+          </Box>
+        </Box>
 
         {tab === 0 && (
         <Fade in timeout={800}>
@@ -427,7 +545,7 @@ export const Dietas: React.FC = () => {
             <Autocomplete
               loading={loadingDrivers}
               options={drivers}
-              forcePopupIcon={false}
+              popupIcon={<ArrowDropDown sx={{ color:'text.secondary', fontSize:22 }} />}
               disableClearable
               ListboxProps={{ style:{ maxHeight: 300 }}}
               getOptionLabel={(o) => (o?.full_name || `${o?.first_name || ''} ${o?.last_name || ''}` || o?.dni_nie || '').trim()}
@@ -454,7 +572,26 @@ export const Dietas: React.FC = () => {
                   label="Conductor"
                   size="small"
                   placeholder={loadingDrivers? 'Cargando...' : 'Buscar...'}
-                  InputProps={{ ...params.InputProps, sx:{ borderRadius:2, pr:1 } }}
+                  sx={pillFieldSx}
+                  InputProps={{
+                    ...params.InputProps,
+                    sx:{
+                      ...pillFieldSx['& .MuiInputBase-root'],
+                      '& .MuiAutocomplete-endAdornment':{ right:6 },
+                      '& .MuiAutocomplete-popupIndicator':{
+                        borderRadius:1,
+                        p:0,
+                        m:0,
+                        width:28,
+                        height:28,
+                        color:'text.secondary',
+                        background:'transparent',
+                        boxShadow:'none',
+                        '&:hover':{ background:'transparent', color:'text.primary' },
+                        '&:active':{ background:'transparent' }
+                      }
+                    }
+                  }}
                 />
               )}
             />
@@ -473,14 +610,14 @@ export const Dietas: React.FC = () => {
             )}
           </Box>
           <Box minWidth={{ xs: '100%', sm: '200px' }} flexGrow={0} flexBasis={{ xs: '100%', sm: '200px' }}>
-            <TextField required label="OC / Albarán" value={orderNumber} onChange={e=>setOrderNumber(e.target.value)} fullWidth size="small" error={!orderNumber.trim()} helperText={!orderNumber.trim()?'Obligatorio':''} />
+            <TextField required label="OC / Albarán" value={orderNumber} onChange={e=>setOrderNumber(e.target.value)} fullWidth size="small" error={!orderNumber.trim()} helperText={!orderNumber.trim()?'Obligatorio':''} sx={pillFieldSx} />
           </Box>
           <Box minWidth={{ xs: '100%', sm: '200px' }} flexGrow={0} flexBasis={{ xs: '100%', sm: '200px' }}>
-            <TextField label="Fecha" type="date" value={month} onChange={e=>setMonth(e.target.value)} fullWidth size="small" />
+            <TextField label="Fecha" type="date" value={month} onChange={e=>setMonth(e.target.value)} fullWidth size="small" sx={pillFieldSx} />
           </Box>
           {selectedDriver && driverType==='antiguo' && (
             <Box minWidth={{ xs: '100%', sm: '160px' }} flexGrow={0} flexBasis={{ xs: '100%', sm: '160px' }}>
-              <TextField label="Kms" type="number" size="small" value={kmsAntiguo} onChange={e=>{setKmsAntiguo(e.target.value); setResult(null);}} inputProps={{min:0}} fullWidth />
+              <TextField label="Kms" type="number" size="small" value={kmsAntiguo} onChange={e=>{setKmsAntiguo(e.target.value); setResult(null);}} inputProps={{min:0}} fullWidth sx={pillFieldSx} />
               {kmsAntiguo && kmTramoAmount > 0 && (
                 <Typography variant="caption" sx={{ mt:0.5, display:'block', fontWeight:600, color:'success.main', textAlign:'center' }}>+{kmTramoAmount.toFixed(2)}€</Typography>
               )}
@@ -596,19 +733,70 @@ export const Dietas: React.FC = () => {
                     size="small"
                     value={filterUser}
                     onChange={(_,v)=>setFilterUser(v)}
+                    popupIcon={<ArrowDropDown sx={{ color:'text.secondary', fontSize:22 }} />}
                     getOptionLabel={(o)=> (o?.full_name || `${o?.first_name||''} ${o?.last_name||''}`).trim()}
-                    renderInput={(p)=><TextField {...p} label="Conductor" placeholder="Todos" />}
+                    renderInput={(p)=>(
+                      <TextField
+                        {...p}
+                        label="Conductor"
+                        placeholder="Todos"
+                        sx={pillFieldSx}
+                        InputProps={{
+                          ...p.InputProps,
+                          sx:{
+                            ...pillFieldSx['& .MuiInputBase-root'],
+                            '& .MuiAutocomplete-endAdornment':{ right:6 },
+                            '& .MuiAutocomplete-popupIndicator':{
+                              borderRadius:1,
+                              p:0,m:0,width:26,height:26,
+                              color:'text.secondary',
+                              background:'transparent',
+                              boxShadow:'none',
+                              '&:hover':{ background:'transparent', color:'text.primary' },
+                              '&:active':{ background:'transparent' }
+                            }
+                          }
+                        }}
+                      />
+                    )}
                   />
                 </Box>
-                <TextField select size="small" label="Tipo" value={filterWorkerType} onChange={e=>setFilterWorkerType(e.target.value)} sx={{ width:140 }}>
+                <TextField select size="small" label="Tipo" value={filterWorkerType} onChange={e=>setFilterWorkerType(e.target.value)} sx={{ width:140, ...pillFieldSx }}>
                   <MenuItem value="">Todos</MenuItem>
                   <MenuItem value="antiguo">Antiguo</MenuItem>
                   <MenuItem value="nuevo">Nuevo</MenuItem>
                 </TextField>
-                <TextField size="small" label="OC / Albarán" value={filterOrder} onChange={e=>setFilterOrder(e.target.value)} sx={{ width:160 }} />
-                <TextField size="small" type="date" label="Desde" InputLabelProps={{ shrink:true }} value={filterStart} onChange={e=>setFilterStart(e.target.value)} />
-                <TextField size="small" type="date" label="Hasta" InputLabelProps={{ shrink:true }} value={filterEnd} onChange={e=>setFilterEnd(e.target.value)} />
-                <Button variant="outlined" size="small" onClick={()=>{setFilterUser(null);setFilterWorkerType('');setFilterOrder('');setFilterStart('');setFilterEnd(''); loadRecords();}}>Limpiar</Button>
+                <TextField size="small" label="OC / Albarán" value={filterOrder} onChange={e=>setFilterOrder(e.target.value)} sx={{ width:160, ...pillFieldSx }} />
+                <TextField size="small" type="date" label="Desde" InputLabelProps={{ shrink:true }} value={filterStart} onChange={e=>setFilterStart(e.target.value)} sx={pillFieldSx} />
+                <TextField size="small" type="date" label="Hasta" InputLabelProps={{ shrink:true }} value={filterEnd} onChange={e=>setFilterEnd(e.target.value)} sx={pillFieldSx} />
+        <Button
+                  variant="contained"
+                  size="small"
+                  onClick={()=>{setFilterUser(null);setFilterWorkerType('');setFilterOrder('');setFilterStart('');setFilterEnd(''); loadRecords();}}
+                  sx={{
+                    borderRadius:999,
+                    textTransform:'none',
+                    fontWeight:600,
+                    letterSpacing:0.4,
+                    px:2.6,
+                    minHeight:42,
+                    lineHeight:1.2,
+                    border:'none',
+                    color:'#fff',
+                    background:'linear-gradient(135deg,#5c2340 0%, #7d3456 55%, #a15375 100%)',
+                    boxShadow:'0 2px 6px rgba(0,0,0,0.18)',
+                    '&:hover':{
+                      background:'linear-gradient(135deg,#662945 0%, #8a3b5f 55%, #b36588 100%)',
+                      boxShadow:'0 3px 8px rgba(0,0,0,0.22)'
+                    },
+                    '&:active':{
+                      background:'linear-gradient(135deg,#4d1f34 0%, #6d2548 55%, #8f4767 100%)',
+                      boxShadow:'0 2px 4px rgba(0,0,0,0.25) inset'
+                    },
+                    '&.Mui-disabled':{ opacity:.5 },
+                    '&.Mui-focusVisible':{ outline:'none', boxShadow:'0 0 0 3px rgba(92,35,64,0.35), 0 2px 6px rgba(0,0,0,0.18)' }
+                  }}
+                >Limpiar</Button>
               </Box>
               {/* Contenedor tabla personalizado */}
               <Box sx={{
@@ -803,8 +991,55 @@ export const Dietas: React.FC = () => {
                       <Typography variant="caption">Nuevo: <strong>{totalNuevo.toFixed(2)}€</strong></Typography>
                       <Typography variant="caption" sx={{ ml:'auto' }}>Actualizado {new Date().toLocaleTimeString()}</Typography>
                       <Divider flexItem orientation="vertical" sx={{ mx:1 }} />
-                      <Tooltip title="Exportar Excel"><span><IconButton size="small" onClick={exportExcel} disabled={records.length===0}><Download fontSize="inherit" /></IconButton></span></Tooltip>
-                      <Tooltip title="Exportar PDF"><span><IconButton size="small" onClick={exportPDF} disabled={records.length===0}><PictureAsPdf fontSize="inherit" /></IconButton></span></Tooltip>
+                      <Tooltip title="Exportar Excel">
+                        <span>
+                          <IconButton
+                            size="small"
+                            onClick={exportExcel}
+                            disabled={records.length===0}
+                            disableRipple
+                            disableFocusRipple
+                            sx={{
+                              color:'#1D6F42',
+                              background:'transparent',
+                              boxShadow:'none',
+                              border:'none',
+                              '&:hover':{ background:'transparent', color:'#17894e' },
+                              '&:active':{ background:'transparent', transform:'scale(0.92)' },
+                              '&:focus,&:focus-visible':{ outline:'none', background:'transparent' },
+                              '& .MuiTouchRipple-root':{ display:'none' },
+                              '&.Mui-disabled':{ color:'#1D6F4255' }
+                            }}
+                          >
+                            <ExcelIcon />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title="Exportar PDF">
+                        <span>
+                          <IconButton
+                            size="small"
+                            onClick={exportPDF}
+                            disabled={records.length===0}
+                            disableRipple
+                            disableFocusRipple
+                            sx={{
+                              color:'#d32f2f',
+                              background:'transparent',
+                              boxShadow:'none',
+                              border:'none',
+                              '&:hover':{ background:'transparent', color:'#b71c1c' },
+                              '&:active':{ background:'transparent', transform:'scale(0.92)' },
+                              '&:focus,&:focus-visible':{ outline:'none', background:'transparent' },
+                              '& .MuiTouchRipple-root':{ display:'none' },
+                              '&.Mui-disabled':{ color:'#d32f2f55' }
+                            }}
+                          >
+                            <PictureAsPdf fontSize="inherit" />
+                          </IconButton>
+                        </span>
+                      </Tooltip>
+
                     </Box>
                   );
                 })()}
@@ -841,9 +1076,17 @@ export const Dietas: React.FC = () => {
               </TableRow>
             </TableBody>
           </Table>
-              <Box mt={3} display="flex" justifyContent="space-between" alignItems="center">
-                {saveMessage && <Typography variant="body2" color={saveMessage.startsWith('Error')? 'error':'success.main'}>{saveMessage}</Typography>}
-                <Button variant="outlined" disabled={saving || !orderNumber.trim()} onClick={handleSave}>{saving? 'Guardando...' : 'Guardar'}</Button>
+              <Box mt={3} display="flex" alignItems="center" gap={2}>
+                <Fade in={Boolean(saveMessage)} mountOnEnter unmountOnExit>
+                  <Typography variant="body2" color={saveMessage && saveMessage.startsWith('Error')? 'error':'success.main'} sx={{ fontWeight:500 }}>
+                    {saveMessage}
+                  </Typography>
+                </Fade>
+                <Box sx={{ ml:'auto' }}>
+                  <Button variant="outlined" disabled={saving || !orderNumber.trim()} onClick={handleSave} sx={{ minWidth:128 }}>
+                    {saving? 'Guardando...' : 'Guardar'}
+                  </Button>
+                </Box>
               </Box>
             </Paper>
           </Fade>
