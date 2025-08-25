@@ -994,45 +994,59 @@ export const Dietas: React.FC = () => {
                       <Tooltip title="Exportar Excel">
                         <span>
                           <IconButton
-                            size="small"
+                            size="medium"
                             onClick={exportExcel}
                             disabled={records.length===0}
                             disableRipple
                             disableFocusRipple
                             sx={{
                               color:'#1D6F42',
-                              background:'transparent',
-                              boxShadow:'none',
+                              background:'rgba(29,111,66,0.08)',
+                              boxShadow:'0 0 0 1px #cfd3d7',
                               border:'none',
-                              '&:hover':{ background:'transparent', color:'#17894e' },
-                              '&:active':{ background:'transparent', transform:'scale(0.92)' },
-                              '&:focus,&:focus-visible':{ outline:'none', background:'transparent' },
+                              width:46,
+                              height:42,
+                              borderRadius:12,
+                              display:'flex',
+                              alignItems:'center',
+                              justifyContent:'center',
+                              '& svg':{ width:24, height:24 },
+                              '&:hover':{ background:'rgba(29,111,66,0.12)', color:'#17894e' },
+                              '&:active':{ background:'rgba(29,111,66,0.18)', transform:'scale(0.94)' },
+                              '&:focus,&:focus-visible':{ outline:'none', background:'rgba(29,111,66,0.15)' },
                               '& .MuiTouchRipple-root':{ display:'none' },
-                              '&.Mui-disabled':{ color:'#1D6F4255' }
+                              '&.Mui-disabled':{ color:'#1D6F4255', background:'rgba(29,111,66,0.05)' }
                             }}
                           >
-                            <ExcelIcon />
+                            <ExcelIcon size={22} />
                           </IconButton>
                         </span>
                       </Tooltip>
                       <Tooltip title="Exportar PDF">
                         <span>
                           <IconButton
-                            size="small"
+                            size="medium"
                             onClick={exportPDF}
                             disabled={records.length===0}
                             disableRipple
                             disableFocusRipple
                             sx={{
                               color:'#d32f2f',
-                              background:'transparent',
-                              boxShadow:'none',
+                              background:'rgba(211,47,47,0.08)',
+                              boxShadow:'0 0 0 1px #cfd3d7',
                               border:'none',
-                              '&:hover':{ background:'transparent', color:'#b71c1c' },
-                              '&:active':{ background:'transparent', transform:'scale(0.92)' },
-                              '&:focus,&:focus-visible':{ outline:'none', background:'transparent' },
+                              width:46,
+                              height:42,
+                              borderRadius:12,
+                              display:'flex',
+                              alignItems:'center',
+                              justifyContent:'center',
+                              '& svg':{ fontSize:24 },
+                              '&:hover':{ background:'rgba(211,47,47,0.12)', color:'#b71c1c' },
+                              '&:active':{ background:'rgba(211,47,47,0.18)', transform:'scale(0.94)' },
+                              '&:focus,&:focus-visible':{ outline:'none', background:'rgba(211,47,47,0.15)' },
                               '& .MuiTouchRipple-root':{ display:'none' },
-                              '&.Mui-disabled':{ color:'#d32f2f55' }
+                              '&.Mui-disabled':{ color:'#d32f2f55', background:'rgba(211,47,47,0.05)' }
                             }}
                           >
                             <PictureAsPdf fontSize="inherit" />
