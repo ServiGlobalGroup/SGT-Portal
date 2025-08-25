@@ -61,7 +61,16 @@ async def create_dieta_record(
         raise HTTPException(status_code=422, detail='total_amount no coincide con la suma de subtotales de conceptos')
 
     record = DietaService.create(db, payload)
-    return DietaRecordResponse.model_validate(record, from_attributes=True)
+    # Asegurar carga de usuario para user_name
+    user = target_user
+    full_name = None
+    if user:
+        full_name = getattr(user, 'full_name', None) or (
+            f"{getattr(user,'first_name','').strip()} {getattr(user,'last_name','').strip()}".strip() or None
+        )
+    resp = DietaRecordResponse.model_validate(record, from_attributes=True)
+    resp.user_name = full_name
+    return resp
 
 @router.get('/', response_model=List[DietaRecordResponse])
 async def list_dietas(
@@ -78,7 +87,18 @@ async def list_dietas(
     if role_value == 'TRABAJADOR':
         user_id = getattr(current_user, 'id')
     records = DietaService.list(db, user_id, start_date, end_date, worker_type, order_number)
-    return [DietaRecordResponse.model_validate(r, from_attributes=True) for r in records]
+    resp_list: List[DietaRecordResponse] = []
+    for r in records:
+        user = getattr(r, 'user', None)
+        full_name = None
+        if user:
+            full_name = getattr(user, 'full_name', None) or (
+                f"{getattr(user,'first_name','').strip()} {getattr(user,'last_name','').strip()}".strip() or None
+            )
+        item = DietaRecordResponse.model_validate(r, from_attributes=True)
+        item.user_name = full_name
+        resp_list.append(item)
+    return resp_list
 
 @router.get('/{record_id}', response_model=DietaRecordResponse)
 async def get_dieta_record(
@@ -92,4 +112,10 @@ async def get_dieta_record(
     role_value = str(getattr(current_user.role, 'value', current_user.role))
     if role_value == 'TRABAJADOR' and record.user_id != getattr(current_user, 'id'):
         raise HTTPException(status_code=403, detail='No autorizado')
-    return DietaRecordResponse.model_validate(record, from_attributes=True)
+    resp = DietaRecordResponse.model_validate(record, from_attributes=True)
+    user = getattr(record, 'user', None)
+    if user:
+        resp.user_name = getattr(user, 'full_name', None) or (
+            f"{getattr(user,'first_name','').strip()} {getattr(user,'last_name','').strip()}".strip() or None
+        )
+    return resp

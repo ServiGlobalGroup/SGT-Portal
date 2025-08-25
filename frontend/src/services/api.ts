@@ -367,11 +367,14 @@ export const dietasAPI = {
     concepts: { code: string; label: string; quantity: number; rate: number; subtotal: number; }[];
     notes?: string;
   }): Promise<DietaRecord> => api.post('/api/dietas/', data).then(r=>r.data),
-  list: (params?: { user_id?: number; start_month?: string; end_month?: string; worker_type?: string; order_number?: string; }) => {
+  list: (params?: { user_id?: number; start_month?: string; end_month?: string; start_date?: string; end_date?: string; worker_type?: string; order_number?: string; }) => {
     const sp = new URLSearchParams();
     if (params?.user_id) sp.append('user_id', String(params.user_id));
-    if (params?.start_month) sp.append('start_month', params.start_month);
-    if (params?.end_month) sp.append('end_month', params.end_month);
+    // Compatibilidad anterior
+    if (params?.start_month) sp.append('start_date', params.start_month);
+    if (params?.end_month) sp.append('end_date', params.end_month);
+    if (params?.start_date) sp.append('start_date', params.start_date);
+    if (params?.end_date) sp.append('end_date', params.end_date);
     if (params?.worker_type) sp.append('worker_type', params.worker_type);
     if (params?.order_number) sp.append('order_number', params.order_number);
     return api.get(`/api/dietas/?${sp.toString()}`).then(r=>r.data as DietaRecord[]);

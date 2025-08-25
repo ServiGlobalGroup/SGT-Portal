@@ -22,5 +22,19 @@ class DietaRecord(Base):
 
     user = relationship("User")
 
+    @property
+    def user_name(self):
+        """Nombre completo derivado del usuario relacionado.
+        Se usa en las respuestas para no depender de lógica adicional en la API.
+        """
+        try:
+            u = getattr(self, 'user', None)
+            if not u:
+                return None
+            # full_name property ya existe en User
+            return getattr(u, 'full_name', None) or f"{getattr(u,'first_name','').strip()} {getattr(u,'last_name','').strip()}".strip() or None
+        except Exception:
+            return None
+
     def __repr__(self):
         return f"<DietaRecord id={self.id} user_id={self.user_id} month={self.month} total={self.total_amount}>"

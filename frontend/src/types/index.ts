@@ -76,6 +76,8 @@ export interface User {
   role: 'MASTER_ADMIN' | 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR';
   department: string;
   position?: string;
+  // Tipo de trabajador (dietas): antiguo / nuevo
+  worker_type?: 'antiguo' | 'nuevo';
   hire_date?: string;
   birth_date?: string;
   address?: string;
