@@ -72,6 +72,13 @@ class UserService:
         # Hashear la contraseña
         hashed_password = UserService.hash_password(user_create.password)
         
+        # Normalizar worker_type solo si rol es TRABAJADOR y valor válido
+        worker_type = (
+            user_create.worker_type
+            if user_create.role == UserRole.TRABAJADOR and user_create.worker_type in ["antiguo", "nuevo"]
+            else "antiguo"
+        )
+
         # Crear el objeto User
         db_user = User(
             dni_nie=user_create.dni_nie,
@@ -82,7 +89,7 @@ class UserService:
             role=user_create.role,
             department=user_create.department,
             position=user_create.position,
-            worker_type=user_create.worker_type if user_create.role == UserRole.TRABAJADOR else 'antiguo',
+            worker_type=worker_type,
             hire_date=user_create.hire_date,
             birth_date=user_create.birth_date,
             address=user_create.address,
@@ -92,21 +99,23 @@ class UserService:
             emergency_contact_phone=user_create.emergency_contact_phone,
             hashed_password=hashed_password,
             is_active=True,
-            is_verified=False
+            is_verified=False,
         )
-        
+
         # Crear la carpeta del usuario
         try:
             user_folder_path = db_user.create_user_folder(settings.user_files_base_path)
-            db_user.user_folder_path = user_folder_path
+            # Asignar ruta sólo si el modelo tiene el atributo (evita advertencias del analizador)
+            if hasattr(db_user, "user_folder_path"):
+                setattr(db_user, "user_folder_path", user_folder_path)
         except Exception as e:
             raise Exception(f"Error creando carpeta de usuario: {str(e)}")
-        
+
         # Guardar en la base de datos
         db.add(db_user)
         db.commit()
         db.refresh(db_user)
-        
+
         return db_user
     
     @staticmethod
@@ -124,9 +133,12 @@ class UserService:
             update_data["hashed_password"] = UserService.hash_password(update_data.pop("password"))
         
         for field, value in update_data.items():
-            if field == 'worker_type' and getattr(db_user, 'role') != UserRole.TRABAJADOR:
-                # Ignorar cambios de worker_type para roles que no son trabajadores
-                continue
+            if field == 'worker_type':
+                # Solo permitir para TRABAJADOR y valores válidos
+                if getattr(db_user, 'role') != UserRole.TRABAJADOR:
+                    continue
+                if value not in ['antiguo', 'nuevo']:
+                    continue
             setattr(db_user, field, value)
         
         db.commit()
@@ -139,75 +151,70 @@ class UserService:
         db_user = UserService.get_user_by_id(db, user_id)
         if not db_user:
             return False
-        
-        db_user.is_active = False
+        setattr(db_user, 'is_active', False)
         db.commit()
         return True
-    
+
     @staticmethod
     def activate_user(db: Session, user_id: int) -> bool:
         """Activa un usuario"""
         db_user = UserService.get_user_by_id(db, user_id)
         if not db_user:
             return False
-        
-        db_user.is_active = True
+        setattr(db_user, 'is_active', True)
         db.commit()
         return True
-    
+
     @staticmethod
     def verify_user_email(db: Session, user_id: int) -> bool:
         """Marca el email de un usuario como verificado"""
         db_user = UserService.get_user_by_id(db, user_id)
         if not db_user:
             return False
-        
-        db_user.is_verified = True
+        setattr(db_user, 'is_verified', True)
         db.commit()
         return True
-    
+
     @staticmethod
     def get_users_by_department(db: Session, department: str) -> List[User]:
         """Obtiene todos los usuarios de un departamento"""
         return db.query(User).filter(User.department == department).all()
-    
+
     @staticmethod
     def get_users_by_role(db: Session, role: UserRole) -> List[User]:
         """Obtiene todos los usuarios de un rol específico"""
         return db.query(User).filter(User.role == role).all()
-    
+
     @staticmethod
     def change_password(db: Session, user_id: int, new_password: str) -> bool:
         """Cambia la contraseña de un usuario"""
         db_user = UserService.get_user_by_id(db, user_id)
         if not db_user:
             return False
-        
-        # Hashear la nueva contraseña
         hashed_password = UserService.hash_password(new_password)
-        db_user.hashed_password = hashed_password
-        
+        setattr(db_user, 'hashed_password', hashed_password)
         try:
             db.commit()
             return True
         except Exception:
             db.rollback()
             return False
-    
+
     @staticmethod
     def delete_user_permanently(db: Session, user_id: int) -> bool:
         """Elimina un usuario permanentemente de la base de datos y su carpeta"""
         db_user = UserService.get_user_by_id(db, user_id)
         if not db_user:
             return False
-        
         try:
-            # Eliminar la carpeta del usuario antes de eliminarlo de la BD
+            from app.models.dieta import DietaRecord  # import local para evitar ciclos
+            has_dietas = db.query(DietaRecord.id).filter(DietaRecord.user_id == user_id).limit(1).first()
+            if has_dietas:
+                print(f"No se puede borrar usuario {user_id}: registros de dietas existentes")
+                return False
             folder_deleted = db_user.delete_user_folder(settings.user_files_base_path)
             if not folder_deleted:
                 print(f"Advertencia: No se pudo eliminar la carpeta del usuario {db_user.dni_nie}")
-            
-            # Eliminar el usuario de la base de datos
             db.delete(db_user)
             db.commit()
             return True

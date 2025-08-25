@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { TrafficData, VacationRequest, Document, TrafficFolder, TrafficDocument, PayrollDocument, PayrollStats, User } from '../types';
+import type { TrafficData, VacationRequest, Document, TrafficFolder, TrafficDocument, PayrollDocument, PayrollStats, User, DietaRecord } from '../types';
 
 // Usar variable de entorno en Vite para configurar el backend en dev/prod
 const envUrl = (import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined;
@@ -354,6 +354,29 @@ export const usersAPI = {
   getUserStats: () => 
   // Endpoint corregido: el backend expone /api/users/stats/summary
   api.get('/api/users/stats/summary').then(res => res.data),
+};
+
+// API Dietas
+export const dietasAPI = {
+  createRecord: (data: {
+    user_id: number;
+    worker_type: string;
+    order_number?: string;
+    month: string;
+    total_amount: number;
+    concepts: { code: string; label: string; quantity: number; rate: number; subtotal: number; }[];
+    notes?: string;
+  }): Promise<DietaRecord> => api.post('/api/dietas/', data).then(r=>r.data),
+  list: (params?: { user_id?: number; start_month?: string; end_month?: string; worker_type?: string; order_number?: string; }) => {
+    const sp = new URLSearchParams();
+    if (params?.user_id) sp.append('user_id', String(params.user_id));
+    if (params?.start_month) sp.append('start_month', params.start_month);
+    if (params?.end_month) sp.append('end_month', params.end_month);
+    if (params?.worker_type) sp.append('worker_type', params.worker_type);
+    if (params?.order_number) sp.append('order_number', params.order_number);
+    return api.get(`/api/dietas/?${sp.toString()}`).then(r=>r.data as DietaRecord[]);
+  },
+  get: (id: number): Promise<DietaRecord> => api.get(`/api/dietas/${id}`).then(r=>r.data)
 };
 
 // API para archivos de usuario

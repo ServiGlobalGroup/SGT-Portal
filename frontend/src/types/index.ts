@@ -149,3 +149,25 @@ export interface OrderDocument {
   uploaded_date: string;
   email_attachment_name: string;
 }
+
+// ---- Dietas ----
+export interface DietaConcept {
+  code: string;
+  label: string;
+  quantity: number;
+  rate: number;
+  subtotal: number;
+}
+
+export interface DietaRecord {
+  id: number;
+  user_id: number;
+  worker_type: string;
+  order_number?: string;
+  month: string;
+  total_amount: number;
+  concepts: DietaConcept[];
+  notes?: string;
+  created_at: string;
+  user_name?: string;
+}

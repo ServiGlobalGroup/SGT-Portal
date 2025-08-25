@@ -95,6 +95,7 @@ class UserList(BaseModel):
     department: str
     position: Optional[str] = None
     role: UserRole
+    worker_type: str = Field(..., pattern="^(antiguo|nuevo)$")
     is_active: bool
     last_login: Optional[datetime] = None
     created_at: datetime

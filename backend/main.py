@@ -10,7 +10,7 @@ BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
-from app.api import dashboard, traffic, vacations, documents, payroll, orders, profile, settings, users, auth, user_files, documentation, activity
+from app.api import dashboard, traffic, vacations, documents, payroll, orders, profile, settings, users, auth, user_files, documentation, activity, dietas
 from app.database.connection import check_database_connection
 from app.middleware.maintenance import MaintenanceMiddleware
 from app.config import settings as app_settings
@@ -43,6 +43,7 @@ app.include_router(orders.router, tags=["orders"])
 app.include_router(profile.router, prefix="/api", tags=["profile"])
 app.include_router(settings.router, prefix="/api", tags=["settings"])
 app.include_router(activity.router, prefix="/api/activity", tags=["activity"]) 
+app.include_router(dietas.router, prefix="/api/dietas", tags=["dietas"]) 
 
 # Nota: la ruta raíz '/' será servida por el fallback de la SPA si existe el build
 

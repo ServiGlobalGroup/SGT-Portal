@@ -202,3 +202,35 @@ class UploadHistoryResponse(BaseModel):
     """Respuesta del historial de subidas"""
     items: List[UploadHistoryItem]
     total: int
+
+# -------------------- Dietas --------------------
+class DietaConcept(BaseModel):
+    code: str
+    label: str
+    quantity: float  # permitir 0.5 (media)
+    rate: float
+    subtotal: float
+
+class DietaRecordCreate(BaseModel):
+    user_id: int
+    worker_type: str
+    order_number: str  # obligatorio: OC / Albarán
+    month: str  # YYYY-MM-DD
+    concepts: List[DietaConcept]
+    total_amount: float
+    notes: str | None = None
+
+class DietaRecordResponse(BaseModel):
+    id: int
+    user_id: int
+    worker_type: str
+    order_number: str | None
+    month: str  # YYYY-MM-DD
+    total_amount: float
+    concepts: List[DietaConcept]
+    notes: str | None
+    created_at: datetime
+    user_name: str | None = None
+
+    class Config:
+        from_attributes = True
