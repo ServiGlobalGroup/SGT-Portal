@@ -235,73 +235,50 @@ export const Sidebar: React.FC<SidebarProps> = ({
         }}
       />
       <Toolbar sx={{ 
-        minHeight: { xs: '64px !important', sm: '80px !important' }, 
-        flexDirection: 'column', 
-        justifyContent: 'center', 
-        gap: 2,
-        position: 'relative',
+        minHeight: { xs: '90px !important', sm: '100px !important' }, 
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        gap: 1.2,
+        pt: 1.5,
+        pb: 1,
       }}>
-        {/* Botón de toggle - movido a esquina superior derecha */}
         {!isMobile && (
           <IconButton
             onClick={handleToggle}
             disableRipple
+            aria-label={isCollapsed ? 'Expandir menú' : 'Colapsar menú'}
             sx={{
-              position: 'absolute',
-              top: 8,
-              right: 8,
-              color: '#ffffff',
-              boxShadow: 'none',
-              border: 'none',
-              outline: 'none',
-              '&:hover': {
-                color: '#ffffff',
-                backgroundColor: 'rgba(0, 0, 0, 0.1)',
-                borderRadius: '8px',
-                boxShadow: 'none',
-              },
-              '&:focus': {
-                outline: 'none',
-                boxShadow: 'none',
-              },
-              '&:active': {
-                outline: 'none',
-                boxShadow: 'none',
-                transform: 'none',
-              },
-              '&.Mui-focusVisible': {
-                outline: 'none',
-                boxShadow: 'none',
-              },
-              transition: 'all 0.2s ease',
+              bgcolor: 'rgba(255,255,255,0.12)',
+              color: '#fff',
+              width: 42,
+              height: 42,
+              borderRadius: '14px',
+              boxShadow: '0 3px 10px rgba(0,0,0,0.25)',
+              backdropFilter: 'blur(6px)',
+              border: '1px solid rgba(255,255,255,0.25)',
+              '&:hover': { bgcolor: 'rgba(255,255,255,0.2)' },
+              transition: 'all .25s',
+              flexShrink: 0,
             }}
           >
             {isCollapsed ? <MenuOpen /> : <Close />}
           </IconButton>
         )}
-
-        {/* Logo centrado */}
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '100%' }}>
+        {/* Logo debajo del botón sin superposición */}
+        <Box sx={{ mt: 0.5, width: '100%', display:'flex', justifyContent:'center' }}>
           {(!isCollapsed || isMobile) && (
-            <Box
-              sx={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                p: 1,
-                pt: 2, // Espacio extra para el botón
-              }}
-            >
+            <Box sx={{ p:0.5 }}>
               <Box
                 component="img"
                 src="/images/logosgt.webp"
                 alt="Grupo SGT"
                 sx={{
-                  height: 45,
+                  height: 48,
                   width: 'auto',
                   maxWidth: '180px',
                   objectFit: 'contain',
-                  filter: 'drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3))',
+                  filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.35))',
                 }}
               />
             </Box>
