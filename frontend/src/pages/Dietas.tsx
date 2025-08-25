@@ -6,9 +6,18 @@ import { usersAPI } from '../services/api';
 import type { User } from '../types';
 import { calculateDietas, DIETA_RATES, DietaConceptInput, DietaCalculationResult, findKilometerRangeAntiguo } from '../config/dietas';
 import { dietasAPI } from '../services/api';
-import { Add, Delete, Calculate, RestaurantMenu, History, FiberNew, Close, ArrowUpward, ArrowDownward, PictureAsPdf, ArrowDropDown } from '@mui/icons-material';
+import { Add, Delete, Calculate, RestaurantMenu, History, FiberNew, Close, ArrowUpward, ArrowDownward, PictureAsPdf, ArrowDropDown, Map, ArrowRightAlt, Flag, TripOrigin, Close as CloseIcon, Undo } from '@mui/icons-material';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+
+// Declaraciones suaves para evitar errores de TS si no se tienen @types/google.maps instalados
+// Se pueden reemplazar instalando: npm i -D @types/google.maps
+// y eliminando este bloque.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+declare global {
+  // eslint-disable-next-line no-var
+  var google: any; // simplificado
+}
 
 interface ConceptRow extends DietaConceptInput { tempId: string; }
 
@@ -19,115 +28,182 @@ interface DietaRecordRow {
   order_number?: string;
   month: string;
   total_amount: number;
-  concepts: { code: string; label: string; quantity: number; rate: number; subtotal: number }[];
   created_at: string;
+  concepts: { code:string; label:string; quantity:number; rate:number; subtotal:number; }[];
   user_name?: string;
 }
 
-// Icono Excel SVG inline reutilizable
-const ExcelIcon: React.FC<{ size?: number }> = ({ size = 18 }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect x="3" y="4" width="13" height="16" rx="2" fill="#1D6F42" />
-    <path d="M16 6H19C19.5523 6 20 6.44772 20 7V17C20 17.5523 19.5523 18 19 18H16" stroke="#1D6F42" strokeWidth="2" strokeLinejoin="round"/>
-    <path d="M8.25 15L10.5 11.5L8.25 8H10.05L11.4 10.41L12.75 8H14.55L12.3 11.5L14.55 15H12.75L11.4 12.59L10.05 15H8.25Z" fill="white" />
+// Icono Excel inline para evitar imports adicionales pesados
+const ExcelIcon: React.FC<{ size?: number }> = ({ size=20 }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 4h7l5 5v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V5a1 1 0 0 1 1-1z" />
+    <path d="M11 4v5h5" />
+    <path d="m10 12 4 6" />
+    <path d="m14 12-4 6" />
   </svg>
 );
 
 export const Dietas: React.FC = () => {
   const { user } = useAuth();
-  const canView = hasPermission(user, Permission.VIEW_DIETAS);
+  const canView = !!user && hasPermission(user, Permission.VIEW_DIETAS);
+
+  // Estado pestañas
+  const [tab, setTab] = useState<number>(0);
+
+  // Conductores
   const [drivers, setDrivers] = useState<User[]>([]);
+  const [loadingDrivers, setLoadingDrivers] = useState(false);
   const [selectedDriver, setSelectedDriver] = useState<User | null>(null);
-  const [orderNumber, setOrderNumber] = useState('');
-  const [month, setMonth] = useState(() => new Date().toISOString().slice(0,10));
+
+  // Cálculo
   const [rows, setRows] = useState<ConceptRow[]>([]);
-  const [kmsAntiguo, setKmsAntiguo] = useState<string>('');
+  const [orderNumber, setOrderNumber] = useState('');
+  const [month, setMonth] = useState<string>(new Date().toISOString().slice(0,10));
+  const [kmsAntiguo, setKmsAntiguo] = useState('');
   const [result, setResult] = useState<DietaCalculationResult | null>(null);
+  const [flashSaved, setFlashSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
-  const [showSuccess, setShowSuccess] = useState(false);
-  const [flashSaved, setFlashSaved] = useState(false);
-  const [loadingDrivers, setLoadingDrivers] = useState(false);
+
+  // Extras
   const [openExtraDialog, setOpenExtraDialog] = useState(false);
   const [extraName, setExtraName] = useState('');
   const [extraAmount, setExtraAmount] = useState('');
-  const [extraMode, setExtraMode] = useState<'fijo'|'porcentaje'>('fijo');
   const [extraPercent, setExtraPercent] = useState('');
+  const [extraMode, setExtraMode] = useState<'fijo'|'porcentaje'>('fijo');
   const [extraPercentBase, setExtraPercentBase] = useState<'kmTramo'|'totalBase'>('kmTramo');
 
-  // Tab state
-  const [tab, setTab] = useState(0);
-
-  // Listado registros
+  // Registros
   const [records, setRecords] = useState<DietaRecordRow[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(false);
   const [filterUser, setFilterUser] = useState<User | null>(null);
-  const [filterWorkerType, setFilterWorkerType] = useState<string>('');
+  const [filterWorkerType, setFilterWorkerType] = useState('');
   const [filterOrder, setFilterOrder] = useState('');
-  const [filterStart, setFilterStart] = useState<string>('');
-  const [filterEnd, setFilterEnd] = useState<string>('');
+  const [filterStart, setFilterStart] = useState('');
+  const [filterEnd, setFilterEnd] = useState('');
   const [recordDetail, setRecordDetail] = useState<DietaRecordRow | null>(null);
   const [selectedRecordId, setSelectedRecordId] = useState<number | null>(null);
-  // Columnas dinámicas para registros
-  type RecordColumn = { key: string; label: string; width?: number; align?: 'left'|'right'|'center' };
-  const [recordColumns, setRecordColumns] = useState<RecordColumn[]>([
-    { key: 'index', label: '#', width: 50 },
-    { key: 'month', label: 'Fecha', width: 110 },
-    { key: 'user_name', label: 'Conductor', width: 190 },
-    { key: 'worker_type', label: 'Tipo', width: 90 },
-    { key: 'order_number', label: 'OC / Albarán', width: 130 },
-    { key: 'created_at', label: 'Creado', width: 170 },
-    { key: 'total_amount', label: 'Total (€)', width: 110, align: 'right' },
-    // "concepts" será flexible para ocupar espacio restante
-    { key: 'concepts', label: 'Conceptos' },
+
+  // Export
+  const exportingRef = useRef(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+
+  // Grid registros columnas y orden
+  const [recordColumns, setRecordColumns] = useState<any[]>([
+    { key:'index', label:'#', width:55, align:'right' },
+    { key:'month', label:'Fecha', width:110 },
+    { key:'user_name', label:'Conductor', width:200 },
+    { key:'worker_type', label:'Tipo', width:110, align:'center' },
+    { key:'order_number', label:'OC / Albarán', width:140 },
+    { key:'total_amount', label:'Total (€)', width:110, align:'right' },
+    { key:'concepts', label:'Conceptos' },
+    { key:'created_at', label:'Creado', width:170 }
   ]);
   const [sortKey, setSortKey] = useState<string>('');
   const [sortDir, setSortDir] = useState<'asc'|'desc'|''>('');
-  const [resizingKey, setResizingKey] = useState<string | null>(null);
-  const [resizeStartX, setResizeStartX] = useState(0);
-  const [resizeStartWidth, setResizeStartWidth] = useState(0);
-  const RECORD_GRID_HEIGHT = 560; // altura fija deseada para el grid de registros
   const recordsBodyRef = useRef<HTMLDivElement | null>(null);
-  const exportingRef = useRef(false);
-  // Handlers redimensionar columnas
-  const beginResize = (e: React.MouseEvent, key: string, currentWidth?: number) => {
-    e.preventDefault(); e.stopPropagation();
-    if(!currentWidth) return; // sólo con width fijo
-    setResizingKey(key);
-    setResizeStartX(e.clientX);
-    setResizeStartWidth(currentWidth);
+  const RECORD_GRID_HEIGHT = 500; // altura fija de la zona scroll registros (aumentada desde 420)
+
+  // Rutas
+  const [routeOrigin, setRouteOrigin] = useState('');
+  const [routeDestination, setRouteDestination] = useState('');
+  const [nextStop, setNextStop] = useState('');
+  const [waypoints, setWaypoints] = useState<string[]>([]);
+  const [routeStats, setRouteStats] = useState<any | null>(null);
+  const [mapsError, setMapsError] = useState<string | null>(null);
+  const [mapReady, setMapReady] = useState(false);
+  const mapDivRef = useRef<HTMLDivElement | null>(null);
+  const gMapRef = useRef<any>(null);
+  const directionsServiceRef = useRef<any>(null);
+  const directionsRendererRef = useRef<any>(null);
+  const autocompleteServiceRef = useRef<any>(null); // servicio de sugerencias
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const searchBoxRef = useRef<any>(null);
+
+  // Sugerencias de lugares (origen/destino)
+  const [originOptions, setOriginOptions] = useState<string[]>([]);
+  const [destinationOptions, setDestinationOptions] = useState<string[]>([]);
+  const originDebounceRef = useRef<number | null>(null);
+  const destinationDebounceRef = useRef<number | null>(null);
+
+  // Funciones auxiliares que usan estado deben estar después de las definiciones anteriores
+
+  const beginResize = (e: React.MouseEvent, key:string, width:number) => {
+    e.preventDefault();
+    const startX = e.clientX; const startWidth = width;
+    const move = (ev:MouseEvent) => {
+      const delta = ev.clientX - startX;
+      setRecordColumns(prev => prev.map(c => c.key===key ? { ...c, width: Math.max(55, startWidth + delta) } : c));
+    };
+    const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+    window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
   };
 
-  useEffect(() => {
-    if(!resizingKey) return;
-    const onMove = (e: MouseEvent) => {
-      e.preventDefault();
-      const delta = e.clientX - resizeStartX;
-      setRecordColumns(prev => prev.map(c => c.key===resizingKey ? { ...c, width: Math.max(50, Math.min(900, (resizeStartWidth||0)+delta)) } : c));
-    };
-    const onUp = () => { setResizingKey(null); };
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp, { once:true });
-    return () => { window.removeEventListener('mousemove', onMove); };
-  }, [resizingKey, resizeStartX, resizeStartWidth]);
-
-
-  const autoSizeColumnPrecise = (key: string) => {
-    // Solo autoajustar columnas con width explícito (no la flexible concepts)
-    const target = recordColumns.find(c => c.key===key);
-    if(!target) return;
+  const autoSizeColumnPrecise = (key:string) => {
     requestAnimationFrame(() => {
       const headerSpan = document.querySelector(`[data-col-header-inner="${key}"]`) as HTMLElement | null;
       const cellSpans = Array.from(document.querySelectorAll(`[data-col-cell-inner="${key}"]`)) as HTMLElement[];
       if(!headerSpan && cellSpans.length===0) return;
       let max = headerSpan ? headerSpan.scrollWidth : 0;
       cellSpans.forEach(el => { const w = el.scrollWidth; if(w>max) max = w; });
-      // Añadir padding horizontal de la celda + margen iconos sort/resize
-      const padding = 16 /* izquierda */ + 16 /* derecha */ + 8 /* icono sort espacio */;
+      const padding = 16 + 16 + 8;
       const finalWidth = Math.min(900, Math.max(55, max + padding));
       setRecordColumns(prev => prev.map(c => c.key===key ? { ...c, width: finalWidth } : c));
     });
   };
+
+  // Cadena visual de puntos (origen, waypoints, destino)
+  const renderRouteChain = () => {
+    const nodes: { type:'origin'|'wp'|'dest'; label:string; index?:number }[] = [];
+    if(routeOrigin) nodes.push({ type:'origin', label: routeOrigin });
+    waypoints.forEach((w,i)=> nodes.push({ type:'wp', label:w, index:i+1 }));
+    if(routeDestination) nodes.push({ type:'dest', label: routeDestination });
+    if(nodes.length===0) return null;
+    return (
+      <Box sx={{ display:'flex', flexWrap:'wrap', alignItems:'center', gap:1, mb:1 }}>
+        {nodes.map((n,i)=> (
+          <React.Fragment key={n.type+String(i)+n.label}>
+            <Box
+              sx={{
+                display:'flex', alignItems:'center', gap:0.6,
+                px:1.4, py:0.6,
+                borderRadius:999,
+                fontSize:12,
+                fontWeight:600,
+                letterSpacing:.4,
+                maxWidth:220,
+                background: n.type==='origin'? '#eef5ff' : (n.type==='dest'? '#ffeef2' : '#f4f6f8'),
+                border:'1px solid',
+                borderColor: n.type==='origin'? '#90caf9' : (n.type==='dest'? '#f48fb1' : '#d0d4d8'),
+                color:'#2d3135',
+                textTransform:'uppercase',
+                position:'relative'
+              }}
+              title={n.label}
+            >
+              {n.type==='origin' && <TripOrigin sx={{ fontSize:14, color:'#1976d2' }} />}
+              {n.type==='dest' && <Flag sx={{ fontSize:14, color:'#d32f2f' }} />}
+              {n.type==='wp' && <Typography component="span" sx={{ fontSize:10, fontWeight:700, color:'text.secondary' }}>T{n.index}</Typography>}
+              <Typography component="span" sx={{ fontSize:11, fontWeight:600, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{n.label}</Typography>
+              {n.type==='wp' && n.index===waypoints.length && (
+                <IconButton size="small" onClick={()=>{ // eliminar sólo el último waypoint
+                  setRouteStats(null);
+                  setWaypoints(prev=> prev.slice(0,-1));
+                }} sx={{ position:'absolute', top:-6, right:-6, p:0.3, bgcolor:'#fff', boxShadow:'0 0 0 1px #cfd3d7', '&:hover':{ bgcolor:'#f5f5f5' } }}>
+                  <CloseIcon sx={{ fontSize:12 }} />
+                </IconButton>
+              )}
+            </Box>
+            {i < nodes.length-1 && <ArrowRightAlt sx={{ fontSize:18, color:'text.disabled' }} />}
+          </React.Fragment>
+        ))}
+      </Box>
+    );
+  };
+  // --- AQUI CONTINUA EL CODIGO ORIGINAL DEL COMPONENTE ---
+  // El resto del archivo (a partir de buildExportRows etc.) ya contiene lógica y JSX.
+  // Simplemente retornamos al final. (El contenido existente debajo permanecerá dentro del componente)
+
   const formatDate = (iso:string) => {
     if(!iso) return '';
     const d = new Date(iso);
@@ -314,6 +390,146 @@ export const Dietas: React.FC = () => {
     const tramo = findKilometerRangeAntiguo(kms);
     return tramo?.amount || 0;
   }, [driverType, kmsAntiguo]);
+
+  // Carga perezosa del script sólo cuando se entra a la pestaña Rutas
+  const initializeMap = () => {
+    try {
+      if(!mapDivRef.current) return;
+      gMapRef.current = new (window as any).google.maps.Map(mapDivRef.current, {
+        center:{lat:40.4168,lng:-3.7038},
+        zoom:6,
+        mapTypeControl:false,
+        fullscreenControl:true,
+        streetViewControl:false,
+      });
+      directionsServiceRef.current = new (window as any).google.maps.DirectionsService();
+      directionsRendererRef.current = new (window as any).google.maps.DirectionsRenderer({ map: gMapRef.current });
+      try { autocompleteServiceRef.current = new (window as any).google.maps.places.AutocompleteService(); } catch {}
+      if(searchInputRef.current){
+        searchBoxRef.current = new (window as any).google.maps.places.SearchBox(searchInputRef.current);
+        searchBoxRef.current.addListener('places_changed', () => {
+          const places = searchBoxRef.current.getPlaces();
+          if(!places || !places.length) return;
+          const bounds = new (window as any).google.maps.LatLngBounds();
+            places.forEach((p:any)=>{ if(p.geometry?.viewport) bounds.union(p.geometry.viewport); else if(p.geometry?.location) bounds.extend(p.geometry.location); });
+          gMapRef.current.fitBounds(bounds);
+        });
+      }
+      setMapReady(true);
+      // Si ya tenemos una ruta previa, volver a dibujarla
+      if(routeStats && routeOrigin && routeDestination){
+        setTimeout(()=> { handleCalculateRoute(); }, 50);
+      }
+    } catch(e:any){ setMapsError('Error inicializando mapa'); }
+  };
+
+  useEffect(()=>{
+    if(tab!==2) return;
+    // Si ya listo y referencia válida, sólo forzar resize
+    if(mapReady && gMapRef.current){
+      setTimeout(()=>{ try { (window as any).google?.maps?.event?.trigger(gMapRef.current,'resize'); } catch {}; }, 120);
+      return;
+    }
+    const apiKey = import.meta.env.VITE_GOOGLE_MAPS_KEY;
+    if(!apiKey){ setMapsError('Falta VITE_GOOGLE_MAPS_KEY en .env'); return; }
+    const existing = document.querySelector('script[data-gmaps]') as HTMLScriptElement | null;
+    if(existing){
+      if((window as any).google?.maps) initializeMap(); else existing.addEventListener('load', initializeMap, { once:true });
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.async = true; script.defer = true; script.dataset.gmaps='1';
+    script.onload = initializeMap;
+    script.onerror = ()=> setMapsError('No se pudo cargar Google Maps');
+    document.head.appendChild(script);
+  },[tab]);
+
+  // Al salir de la pestaña, liberar referencias para asegurar reinicio limpio y evitar mapa gris
+  useEffect(()=>{
+    if(tab!==2){
+      try { directionsRendererRef.current?.setMap(null); } catch {}
+      gMapRef.current = null;
+      directionsRendererRef.current = null;
+      directionsServiceRef.current = null;
+      setMapReady(false);
+    }
+  },[tab]);
+
+  // Buscar sugerencias para origen
+  useEffect(()=>{
+    if(tab!==2) return; // solo pestaña rutas
+    if(!autocompleteServiceRef.current) return;
+    if(originDebounceRef.current) window.clearTimeout(originDebounceRef.current);
+    if(!routeOrigin || routeOrigin.trim().length < 3){ setOriginOptions([]); return; }
+    originDebounceRef.current = window.setTimeout(()=>{
+      autocompleteServiceRef.current.getPlacePredictions({ input: routeOrigin, componentRestrictions:{ country:['es','pt','fr'] } }, (preds:any[], status:string)=>{
+        if(status!=='OK' || !Array.isArray(preds)){ setOriginOptions([]); return; }
+        setOriginOptions(preds.map(p=>p.description));
+      });
+    }, 280);
+    return ()=>{ if(originDebounceRef.current) window.clearTimeout(originDebounceRef.current); };
+  },[routeOrigin, tab]);
+
+  // Buscar sugerencias para destino
+  useEffect(()=>{
+    if(tab!==2) return; // solo pestaña rutas
+    if(!autocompleteServiceRef.current) return;
+    if(destinationDebounceRef.current) window.clearTimeout(destinationDebounceRef.current);
+    if(!routeDestination || routeDestination.trim().length < 3){ setDestinationOptions([]); return; }
+    destinationDebounceRef.current = window.setTimeout(()=>{
+      autocompleteServiceRef.current.getPlacePredictions({ input: routeDestination, componentRestrictions:{ country:['es','pt','fr'] } }, (preds:any[], status:string)=>{
+        if(status!=='OK' || !Array.isArray(preds)){ setDestinationOptions([]); return; }
+        setDestinationOptions(preds.map(p=>p.description));
+      });
+    }, 280);
+    return ()=>{ if(destinationDebounceRef.current) window.clearTimeout(destinationDebounceRef.current); };
+  },[routeDestination, tab]);
+
+  const handleCalculateRoute = () => {
+    if(!routeOrigin.trim() || !routeDestination.trim()){
+      setMapsError('Origen y destino requeridos'); return;
+    }
+    if(!directionsServiceRef.current || !directionsRendererRef.current){
+      setMapsError('Mapa no listo'); return;
+    }
+    const cleanWaypoints = waypoints.map(w=>w.trim()).filter(Boolean);
+    setMapsError(null);
+    directionsServiceRef.current.route({
+      origin: routeOrigin,
+      destination: routeDestination,
+      waypoints: cleanWaypoints.map(w=>({ location:w, stopover:true })),
+      optimizeWaypoints: false,
+  travelMode: (window as any).google.maps.TravelMode.DRIVING,
+  avoidTolls: true // forzar rutas sin peajes
+    }).then((res:any)=>{
+      directionsRendererRef.current.setDirections(res);
+      const route = res.routes?.[0];
+      if(route?.bounds) gMapRef.current.fitBounds(route.bounds);
+      const legs = route?.legs || [];
+      if(legs.length){
+        let totalMeters=0; let totalSeconds=0;
+        const legStats = legs.map((lg:any)=>{
+          totalMeters += lg.distance?.value || 0;
+          totalSeconds += lg.duration?.value || 0;
+          const kmNumber = (lg.distance?.value || 0)/1000;
+          return {
+            from: (lg.start_address||'').split(',')[0],
+            to: (lg.end_address||'').split(',')[0],
+            distance: lg.distance?.text || '',
+            duration: lg.duration?.text || '',
+            kmNumber
+          };
+        });
+  const km = totalMeters/1000;
+  const totalDistance = (km > 100 ? km.toFixed(0) : km.toFixed(2)) + ' km';
+        const hours = Math.floor(totalSeconds/3600);
+        const mins = Math.round((totalSeconds%3600)/60);
+        const totalDuration = hours ? `${hours} h ${mins} min` : `${mins} min`;
+  setRouteStats({ totalDistance, totalDuration, totalKmNumber: km, legs: legStats });
+      }
+    }).catch(()=> setMapsError('No se pudo calcular la ruta'));
+  };
 
   const handleAddRow = () => {
     setRows(prev => [...prev, { tempId: crypto.randomUUID(), code: availableRates[0]?.code || '', quantity: 1 }]);
@@ -532,6 +748,9 @@ export const Dietas: React.FC = () => {
               <ToggleButton value={1}>
                 <History sx={{ mr:0.6, fontSize:18 }} /> Registros
               </ToggleButton>
+              <ToggleButton value={2}>
+                <Map sx={{ mr:0.6, fontSize:18 }} /> Rutas
+              </ToggleButton>
             </ToggleButtonGroup>
           </Box>
         </Box>
@@ -721,6 +940,177 @@ export const Dietas: React.FC = () => {
             </Box>
           </Paper>
         </Fade>
+        )}
+
+        {tab === 2 && (
+          <Fade in timeout={600}>
+            <Box>
+              <Box sx={{
+                display:'grid',
+                gridTemplateColumns:{ xs:'1fr', lg: routeStats ? '1fr 360px' : '1fr' },
+                gap:{ xs:2, md:3 }
+              }}>
+                {/* Columna principal */}
+                <Paper sx={{ p:{ xs:2, sm:3 }, borderRadius:4, border:'1px solid #e2e5e9', background:'linear-gradient(180deg,#ffffff,#fafafa)' }}>
+                  <Typography variant="h6" sx={{ fontWeight:700, mb:2 }}>Rutas</Typography>
+                  {/* Fila 1: origen/destino */}
+                  <Box sx={{ display:'flex', flexWrap:'wrap', gap:2, mb:2 }}>
+                    <Autocomplete
+                      freeSolo
+                      options={originOptions}
+                      value={routeOrigin}
+                      onInputChange={(_,val)=> setRouteOrigin(val)}
+                      onChange={(_,val)=>{ if(typeof val==='string') setRouteOrigin(val); }}
+                      ListboxProps={{ style:{ maxHeight:260 } }}
+                      noOptionsText={routeOrigin.trim().length<3? 'Escribe 3+ letras' : 'Sin sugerencias'}
+                      renderInput={(params)=>(
+                        <TextField {...params} label="Origen" size="small" placeholder="Ciudad / Dirección" sx={pillFieldSx} />
+                      )}
+                      sx={{ flex:1, minWidth:250 }}
+                    />
+                    <Autocomplete
+                      freeSolo
+                      options={destinationOptions}
+                      value={routeDestination}
+                      onInputChange={(_,val)=> setRouteDestination(val)}
+                      onChange={(_,val)=>{ if(typeof val==='string') setRouteDestination(val); }}
+                      ListboxProps={{ style:{ maxHeight:260 } }}
+                      noOptionsText={routeDestination.trim().length<3? 'Escribe 3+ letras' : 'Sin sugerencias'}
+                      renderInput={(params)=>(
+                        <TextField {...params} label="Destino" size="small" placeholder="Ciudad / Dirección" sx={pillFieldSx} />
+                      )}
+                      sx={{ flex:1, minWidth:250 }}
+                    />
+                    <Button
+                      variant="contained"
+                      onClick={handleCalculateRoute}
+                      disabled={!routeOrigin.trim() || !routeDestination.trim()}
+                      sx={{
+                        alignSelf:'stretch',
+                        minHeight:42,
+                        px:3.2,
+                        borderRadius:999,
+                        fontWeight:700,
+                        background:'linear-gradient(135deg,#501b36 0%,#7d3456 55%,#a15375 100%)',
+                        '&:hover':{ background:'linear-gradient(135deg,#45152d 0%,#6a2949 55%,#8a4766 100%)' }
+                      }}
+                    >Calcular ruta</Button>
+                  </Box>
+                  {/* Fila 2: cadena + add tramo */}
+                  <Box sx={{ display:'flex', flexWrap:'wrap', gap:1.5, alignItems:'center', mb: routeStats? 3 : 2 }}>
+                    <Box sx={{ flex:1, minWidth:260, display:'flex', flexWrap:'wrap', gap:1, alignItems:'center' }}>
+                      {(routeOrigin || routeDestination || waypoints.length>0) && renderRouteChain()}
+                    </Box>
+                    <TextField
+                      size="small"
+                      label="Nuevo tramo"
+                      placeholder="Añadir ciudad"
+                      value={nextStop}
+                      onChange={e=> setNextStop(e.target.value)}
+                      sx={{ ...pillFieldSx, minWidth:200 }}
+                    />
+                    <Tooltip title="Añadir tramo (usa el destino actual como origen)">
+                      <span>
+                        <IconButton
+                          size="small"
+                          disabled={!nextStop.trim() || !routeOrigin.trim() || !routeDestination.trim()}
+                          onClick={()=>{ const val = nextStop.trim(); if(!val) return; setWaypoints(prev=>[...prev, routeDestination]); setRouteDestination(val); setNextStop(''); setRouteStats(null); }}
+                          sx={{
+                            bgcolor: (!nextStop.trim() || !routeOrigin.trim() || !routeDestination.trim())? '#e0e0e0' : '#5c2340',
+                            color:'#fff',
+                            '&:hover':{ bgcolor:'#471a31' },
+                            border:'1px solid #4f1e35'
+                          }}
+                        >
+                          <Add fontSize="inherit" />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
+                    {waypoints.length>0 && (
+                      <Tooltip title="Eliminar último tramo">
+                        <IconButton
+                          size="small"
+                          onClick={()=>{ setRouteStats(null); setWaypoints(prev=>{ if(!prev.length) return prev; const cp=[...prev]; const last=cp.pop() as string; setRouteDestination(last); return cp; }); }}
+                          sx={{ bgcolor:'#ffefdd', color:'#c77000', '&:hover':{ bgcolor:'#ffdcba' }, border:'1px solid #f2c38a' }}
+                        >
+                          <Undo fontSize="inherit" />
+                        </IconButton>
+                      </Tooltip>
+                    )}
+                  </Box>
+                  {mapsError && <Alert severity="error" sx={{ mb:2 }}>{mapsError}</Alert>}
+                  <Box sx={{ height:680, borderRadius:3, overflow:'hidden', border:'1px solid #d0d4d8', position:'relative', background:'#eef1f4' }}>
+                    {!mapReady && !mapsError && (
+                      <Box sx={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                        <Typography variant="body2" fontWeight={500}>Cargando mapa...</Typography>
+                      </Box>
+                    )}
+                    <Box ref={mapDivRef} sx={{ position:'absolute', inset:0 }} />
+                  </Box>
+                </Paper>
+                {/* Panel lateral resumen */}
+                {routeStats && (
+                  <Paper sx={{
+                    p:3,
+                    borderRadius:5,
+                    border:'1px solid #e2e5e9',
+                    background:'#ffffff',
+                    display:'flex',
+                    flexDirection:'column',
+                    gap:2,
+                    position:'relative'
+                  }}>
+                    <Box sx={{ display:'flex', alignItems:'flex-start', gap:1 }}>
+                      <Box>
+                        <Typography sx={{ fontWeight:700, fontSize:34, lineHeight:1, letterSpacing:.5 }}>{routeStats.totalDistance}</Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ fontWeight:500 }}>{routeStats.totalDuration}</Typography>
+                      </Box>
+                      <Box sx={{ ml:'auto', display:'flex', flexDirection:'column', gap:1 }}>
+                        <Tooltip title="Abrir en Google Maps">
+                          <span>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              disabled={!routeOrigin.trim() || !routeDestination.trim()}
+                              onClick={()=>{ const url=`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(routeOrigin)}&destination=${encodeURIComponent(routeDestination)}&travelmode=driving`; window.open(url,'_blank','noopener'); }}
+                              startIcon={<Map sx={{ fontSize:18 }} />}
+                              sx={{ borderRadius:999, fontWeight:600, textTransform:'none' }}
+                            >Maps</Button>
+                          </span>
+                        </Tooltip>
+                        <Tooltip title={selectedDriver ? (driverType==='antiguo'? 'Copiar km a cálculo':'Sólo conductores antiguos') : 'Selecciona un conductor'}>
+                          <span>
+                            <Button
+                              size="small"
+                              variant="contained"
+                              disabled={!selectedDriver || driverType!=='antiguo'}
+                              onClick={()=>{ if(!(selectedDriver && driverType==='antiguo')) return; setKmsAntiguo(()=>{ const km=routeStats.totalKmNumber; return km>100?km.toFixed(0):km.toFixed(1); }); setTab(0); }}
+                              sx={{ borderRadius:999, fontWeight:600, textTransform:'none' }}
+                            >Usar km</Button>
+                          </span>
+                        </Tooltip>
+                      </Box>
+                    </Box>
+                    <Divider />
+                    <Box sx={{ display:'flex', flexDirection:'column', gap:1, overflowY:'auto' }}>
+                      {routeStats.legs.map((lg:any,i:number)=>(
+                        <Paper key={i} elevation={0} sx={{ p:1.1, border:'1px solid #eceff2', borderRadius:3, display:'flex', flexDirection:'column', gap:0.4, background:'#fafbfc' }}>
+                          <Box sx={{ display:'flex', alignItems:'center', gap:1 }}>
+                            <Chip size="small" label={`T${i+1}`} sx={{ fontSize:10, height:20 }} />
+                            <Typography sx={{ fontSize:13, fontWeight:600, flex:1, minWidth:120 }}>{lg.from} → {lg.to}</Typography>
+                          </Box>
+                          <Box sx={{ display:'flex', gap:1 }}>
+                            <Chip size="small" label={lg.distance} sx={{ fontSize:10, height:20 }} />
+                            <Chip size="small" label={lg.duration} sx={{ fontSize:10, height:20 }} />
+                          </Box>
+                        </Paper>
+                      ))}
+                    </Box>
+                  </Paper>
+                )}
+              </Box>
+            </Box>
+          </Fade>
         )}
 
         {tab === 1 && (
