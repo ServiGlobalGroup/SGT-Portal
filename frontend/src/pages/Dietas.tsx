@@ -109,15 +109,19 @@ export const Dietas: React.FC = () => {
   const [routeDestination, setRouteDestination] = useState('');
   const [nextStop, setNextStop] = useState('');
   const [waypoints, setWaypoints] = useState<string[]>([]);
-  const [routeStats, setRouteStats] = useState<any | null>(null);
-  const [routeUsesTolls, setRouteUsesTolls] = useState(false); // indica si la ruta final incluye peajes (fallback)
+  const [routeStats, setRouteStats] = useState<any | null>(null); // ruta seleccionada
+  const [routeOptions, setRouteOptions] = useState<any[]>([]); // opciones disponibles (sin peaje base + peaje rápidas)
+  const [selectedRouteIdx, setSelectedRouteIdx] = useState(0);
   const [disabledLegs, setDisabledLegs] = useState<Set<number>>(new Set()); // tramos descontados
   const [mapsError, setMapsError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const mapDivRef = useRef<HTMLDivElement | null>(null);
   const gMapRef = useRef<any>(null);
   const directionsServiceRef = useRef<any>(null);
-  const directionsRendererRef = useRef<any>(null);
+  // Polilíneas múltiples clicables para seleccionar ruta
+  const routePolylinesRef = useRef<any[]>([]);
+  const startMarkerRef = useRef<any>(null);
+  const endMarkerRef = useRef<any>(null);
   const autocompleteServiceRef = useRef<any>(null); // servicio de sugerencias
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const searchBoxRef = useRef<any>(null);
@@ -414,8 +418,7 @@ export const Dietas: React.FC = () => {
         fullscreenControl:true,
         streetViewControl:false,
       });
-      directionsServiceRef.current = new (window as any).google.maps.DirectionsService();
-      directionsRendererRef.current = new (window as any).google.maps.DirectionsRenderer({ map: gMapRef.current });
+  directionsServiceRef.current = new (window as any).google.maps.DirectionsService();
       try { autocompleteServiceRef.current = new (window as any).google.maps.places.AutocompleteService(); } catch {}
       if(searchInputRef.current){
         searchBoxRef.current = new (window as any).google.maps.places.SearchBox(searchInputRef.current);
@@ -460,9 +463,13 @@ export const Dietas: React.FC = () => {
   // Al salir de la pestaña, liberar referencias para asegurar reinicio limpio y evitar mapa gris
   useEffect(()=>{
     if(tab!==2){
-      try { directionsRendererRef.current?.setMap(null); } catch {}
+  try {
+        routePolylinesRef.current.forEach(p=>{ try { p.setMap(null); } catch {} });
+        routePolylinesRef.current=[];
+        if(startMarkerRef.current) { try { startMarkerRef.current.setMap(null); } catch {}; startMarkerRef.current=null; }
+        if(endMarkerRef.current) { try { endMarkerRef.current.setMap(null); } catch {}; endMarkerRef.current=null; }
+      } catch {}
       gMapRef.current = null;
-      directionsRendererRef.current = null;
       directionsServiceRef.current = null;
       setMapReady(false);
     }
@@ -517,18 +524,14 @@ export const Dietas: React.FC = () => {
     if(!routeOrigin.trim() || !routeDestination.trim()){
       setMapsError('Origen y destino requeridos'); return;
     }
-    if(!directionsServiceRef.current || !directionsRendererRef.current){
+  if(!directionsServiceRef.current || !gMapRef.current){
       setMapsError('Mapa no listo'); return;
     }
     const cleanWaypoints = waypoints.map(w=>w.trim()).filter(Boolean);
     setMapsError(null);
-    const buildStats = (res:any) => {
-      directionsRendererRef.current.setDirections(res);
-      const route = res.routes?.[0];
-      if(route?.bounds) gMapRef.current.fitBounds(route.bounds);
-      const legs = route?.legs || [];
-      if(!legs.length){ setMapsError('Sin resultados'); return; }
+  const buildOption = (route:any, usesTolls:boolean, parentResult:any) => {
       let totalMeters=0; let totalSeconds=0;
+      const legs = route?.legs || [];
       const legStats = legs.map((lg:any)=>{
         totalMeters += lg.distance?.value || 0;
         totalSeconds += lg.duration?.value || 0;
@@ -542,37 +545,137 @@ export const Dietas: React.FC = () => {
           secNumber: lg.duration?.value || 0,
         };
       });
+      let crossesPortugal=false, crossesFrance=false;
+      try {
+        const spainBox = { minLat:27.5, maxLat:43.95, minLng:-18.5, maxLng:4.7 };
+        const portugalBox = { minLat:36.5, maxLat:42.3, minLng:-9.7, maxLng:-6.0 };
+        const franceBox = { minLat:42.3, maxLat:51.5, minLng:-5.5, maxLng:8.7 };
+        const path = route?.overview_path || [];
+        for(const pt of path){
+          const lat = typeof pt.lat === 'function'? pt.lat(): pt.lat;
+          const lng = typeof pt.lng === 'function'? pt.lng(): pt.lng;
+          const inPortugal = lat>=portugalBox.minLat && lat<=portugalBox.maxLat && lng>=portugalBox.minLng && lng<=portugalBox.maxLng;
+          const inFranceCandidate = lat>=franceBox.minLat && lat<=franceBox.maxLat && lng>=franceBox.minLng && lng<=franceBox.maxLng;
+          const inSpain = lat>=spainBox.minLat && lat<=spainBox.maxLat && lng>=spainBox.minLng && lng<=spainBox.maxLng;
+          if(inPortugal) crossesPortugal = true;
+          if(inFranceCandidate && !inSpain) crossesFrance = true;
+          if(crossesPortugal && crossesFrance) break;
+        }
+      } catch {}
       const km = totalMeters/1000;
       const totalDistance = (km > 100 ? km.toFixed(0) : km.toFixed(2)) + ' km';
       const hours = Math.floor(totalSeconds/3600);
       const mins = Math.round((totalSeconds%3600)/60);
       const totalDuration = hours ? `${hours} h ${mins} min` : `${mins} min`;
-      setRouteStats({ totalDistance, totalDuration, totalKmNumber: km, legs: legStats });
-      setDisabledLegs(new Set()); // reset al recalcular
+  return { totalDistance, totalDuration, totalKmNumber: km, legs: legStats, crossesPortugal, crossesFrance, usesTolls, meters: totalMeters, seconds: totalSeconds, route, parentResult };
     };
-
-    // Intento sin peajes
-    directionsServiceRef.current.route({
+    const reqBase = {
       origin: routeOrigin,
       destination: routeDestination,
       waypoints: cleanWaypoints.map(w=>({ location:w, stopover:true })),
       optimizeWaypoints: false,
       travelMode: (window as any).google.maps.TravelMode.DRIVING,
-      avoidTolls: true
-    }).then((res:any)=>{ setRouteUsesTolls(false); buildStats(res); })
-      .catch(()=>{
-        // fallback con peajes
-        directionsServiceRef.current.route({
-          origin: routeOrigin,
-          destination: routeDestination,
-          waypoints: cleanWaypoints.map(w=>({ location:w, stopover:true })),
-          optimizeWaypoints: false,
-          travelMode: (window as any).google.maps.TravelMode.DRIVING,
-          avoidTolls: false
-        }).then((res2:any)=>{ setRouteUsesTolls(true); buildStats(res2); })
-          .catch(()=> setMapsError('No se pudo calcular la ruta'));
+      provideRouteAlternatives: true
+    };
+    // Helper para renderizar todas las rutas con estilos diferenciados
+    const drawAllPolylines = (candidates:any[], selected=0) => {
+      // Limpiar anteriores
+      routePolylinesRef.current.forEach(p=>{ try { p.setMap(null); } catch {} });
+      routePolylinesRef.current = [];
+      candidates.forEach((opt, idx)=>{
+        const isSel = idx===selected;
+        const colorBase = opt.usesTolls ? '#ff9800' : '#1e5fb8'; // naranja peaje / azul sin peaje
+        const colorSel = opt.usesTolls ? '#ef6c00' : '#0d47a1'; // tono más intenso al seleccionar
+        const polyline = new (window as any).google.maps.Polyline({
+          map: gMapRef.current,
+          path: opt.route?.overview_path || [],
+          clickable: true,
+            strokeColor: isSel? colorSel : colorBase,
+            strokeOpacity: isSel? 0.95 : 0.40,
+            strokeWeight: isSel? 6 : 4,
+            zIndex: isSel? 70 : 40
+        });
+        polyline.addListener('click', ()=>{
+          setSelectedRouteIdx(idx);
+          setRouteStats(opt);
+          setDisabledLegs(new Set());
+        });
+        routePolylinesRef.current.push(polyline);
       });
+      // Ajustar viewport a la seleccionada
+      try { const sel = candidates[selected]; if(sel?.route?.bounds) gMapRef.current.fitBounds(sel.route.bounds); } catch {}
+      // Colocar marcadores de inicio/fin de la seleccionada
+      placeMarkers(candidates[selected]);
+    };
+
+    const placeMarkers = (opt:any) => {
+      try {
+        const legs = opt?.route?.legs||[];
+        if(!legs.length) return;
+        const startLoc = legs[0].start_location;
+        const endLoc = legs[legs.length-1].end_location;
+        if(startLoc){
+          if(!startMarkerRef.current){
+            startMarkerRef.current = new (window as any).google.maps.Marker({ map:gMapRef.current, position:startLoc, label:'O' });
+          } else startMarkerRef.current.setPosition(startLoc);
+        }
+        if(endLoc){
+          if(!endMarkerRef.current){
+            endMarkerRef.current = new (window as any).google.maps.Marker({ map:gMapRef.current, position:endLoc, label:'D' });
+          } else endMarkerRef.current.setPosition(endLoc);
+        }
+      } catch {}
+    };
+
+    Promise.all([
+      directionsServiceRef.current.route({ ...reqBase, avoidTolls: true }),
+      directionsServiceRef.current.route({ ...reqBase, avoidTolls: false }).catch(()=>null)
+    ]).then(([noTollsRes, tollRes])=>{
+  const noTollsRoutes = (noTollsRes?.routes||[]).map((r:any)=> buildOption(r,false,noTollsRes));
+      if(!noTollsRoutes.length){ setMapsError('Sin ruta sin peajes'); return; }
+      const base = [...noTollsRoutes].sort((a,b)=> a.meters - b.meters)[0];
+      let candidates:any[] = [base];
+      if(tollRes){
+  const tollRoutes = (tollRes.routes||[]).map((r:any)=> buildOption(r,true,tollRes));
+        const faster = tollRoutes
+          .filter((t: any)=> t.seconds < base.seconds)
+          .sort((a: any,b: any)=> a.seconds - b.seconds)
+          .slice(0,2);
+        candidates = [base, ...faster];
+      }
+      setRouteOptions(candidates);
+      setSelectedRouteIdx(0);
+      drawAllPolylines(candidates,0);
+      setRouteStats(base);
+      setDisabledLegs(new Set());
+    }).catch(()=> setMapsError('Error calculando rutas'));
   };
+
+  // Actualizar estilos polilíneas y marcadores al cambiar selección
+  useEffect(()=>{
+    if(!routeOptions.length) return;
+    routePolylinesRef.current.forEach((p, idx)=>{
+      try {
+        const opt = routeOptions[idx];
+        const isSel = idx===selectedRouteIdx;
+        const colorBase = opt.usesTolls ? '#ff9800' : '#1e5fb8';
+        const colorSel = opt.usesTolls ? '#ef6c00' : '#0d47a1';
+        p.setOptions({ strokeColor: isSel?colorSel:colorBase, strokeOpacity: isSel?0.95:0.40, strokeWeight: isSel?6:4, zIndex:isSel?70:40 });
+      } catch {}
+    });
+    try { const sel = routeOptions[selectedRouteIdx]; if(sel?.route?.bounds) gMapRef.current.fitBounds(sel.route.bounds); } catch {}
+    // actualizar marcadores
+    try {
+      const opt = routeOptions[selectedRouteIdx];
+      const legs = opt?.route?.legs||[];
+      if(legs.length){
+        const startLoc = legs[0].start_location;
+        const endLoc = legs[legs.length-1].end_location;
+        if(startLoc){ if(!startMarkerRef.current) startMarkerRef.current = new (window as any).google.maps.Marker({ map:gMapRef.current, position:startLoc, label:'O'}); else startMarkerRef.current.setPosition(startLoc); }
+        if(endLoc){ if(!endMarkerRef.current) endMarkerRef.current = new (window as any).google.maps.Marker({ map:gMapRef.current, position:endLoc, label:'D'}); else endMarkerRef.current.setPosition(endLoc); }
+      }
+    } catch {}
+  }, [selectedRouteIdx, routeOptions]);
 
   // Eliminar tramo (leg). Ajusta origen/destino/waypoints y limpia ruta para recalcular
   // Eliminado removeLeg: ya no se permite borrar tramo desde panel, solo descontar.
@@ -1190,6 +1293,7 @@ export const Dietas: React.FC = () => {
                     </Box>
                   </Box>
                   <Divider />
+                  {/* Lista de opciones de rutas ocultada: selección sólo haciendo clic en la polilínea del mapa */}
                   {routeStats ? (
                     <Box sx={{ display:'flex', flexDirection:'column', gap:1, overflowY:'auto' }}>
           {routeStats.legs.map((lg:any,i:number)=>(
@@ -1277,7 +1381,7 @@ export const Dietas: React.FC = () => {
                                 '& .MuiChip-label':{ px:0.75, pt:'1px' }
                               }}
                             />
-                            {routeUsesTolls ? (
+                            {routeStats.usesTolls ? (
                               <Chip
                                 size="small"
                                 icon={<Toll sx={{ fontSize:14 }} />}
@@ -1316,6 +1420,8 @@ export const Dietas: React.FC = () => {
                           </Box>
                         </Paper>
                       ))}
+                      {/* Chips país */}
+                      {/* Chips de países ocultados según petición */}
                     </Box>
                   ) : (
                     <Box sx={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', textAlign:'center', py:4 }}>
