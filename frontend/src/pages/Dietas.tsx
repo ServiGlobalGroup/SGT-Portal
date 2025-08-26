@@ -6,7 +6,7 @@ import { usersAPI } from '../services/api';
 import type { User } from '../types';
 import { calculateDietas, DIETA_RATES, DietaConceptInput, DietaCalculationResult, findKilometerRangeAntiguo } from '../config/dietas';
 import { dietasAPI } from '../services/api';
-import { Add, Delete, Calculate, RestaurantMenu, History, FiberNew, Close, ArrowUpward, ArrowDownward, PictureAsPdf, ArrowDropDown, Map, ArrowRightAlt, Flag, TripOrigin, Close as CloseIcon, Undo } from '@mui/icons-material';
+import { Add, Delete, Calculate, RestaurantMenu, History, FiberNew, Close, ArrowUpward, ArrowDownward, PictureAsPdf, ArrowDropDown, Map, ArrowRightAlt, Flag, TripOrigin, Close as CloseIcon, Undo, Toll, RemoveCircleOutline, CheckCircle } from '@mui/icons-material';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -110,6 +110,8 @@ export const Dietas: React.FC = () => {
   const [nextStop, setNextStop] = useState('');
   const [waypoints, setWaypoints] = useState<string[]>([]);
   const [routeStats, setRouteStats] = useState<any | null>(null);
+  const [routeUsesTolls, setRouteUsesTolls] = useState(false); // indica si la ruta final incluye peajes (fallback)
+  const [disabledLegs, setDisabledLegs] = useState<Set<number>>(new Set()); // tramos descontados
   const [mapsError, setMapsError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
   const mapDivRef = useRef<HTMLDivElement | null>(null);
@@ -125,6 +127,8 @@ export const Dietas: React.FC = () => {
   const [destinationOptions, setDestinationOptions] = useState<string[]>([]);
   const originDebounceRef = useRef<number | null>(null);
   const destinationDebounceRef = useRef<number | null>(null);
+  const [nextStopOptions, setNextStopOptions] = useState<string[]>([]);
+  const nextStopDebounceRef = useRef<number | null>(null);
 
   // Funciones auxiliares que usan estado deben estar después de las definiciones anteriores
 
@@ -278,6 +282,9 @@ export const Dietas: React.FC = () => {
       transition: 'box-shadow .25s, background .25s',
       px: 1.4,
       minHeight: 42,
+  borderBottom: 'none !important',
+  '&::before, &::after': { display:'none !important' },
+      '&:before, &:after': { display:'none !important' },
       '&:hover': {
         background: '#f5f6f7',
         boxShadow: 'inset 0 0 0 1px #b9bdc1'
@@ -291,6 +298,11 @@ export const Dietas: React.FC = () => {
       '&:hover input::-webkit-input-placeholder': { opacity: .55 }
     },
     '& .MuiOutlinedInput-notchedOutline': { display: 'none' },
+    '& .MuiAutocomplete-root, & .MuiAutocomplete-root *': {
+      '&:before, &:after': { display:'none !important' }
+    },
+    '& .MuiOutlinedInput-root:before, & .MuiOutlinedInput-root:after': { display:'none !important' },
+    '& .MuiInputBase-root.MuiOutlinedInput-root:before, & .MuiInputBase-root.MuiOutlinedInput-root:after': { display:'none !important' },
     '& .MuiInputLabel-root': {
       mt: 0,
       px: 0.6,
@@ -486,6 +498,21 @@ export const Dietas: React.FC = () => {
     return ()=>{ if(destinationDebounceRef.current) window.clearTimeout(destinationDebounceRef.current); };
   },[routeDestination, tab]);
 
+  // Sugerencias para nuevo tramo
+  useEffect(()=>{
+    if(tab!==2) return; // solo rutas
+    if(!autocompleteServiceRef.current) return;
+    if(nextStopDebounceRef.current) window.clearTimeout(nextStopDebounceRef.current);
+    if(!nextStop || nextStop.trim().length < 3){ setNextStopOptions([]); return; }
+    nextStopDebounceRef.current = window.setTimeout(()=>{
+      autocompleteServiceRef.current.getPlacePredictions({ input: nextStop, componentRestrictions:{ country:['es','pt','fr'] } }, (preds:any[], status:string)=>{
+        if(status!=='OK' || !Array.isArray(preds)){ setNextStopOptions([]); return; }
+        setNextStopOptions(preds.map(p=>p.description));
+      });
+    },280);
+    return ()=>{ if(nextStopDebounceRef.current) window.clearTimeout(nextStopDebounceRef.current); };
+  },[nextStop, tab]);
+
   const handleCalculateRoute = () => {
     if(!routeOrigin.trim() || !routeDestination.trim()){
       setMapsError('Origen y destino requeridos'); return;
@@ -495,41 +522,85 @@ export const Dietas: React.FC = () => {
     }
     const cleanWaypoints = waypoints.map(w=>w.trim()).filter(Boolean);
     setMapsError(null);
+    const buildStats = (res:any) => {
+      directionsRendererRef.current.setDirections(res);
+      const route = res.routes?.[0];
+      if(route?.bounds) gMapRef.current.fitBounds(route.bounds);
+      const legs = route?.legs || [];
+      if(!legs.length){ setMapsError('Sin resultados'); return; }
+      let totalMeters=0; let totalSeconds=0;
+      const legStats = legs.map((lg:any)=>{
+        totalMeters += lg.distance?.value || 0;
+        totalSeconds += lg.duration?.value || 0;
+        const kmNumber = (lg.distance?.value || 0)/1000;
+        return {
+          from: (lg.start_address||'').split(',')[0],
+          to: (lg.end_address||'').split(',')[0],
+          distance: lg.distance?.text || '',
+          duration: lg.duration?.text || '',
+          kmNumber,
+          secNumber: lg.duration?.value || 0,
+        };
+      });
+      const km = totalMeters/1000;
+      const totalDistance = (km > 100 ? km.toFixed(0) : km.toFixed(2)) + ' km';
+      const hours = Math.floor(totalSeconds/3600);
+      const mins = Math.round((totalSeconds%3600)/60);
+      const totalDuration = hours ? `${hours} h ${mins} min` : `${mins} min`;
+      setRouteStats({ totalDistance, totalDuration, totalKmNumber: km, legs: legStats });
+      setDisabledLegs(new Set()); // reset al recalcular
+    };
+
+    // Intento sin peajes
     directionsServiceRef.current.route({
       origin: routeOrigin,
       destination: routeDestination,
       waypoints: cleanWaypoints.map(w=>({ location:w, stopover:true })),
       optimizeWaypoints: false,
-  travelMode: (window as any).google.maps.TravelMode.DRIVING,
-  avoidTolls: true // forzar rutas sin peajes
-    }).then((res:any)=>{
-      directionsRendererRef.current.setDirections(res);
-      const route = res.routes?.[0];
-      if(route?.bounds) gMapRef.current.fitBounds(route.bounds);
-      const legs = route?.legs || [];
-      if(legs.length){
-        let totalMeters=0; let totalSeconds=0;
-        const legStats = legs.map((lg:any)=>{
-          totalMeters += lg.distance?.value || 0;
-          totalSeconds += lg.duration?.value || 0;
-          const kmNumber = (lg.distance?.value || 0)/1000;
-          return {
-            from: (lg.start_address||'').split(',')[0],
-            to: (lg.end_address||'').split(',')[0],
-            distance: lg.distance?.text || '',
-            duration: lg.duration?.text || '',
-            kmNumber
-          };
-        });
-  const km = totalMeters/1000;
-  const totalDistance = (km > 100 ? km.toFixed(0) : km.toFixed(2)) + ' km';
-        const hours = Math.floor(totalSeconds/3600);
-        const mins = Math.round((totalSeconds%3600)/60);
-        const totalDuration = hours ? `${hours} h ${mins} min` : `${mins} min`;
-  setRouteStats({ totalDistance, totalDuration, totalKmNumber: km, legs: legStats });
-      }
-    }).catch(()=> setMapsError('No se pudo calcular la ruta'));
+      travelMode: (window as any).google.maps.TravelMode.DRIVING,
+      avoidTolls: true
+    }).then((res:any)=>{ setRouteUsesTolls(false); buildStats(res); })
+      .catch(()=>{
+        // fallback con peajes
+        directionsServiceRef.current.route({
+          origin: routeOrigin,
+          destination: routeDestination,
+          waypoints: cleanWaypoints.map(w=>({ location:w, stopover:true })),
+          optimizeWaypoints: false,
+          travelMode: (window as any).google.maps.TravelMode.DRIVING,
+          avoidTolls: false
+        }).then((res2:any)=>{ setRouteUsesTolls(true); buildStats(res2); })
+          .catch(()=> setMapsError('No se pudo calcular la ruta'));
+      });
   };
+
+  // Eliminar tramo (leg). Ajusta origen/destino/waypoints y limpia ruta para recalcular
+  // Eliminado removeLeg: ya no se permite borrar tramo desde panel, solo descontar.
+
+  // Toggle de descontar (activar/desactivar) un tramo sin eliminarlo
+  const toggleDiscountLeg = (index:number) => {
+    setDisabledLegs(prev => {
+      const next = new Set(prev);
+      if(next.has(index)) next.delete(index); else next.add(index);
+      return next;
+    });
+  };
+
+  // Totales activos (excluyendo tramos descontados)
+  const activeTotals = useMemo(()=>{
+    if(!routeStats) return { distanceLabel:'—', durationLabel:'Calcule una ruta', kmNumber:0 };
+    const active = routeStats.legs.filter((_:any,i:number)=> !disabledLegs.has(i));
+    if(active.length === routeStats.legs.length){
+      return { distanceLabel: routeStats.totalDistance, durationLabel: routeStats.totalDuration, kmNumber: routeStats.totalKmNumber };
+    }
+    const totalKm = active.reduce((a:number,l:any)=> a + (l.kmNumber||0),0);
+    const totalSec = active.reduce((a:number,l:any)=> a + (l.secNumber||0),0);
+    const distanceLabel = (totalKm > 100 ? totalKm.toFixed(0) : totalKm.toFixed(2)) + ' km';
+    const hours = Math.floor(totalSec/3600);
+    const mins = Math.round((totalSec%3600)/60);
+    const durationLabel = hours ? `${hours} h ${mins} min` : `${mins} min`;
+    return { distanceLabel, durationLabel, kmNumber: totalKm };
+  }, [routeStats, disabledLegs]);
 
   const handleAddRow = () => {
     setRows(prev => [...prev, { tempId: crypto.randomUUID(), code: availableRates[0]?.code || '', quantity: 1 }]);
@@ -947,7 +1018,7 @@ export const Dietas: React.FC = () => {
             <Box>
               <Box sx={{
                 display:'grid',
-                gridTemplateColumns:{ xs:'1fr', lg: routeStats ? '1fr 360px' : '1fr' },
+                gridTemplateColumns:{ xs:'1fr', lg: '1fr 360px' },
                 gap:{ xs:2, md:3 }
               }}>
                 {/* Columna principal */}
@@ -955,7 +1026,7 @@ export const Dietas: React.FC = () => {
                   <Typography variant="h6" sx={{ fontWeight:700, mb:2 }}>Rutas</Typography>
                   {/* Fila 1: origen/destino */}
                   <Box sx={{ display:'flex', flexWrap:'wrap', gap:2, mb:2 }}>
-                    <Autocomplete
+          <Autocomplete
                       freeSolo
                       options={originOptions}
                       value={routeOrigin}
@@ -964,7 +1035,7 @@ export const Dietas: React.FC = () => {
                       ListboxProps={{ style:{ maxHeight:260 } }}
                       noOptionsText={routeOrigin.trim().length<3? 'Escribe 3+ letras' : 'Sin sugerencias'}
                       renderInput={(params)=>(
-                        <TextField {...params} label="Origen" size="small" placeholder="Ciudad / Dirección" sx={pillFieldSx} />
+            <TextField {...params} variant="outlined" label="Origen" size="small" placeholder="Ciudad / Dirección" sx={pillFieldSx} />
                       )}
                       sx={{ flex:1, minWidth:250 }}
                     />
@@ -977,7 +1048,7 @@ export const Dietas: React.FC = () => {
                       ListboxProps={{ style:{ maxHeight:260 } }}
                       noOptionsText={routeDestination.trim().length<3? 'Escribe 3+ letras' : 'Sin sugerencias'}
                       renderInput={(params)=>(
-                        <TextField {...params} label="Destino" size="small" placeholder="Ciudad / Dirección" sx={pillFieldSx} />
+            <TextField {...params} variant="outlined" label="Destino" size="small" placeholder="Ciudad / Dirección" sx={pillFieldSx} />
                       )}
                       sx={{ flex:1, minWidth:250 }}
                     />
@@ -1001,13 +1072,18 @@ export const Dietas: React.FC = () => {
                     <Box sx={{ flex:1, minWidth:260, display:'flex', flexWrap:'wrap', gap:1, alignItems:'center' }}>
                       {(routeOrigin || routeDestination || waypoints.length>0) && renderRouteChain()}
                     </Box>
-                    <TextField
-                      size="small"
-                      label="Nuevo tramo"
-                      placeholder="Añadir ciudad"
+          <Autocomplete
+                      freeSolo
+                      options={nextStopOptions}
                       value={nextStop}
-                      onChange={e=> setNextStop(e.target.value)}
-                      sx={{ ...pillFieldSx, minWidth:200 }}
+                      onInputChange={(_,val)=> setNextStop(val)}
+                      onChange={(_,val)=> { if(typeof val==='string') setNextStop(val); }}
+                      ListboxProps={{ style:{ maxHeight:260 } }}
+                      noOptionsText={nextStop.trim().length<3? 'Escribe 3+ letras' : 'Sin sugerencias'}
+                      renderInput={(params)=>(
+            <TextField {...params} variant="outlined" label="Nuevo tramo" size="small" placeholder="Añadir ciudad" sx={{ ...pillFieldSx, minWidth:200 }} />
+                      )}
+                      sx={{ minWidth:200 }}
                     />
                     <Tooltip title="Añadir tramo (usa el destino actual como origen)">
                       <span>
@@ -1048,66 +1124,207 @@ export const Dietas: React.FC = () => {
                     <Box ref={mapDivRef} sx={{ position:'absolute', inset:0 }} />
                   </Box>
                 </Paper>
-                {/* Panel lateral resumen */}
-                {routeStats && (
-                  <Paper sx={{
-                    p:3,
-                    borderRadius:5,
-                    border:'1px solid #e2e5e9',
-                    background:'#ffffff',
-                    display:'flex',
-                    flexDirection:'column',
-                    gap:2,
-                    position:'relative'
-                  }}>
-                    <Box sx={{ display:'flex', alignItems:'flex-start', gap:1 }}>
-                      <Box>
-                        <Typography sx={{ fontWeight:700, fontSize:34, lineHeight:1, letterSpacing:.5 }}>{routeStats.totalDistance}</Typography>
-                        <Typography variant="body2" color="text.secondary" sx={{ fontWeight:500 }}>{routeStats.totalDuration}</Typography>
-                      </Box>
-                      <Box sx={{ ml:'auto', display:'flex', flexDirection:'column', gap:1 }}>
-                        <Tooltip title="Abrir en Google Maps">
-                          <span>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              disabled={!routeOrigin.trim() || !routeDestination.trim()}
-                              onClick={()=>{ const url=`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(routeOrigin)}&destination=${encodeURIComponent(routeDestination)}&travelmode=driving`; window.open(url,'_blank','noopener'); }}
-                              startIcon={<Map sx={{ fontSize:18 }} />}
-                              sx={{ borderRadius:999, fontWeight:600, textTransform:'none' }}
-                            >Maps</Button>
-                          </span>
-                        </Tooltip>
-                        <Tooltip title={selectedDriver ? (driverType==='antiguo'? 'Copiar km a cálculo':'Sólo conductores antiguos') : 'Selecciona un conductor'}>
-                          <span>
-                            <Button
-                              size="small"
-                              variant="contained"
-                              disabled={!selectedDriver || driverType!=='antiguo'}
-                              onClick={()=>{ if(!(selectedDriver && driverType==='antiguo')) return; setKmsAntiguo(()=>{ const km=routeStats.totalKmNumber; return km>100?km.toFixed(0):km.toFixed(1); }); setTab(0); }}
-                              sx={{ borderRadius:999, fontWeight:600, textTransform:'none' }}
-                            >Usar km</Button>
-                          </span>
-                        </Tooltip>
-                      </Box>
+                {/* Panel lateral resumen siempre visible */}
+                <Paper sx={{
+                  pt:4,
+                  pl:5,
+                  pr:3,
+                  pb:3,
+                  borderRadius:5,
+                  border:'1px solid #e2e5e9',
+                  background:'#ffffff',
+                  display:'flex',
+                  flexDirection:'column',
+                  gap:2,
+                  position:'relative'
+                }}>
+                  <Box sx={{ display:'flex', alignItems:'center', gap:2, minHeight:68 }}>
+                    <Box sx={{ display:'flex', flexDirection:'column', justifyContent:'center' }}>
+                      <Typography sx={{ fontWeight:700, fontSize:34, lineHeight:1, letterSpacing:.5 }}>
+                        {activeTotals.distanceLabel}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary" sx={{ fontWeight:500, mt:0.5 }}>
+                        {activeTotals.durationLabel}
+                      </Typography>
                     </Box>
-                    <Divider />
+                    <Box sx={{ ml:'auto', display:'flex', flexDirection:'column', gap:1 }}>
+                      <Tooltip title={routeOrigin.trim() && routeDestination.trim() ? 'Abrir en Google Maps' : 'Introduce origen y destino'}>
+                        <span>
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            disabled={!routeOrigin.trim() || !routeDestination.trim()}
+                            onClick={()=>{ const url=`https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(routeOrigin)}&destination=${encodeURIComponent(routeDestination)}&travelmode=driving`; window.open(url,'_blank','noopener'); }}
+                            startIcon={<Map sx={{ fontSize:18 }} />}
+                            sx={{
+                              borderRadius:999,
+                              fontWeight:600,
+                              textTransform:'none',
+                              minWidth:120,
+                              px:2.2,
+                              justifyContent:'center',
+                              height:36
+                            }}
+                          >Maps</Button>
+                        </span>
+                      </Tooltip>
+                      <Tooltip title={selectedDriver ? (driverType==='antiguo'? (routeStats? 'Copiar km a cálculo':'Calcule una ruta primero') :'Sólo conductores antiguos') : 'Selecciona un conductor'}>
+                        <span>
+                          <Button
+                            size="small"
+                            variant="contained"
+                            disabled={!routeStats || !selectedDriver || driverType!=='antiguo'}
+                            onClick={()=>{ if(!(routeStats && selectedDriver && driverType==='antiguo')) return; setKmsAntiguo(()=>{ const km=activeTotals.kmNumber; return km>100?km.toFixed(0):km.toFixed(1); }); setTab(0); }}
+                            sx={{
+                              borderRadius:999,
+                              fontWeight:600,
+                              textTransform:'none',
+                              minWidth:120,
+                              px:2.2,
+                              justifyContent:'center',
+                              height:36
+                            }}
+                          >Usar km</Button>
+                        </span>
+                      </Tooltip>
+                    </Box>
+                  </Box>
+                  <Divider />
+                  {routeStats ? (
                     <Box sx={{ display:'flex', flexDirection:'column', gap:1, overflowY:'auto' }}>
-                      {routeStats.legs.map((lg:any,i:number)=>(
-                        <Paper key={i} elevation={0} sx={{ p:1.1, border:'1px solid #eceff2', borderRadius:3, display:'flex', flexDirection:'column', gap:0.4, background:'#fafbfc' }}>
+          {routeStats.legs.map((lg:any,i:number)=>(
+                        <Paper
+                          key={i}
+                          elevation={0}
+                          sx={{
+                            p:1.1,
+                            border:'1px solid #eceff2',
+                            borderRadius:3,
+                            display:'flex',
+                            flexDirection:'column',
+                            gap:0.55,
+            background:'#fbfcfd',
+            opacity: disabledLegs.has(i)? 0.45 : 1
+                          }}
+                        >
                           <Box sx={{ display:'flex', alignItems:'center', gap:1 }}>
-                            <Chip size="small" label={`T${i+1}`} sx={{ fontSize:10, height:20 }} />
-                            <Typography sx={{ fontSize:13, fontWeight:600, flex:1, minWidth:120 }}>{lg.from} → {lg.to}</Typography>
+                            <Chip
+                              size="small"
+                              label={`T${i+1}`}
+                              sx={{
+                                fontSize:10,
+                                height:22,
+                                px:0.9,
+                                borderRadius:10,
+                                fontWeight:600,
+                                letterSpacing:'.5px',
+                                bgcolor:'rgba(80,27,54,0.15)',
+                                color:'#40142a',
+                                border:'1px solid rgba(80,27,54,0.25)',
+                                backdropFilter:'blur(4px)',
+                                '& .MuiChip-label':{ px:0.5, pt:'1px' }
+                              }}
+                            />
+                            <Typography sx={{ fontSize:13, fontWeight:600, flex:1, minWidth:120, textDecoration: disabledLegs.has(i)?'line-through':'none' }}>{lg.from} → {lg.to}</Typography>
+                            <Tooltip title={disabledLegs.has(i)?'Incluir tramo':'Descontar tramo'}>
+                              <IconButton
+                                size="small"
+                                disableRipple
+                                onClick={()=>toggleDiscountLeg(i)}
+                                sx={{
+                                  color: disabledLegs.has(i)? '#2e7d32':'#5c2340',
+                                  p:0.4,
+                                  ml:1,
+                                  background:'transparent',
+                                  boxShadow:'none',
+                                  '&:hover':{ background:'transparent', color: disabledLegs.has(i)? '#1b5e20':'#7d3456' },
+                                  '&:active':{ transform:'scale(.9)' },
+                                  '&:focus':{ outline:'none' }
+                                }}
+                              >
+                                {disabledLegs.has(i)? <CheckCircle sx={{ fontSize:20 }} /> : <RemoveCircleOutline sx={{ fontSize:20 }} />}
+                              </IconButton>
+                            </Tooltip>
                           </Box>
-                          <Box sx={{ display:'flex', gap:1 }}>
-                            <Chip size="small" label={lg.distance} sx={{ fontSize:10, height:20 }} />
-                            <Chip size="small" label={lg.duration} sx={{ fontSize:10, height:20 }} />
+                          <Box sx={{ display:'flex', gap:0.7, flexWrap:'wrap' }}>
+                            <Chip
+                              size="small"
+                              label={lg.distance}
+                              sx={{
+                                fontSize:10,
+                                height:22,
+                                px:1,
+                                borderRadius:12,
+                                fontWeight:600,
+                                bgcolor:'linear-gradient(135deg, rgba(80,27,54,0.07), rgba(80,27,54,0.04))',
+                                color:'#3a1828',
+                                border:'1px solid rgba(80,27,54,0.18)',
+                                '& .MuiChip-label':{ px:0.75, pt:'1px' }
+                              }}
+                            />
+                            <Chip
+                              size="small"
+                              label={lg.duration}
+                              sx={{
+                                fontSize:10,
+                                height:22,
+                                px:1,
+                                borderRadius:12,
+                                fontWeight:600,
+                                bgcolor:'linear-gradient(135deg, rgba(80,27,54,0.07), rgba(80,27,54,0.04))',
+                                color:'#3a1828',
+                                border:'1px solid rgba(80,27,54,0.18)',
+                                '& .MuiChip-label':{ px:0.75, pt:'1px' }
+                              }}
+                            />
+                            {routeUsesTolls ? (
+                              <Chip
+                                size="small"
+                                icon={<Toll sx={{ fontSize:14 }} />}
+                                label="Peaje"
+                                sx={{
+                                  fontSize:10,
+                                  height:22,
+                                  pl:0.4,
+                                  pr:0.9,
+                                  borderRadius:12,
+                                  fontWeight:600,
+                                  bgcolor:'rgba(183,59,26,0.12)',
+                                  color:'#862e13',
+                                  border:'1px solid rgba(183,59,26,0.35)',
+                                  '& .MuiChip-icon':{ ml:'-2px', color:'inherit' },
+                                  '& .MuiChip-label':{ pt:'1px' }
+                                }}
+                              />
+                            ) : (
+                              <Chip
+                                size="small"
+                                label="Sin peaje"
+                                sx={{
+                                  fontSize:10,
+                                  height:22,
+                                  px:1,
+                                  borderRadius:12,
+                                  fontWeight:600,
+                                  bgcolor:'rgba(46,125,50,0.14)',
+                                  color:'#2e7d32',
+                                  border:'1px solid rgba(46,125,50,0.35)',
+                                  '& .MuiChip-label':{ pt:'1px' }
+                                }}
+                              />
+                            )}
                           </Box>
                         </Paper>
                       ))}
                     </Box>
-                  </Paper>
-                )}
+                  ) : (
+                    <Box sx={{ flex:1, display:'flex', alignItems:'center', justifyContent:'center', textAlign:'center', py:4 }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ maxWidth:200, fontWeight:500 }}>
+                        Introduce origen y destino y pulsa "Calcular ruta" para ver el resumen aquí.
+                      </Typography>
+                    </Box>
+                  )}
+                </Paper>
               </Box>
             </Box>
           </Fade>
