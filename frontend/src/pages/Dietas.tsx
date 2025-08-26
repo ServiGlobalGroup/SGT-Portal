@@ -5,7 +5,7 @@ import { hasPermission, Permission } from '../utils/permissions';
 import { usersAPI } from '../services/api';
 import type { User } from '../types';
 import { calculateDietas, DIETA_RATES, DietaConceptInput, DietaCalculationResult, findKilometerRangeAntiguo } from '../config/dietas';
-import { dietasAPI } from '../services/api';
+import { dietasAPI, distancierosAPI } from '../services/api';
 import { Add, Delete, Calculate, RestaurantMenu, History, FiberNew, Close, ArrowUpward, ArrowDownward, PictureAsPdf, ArrowDropDown, Map, ArrowRightAlt, Flag, TripOrigin, Close as CloseIcon, Undo, Toll, RemoveCircleOutline, CheckCircle } from '@mui/icons-material';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -49,6 +49,69 @@ export const Dietas: React.FC = () => {
 
   // Estado pestañas
   const [tab, setTab] = useState<number>(0);
+
+  // Distancieros
+  const [distGrouped, setDistGrouped] = useState<{ client_name:string; total_routes:number; active_routes:number; min_km:number; max_km:number; }[]>([]);
+  const [loadingDist, setLoadingDist] = useState(false);
+  const [selectedClient, setSelectedClient] = useState<string>('');
+  // Para pestaña cálculo: selección cliente/ruta
+  const [calcClient, setCalcClient] = useState<string>('');
+  const [calcRoutes, setCalcRoutes] = useState<{ id:number; destination:string; km:number; active:boolean; }[]>([]);
+  const [loadingCalcRoutes, setLoadingCalcRoutes] = useState(false);
+  const [calcRouteFilter, setCalcRouteFilter] = useState('');
+  const [selectedCalcRoute, setSelectedCalcRoute] = useState<{ id:number; destination:string; km:number;} | null>(null);
+  const [clientRoutes, setClientRoutes] = useState<{ id:number; client_name:string; destination:string; destination_normalized:string; km:number; active:boolean; notes?:string; created_at:string; updated_at:string; }[]>([]);
+  const [loadingRoutes, setLoadingRoutes] = useState(false);
+  const [showOnlyActiveRoutes, setShowOnlyActiveRoutes] = useState(true);
+  const [routesTotal, setRoutesTotal] = useState(0);
+  const ROUTES_LIMIT = 200;
+  const routesBodyRef = useRef<HTMLDivElement | null>(null);
+
+  // (efecto se reubicará tras definición de driverType)
+
+  // Carga inicial rutas con paginación
+  useEffect(()=>{
+    if(tab!==3 || !selectedClient) return;
+  setClientRoutes([]); setRoutesTotal(0);
+    setLoadingRoutes(true);
+    distancierosAPI.listRoutes(selectedClient, { onlyActive: showOnlyActiveRoutes, limit: ROUTES_LIMIT, offset:0 })
+      .then(data => { setClientRoutes(data.items); setRoutesTotal(data.total); })
+      .catch(()=>{})
+      .finally(()=> setLoadingRoutes(false));
+  },[tab, selectedClient, showOnlyActiveRoutes]);
+
+  // Carga rutas para cálculo (lista compacta)
+  useEffect(()=>{
+    if(!calcClient) { setCalcRoutes([]); setSelectedCalcRoute(null); return; }
+    setLoadingCalcRoutes(true);
+    distancierosAPI.listRoutes(calcClient, { onlyActive: true, limit: 1000, offset:0 })
+      .then(data => {
+        const simple = data.items.map((r:any)=>({ id:r.id, destination:r.destination, km:r.km, active:r.active }));
+        setCalcRoutes(simple);
+        // Si había ruta seleccionada de otro cliente, limpiar
+        setSelectedCalcRoute(null);
+      })
+      .catch(()=>{})
+      .finally(()=> setLoadingCalcRoutes(false));
+  },[calcClient]);
+
+  // Scroll infinito
+  useEffect(()=>{
+    if(tab!==3) return; const el = routesBodyRef.current; if(!el) return;
+    const handler = () => {
+      if(loadingRoutes) return; if(clientRoutes.length >= routesTotal) return;
+      if(el.scrollTop + el.clientHeight >= el.scrollHeight - 60){
+        const nextOffset = clientRoutes.length;
+        setLoadingRoutes(true);
+        distancierosAPI.listRoutes(selectedClient, { onlyActive: showOnlyActiveRoutes, limit: ROUTES_LIMIT, offset: nextOffset })
+          .then(data => { setClientRoutes(prev=>[...prev, ...data.items]); setRoutesTotal(data.total); })
+          .catch(()=>{})
+          .finally(()=> setLoadingRoutes(false));
+      }
+    };
+    el.addEventListener('scroll', handler);
+    return ()=> el.removeEventListener('scroll', handler);
+  },[tab, clientRoutes, routesTotal, loadingRoutes, selectedClient, showOnlyActiveRoutes]);
 
   // Conductores
   const [drivers, setDrivers] = useState<User[]>([]);
@@ -103,6 +166,42 @@ export const Dietas: React.FC = () => {
   const [sortDir, setSortDir] = useState<'asc'|'desc'|''>('');
   const recordsBodyRef = useRef<HTMLDivElement | null>(null);
   const RECORD_GRID_HEIGHT = 500; // altura fija de la zona scroll registros (aumentada desde 420)
+
+  // Distancieros grid columns
+  const [distColumns, setDistColumns] = useState<any[]>([
+    { key:'destination', label:'Destino', width:360 },
+    { key:'km', label:'Km', width:90, align:'right' },
+    { key:'active', label:'Estado', width:110 },
+    { key:'notes', label:'Notas' } // columna flexible
+  ]);
+  const [distSortKey, setDistSortKey] = useState<string>('');
+  const [distSortDir, setDistSortDir] = useState<'asc'|'desc'|''>('');
+  const DIST_GRID_HEIGHT = 500; // misma altura que registros
+  const [distFilterText, setDistFilterText] = useState('');
+
+  // Resize columnas distancieros
+  const beginResizeDist = (e: React.MouseEvent, key:string, width:number) => {
+    e.preventDefault();
+    const startX = e.clientX; const startWidth = width;
+    const move = (ev:MouseEvent) => {
+      const delta = ev.clientX - startX;
+      setDistColumns(prev => prev.map(c => c.key===key ? { ...c, width: Math.max(55, startWidth + delta) } : c));
+    };
+    const up = () => { window.removeEventListener('mousemove', move); window.removeEventListener('mouseup', up); };
+    window.addEventListener('mousemove', move); window.addEventListener('mouseup', up);
+  };
+  const autoSizeColumnPreciseDist = (key:string) => {
+    requestAnimationFrame(() => {
+      const headerSpan = document.querySelector(`[data-dist-col-header-inner="${key}"]`) as HTMLElement | null;
+      const cellSpans = Array.from(document.querySelectorAll(`[data-dist-col-cell-inner="${key}"]`)) as HTMLElement[];
+      if(!headerSpan && cellSpans.length===0) return;
+      let max = headerSpan ? headerSpan.scrollWidth : 0;
+      cellSpans.forEach(el => { const w = el.scrollWidth; if(w>max) max = w; });
+      const padding = 16 + 16 + 8;
+      const finalWidth = Math.min(900, Math.max(55, max + padding));
+      setDistColumns(prev => prev.map(c => c.key===key ? { ...c, width: finalWidth } : c));
+    });
+  };
 
   // Rutas
   const [routeOrigin, setRouteOrigin] = useState('');
@@ -385,6 +484,28 @@ export const Dietas: React.FC = () => {
 
   const driverType = useMemo<'nuevo'|'antiguo'>(() => (selectedDriver?.worker_type === 'nuevo' ? 'nuevo' : 'antiguo'), [selectedDriver]);
 
+  // Cargar grupos distancieros si se entra a pestaña Distancieros o si en cálculo hay conductor antiguo y aún no cargado
+  useEffect(()=>{
+    const needForCalc = selectedDriver && driverType==='antiguo';
+    if(!(tab===3 || needForCalc)) return;
+    if(distGrouped.length>0) return;
+    setLoadingDist(true);
+    distancierosAPI.listGrouped()
+      .then(data => {
+        setDistGrouped(data);
+        if(!selectedClient){
+          const cma = data.find((c:any)=> c.client_name === 'CMA');
+            if(cma) setSelectedClient('CMA');
+        }
+        if(!calcClient){
+          const first = data[0];
+          if(first) setCalcClient(first.client_name);
+        }
+      })
+      .catch(()=>{})
+      .finally(()=> setLoadingDist(false));
+  },[tab, selectedDriver, driverType, distGrouped.length]);
+
   const availableRates = useMemo(() => DIETA_RATES.filter(r => (!r.onlyFor || r.onlyFor === driverType)), [driverType]);
 
   // Si cambia a 'nuevo', eliminar filas no permitidas (recargos, tramos etc.)
@@ -396,6 +517,7 @@ export const Dietas: React.FC = () => {
         return rate && (!rate.onlyFor || rate.onlyFor === 'nuevo');
       }));
       setKmsAntiguo('');
+  setSelectedCalcRoute(null);
     }
   }, [driverType]);
 
@@ -651,6 +773,25 @@ export const Dietas: React.FC = () => {
     }).catch(()=> setMapsError('Error calculando rutas'));
   };
 
+  // Limpiar todos los datos de la sección Rutas
+  const handleClearRoute = () => {
+    setRouteOrigin('');
+    setRouteDestination('');
+    setNextStop('');
+    setWaypoints([]);
+    setRouteStats(null);
+    setRouteOptions([]);
+    setSelectedRouteIdx(0);
+    setDisabledLegs(new Set());
+    setMapsError(null);
+    try {
+      routePolylinesRef.current.forEach(p=>{ try { p.setMap(null); } catch {} });
+      routePolylinesRef.current = [];
+      if(startMarkerRef.current){ try { startMarkerRef.current.setMap(null); } catch {}; startMarkerRef.current=null; }
+      if(endMarkerRef.current){ try { endMarkerRef.current.setMap(null); } catch {}; endMarkerRef.current=null; }
+    } catch {}
+  };
+
   // Actualizar estilos polilíneas y marcadores al cambiar selección
   useEffect(()=>{
     if(!routeOptions.length) return;
@@ -789,6 +930,7 @@ export const Dietas: React.FC = () => {
         styles={{
           body: { paddingRight: '0px !important', overflow: 'auto !important' },
           '.MuiTableContainer-root': { overflowX: 'hidden !important' },
+          '.MuiAutocomplete-clearIndicator': { display:'none !important' }
         }}
       />
   <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: '100%', bgcolor: '#f5f5f5', minHeight: '100vh' }}>
@@ -925,6 +1067,9 @@ export const Dietas: React.FC = () => {
               <ToggleButton value={2}>
                 <Map sx={{ mr:0.6, fontSize:18 }} /> Rutas
               </ToggleButton>
+              <ToggleButton value={3}>
+                Distancieros
+              </ToggleButton>
             </ToggleButtonGroup>
           </Box>
         </Box>
@@ -998,6 +1143,9 @@ export const Dietas: React.FC = () => {
                   label={driverType==='nuevo' ? 'NUEVO' : 'ANTIGUO'}
                   sx={{ fontWeight:600, letterSpacing:0.5 }}
                 />
+                {selectedCalcRoute && driverType==='antiguo' && (
+                  <Chip size="small" label={`${selectedCalcRoute.km} km`} sx={{ fontWeight:600 }} />
+                )}
                 {selectedDriver.hire_date && <Typography variant="caption" color="text.secondary">Alta: {selectedDriver.hire_date}</Typography>}
               </Box>
             )}
@@ -1017,6 +1165,79 @@ export const Dietas: React.FC = () => {
             </Box>
           )}
         </Box>
+        {/* Bloque Cliente/Ruta distanciero debajo */}
+        {selectedDriver && driverType==='antiguo' && (
+          <Box mt={2} display="flex" flexWrap="wrap" gap={2}>
+            <Box minWidth={{ xs:'100%', md:'220px' }}>
+              <Autocomplete
+                options={distGrouped.map(g=>g.client_name)}
+                value={calcClient || undefined}
+                onChange={(_,v)=> setCalcClient(v||'')}
+                size="small"
+                disableClearable
+                popupIcon={<ArrowDropDown sx={{ color:'text.secondary', fontSize:22 }} />}
+                loading={loadingDist}
+                noOptionsText={loadingDist? 'Cargando...' : 'Sin clientes'}
+                renderInput={(p)=>(
+                  <TextField
+                    {...p}
+                    label="Cliente"
+                    placeholder="Selecciona"
+                    sx={pillFieldSx}
+                    InputProps={{
+                      ...p.InputProps,
+                      sx:{
+                        ...pillFieldSx['& .MuiInputBase-root'],
+                        '& .MuiAutocomplete-endAdornment':{ right:6 },
+                        '& .MuiAutocomplete-popupIndicator':{
+                          borderRadius:1,p:0,m:0,width:28,height:28,color:'text.secondary',background:'transparent',boxShadow:'none',
+                          '&:hover':{ background:'transparent', color:'text.primary' }
+                        }
+                      }
+                    }}
+                  />
+                )}
+              />
+            </Box>
+            <Box flex={1} minWidth={{ xs:'100%', md:'340px' }}>
+              <Autocomplete
+                options={calcRoutes.filter(r=> !calcRouteFilter.trim() || r.destination.toLowerCase().includes(calcRouteFilter.toLowerCase())).map(r=> r.destination)}
+                value={selectedCalcRoute?.destination || '' /* mantener string vacío */}
+                onInputChange={(_,val)=> setCalcRouteFilter(val)}
+                onChange={(_,val)=> {
+                  const route = calcRoutes.find(r=> r.destination===val);
+                  setSelectedCalcRoute(route || null);
+                  if(route) setKmsAntiguo(String(route.km));
+                }}
+                disableClearable
+                disabled={!calcClient}
+                popupIcon={<ArrowDropDown sx={{ color:'text.secondary', fontSize:22 }} />}
+                loading={loadingCalcRoutes}
+                size="small"
+                noOptionsText={!calcClient? 'Selecciona cliente' : (loadingCalcRoutes? 'Cargando...' : 'Sin rutas')}
+                renderInput={(p)=>(
+                  <TextField
+                    {...p}
+                    label="Ruta (Distanciero)"
+                    placeholder={calcClient? 'Buscar destino...' : 'Cliente primero'}
+                    sx={pillFieldSx}
+                    InputProps={{
+                      ...p.InputProps,
+                      sx:{
+                        ...pillFieldSx['& .MuiInputBase-root'],
+                        '& .MuiAutocomplete-endAdornment':{ right:6 },
+                        '& .MuiAutocomplete-popupIndicator':{
+                          borderRadius:1,p:0,m:0,width:28,height:28,color:'text.secondary',background:'transparent',boxShadow:'none',
+                          '&:hover':{ background:'transparent', color:'text.primary' }
+                        }
+                      }
+                    }}
+                  />
+                )}
+              />
+            </Box>
+          </Box>
+        )}
             <Divider sx={{ my: 3 }} />
             <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>Conceptos</Typography>
             <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
@@ -1135,6 +1356,7 @@ export const Dietas: React.FC = () => {
                       value={routeOrigin}
                       onInputChange={(_,val)=> setRouteOrigin(val)}
                       onChange={(_,val)=>{ if(typeof val==='string') setRouteOrigin(val); }}
+                      disableClearable
                       ListboxProps={{ style:{ maxHeight:260 } }}
                       noOptionsText={routeOrigin.trim().length<3? 'Escribe 3+ letras' : 'Sin sugerencias'}
                       renderInput={(params)=>(
@@ -1148,6 +1370,7 @@ export const Dietas: React.FC = () => {
                       value={routeDestination}
                       onInputChange={(_,val)=> setRouteDestination(val)}
                       onChange={(_,val)=>{ if(typeof val==='string') setRouteDestination(val); }}
+                      disableClearable
                       ListboxProps={{ style:{ maxHeight:260 } }}
                       noOptionsText={routeDestination.trim().length<3? 'Escribe 3+ letras' : 'Sin sugerencias'}
                       renderInput={(params)=>(
@@ -1169,6 +1392,19 @@ export const Dietas: React.FC = () => {
                         '&:hover':{ background:'linear-gradient(135deg,#45152d 0%,#6a2949 55%,#8a4766 100%)' }
                       }}
                     >Calcular ruta</Button>
+                    <Button
+                      variant="outlined"
+                      onClick={handleClearRoute}
+                      disabled={!routeOrigin && !routeDestination && waypoints.length===0 && !routeStats}
+                      sx={{
+                        alignSelf:'stretch',
+                        minHeight:42,
+                        px:2.6,
+                        borderRadius:999,
+                        fontWeight:600,
+                        textTransform:'none'
+                      }}
+                    >Limpiar</Button>
                   </Box>
                   {/* Fila 2: cadena + add tramo */}
                   <Box sx={{ display:'flex', flexWrap:'wrap', gap:1.5, alignItems:'center', mb: routeStats? 3 : 2 }}>
@@ -1181,6 +1417,7 @@ export const Dietas: React.FC = () => {
                       value={nextStop}
                       onInputChange={(_,val)=> setNextStop(val)}
                       onChange={(_,val)=> { if(typeof val==='string') setNextStop(val); }}
+                      disableClearable
                       ListboxProps={{ style:{ maxHeight:260 } }}
                       noOptionsText={nextStop.trim().length<3? 'Escribe 3+ letras' : 'Sin sugerencias'}
                       renderInput={(params)=>(
@@ -1436,6 +1673,247 @@ export const Dietas: React.FC = () => {
           </Fade>
         )}
 
+        {tab === 3 && (
+          <Fade in timeout={600}>
+            <Box>
+              <Paper sx={{ p:{ xs:2, sm:3}, borderRadius:3, border:'1px solid #e0e0e0', background:'linear-gradient(180deg,#ffffff,#fafafa)', display:'flex', flexDirection:{ xs:'column', md:'row'}, gap:3 }}>
+                <Box sx={{ width:{ xs:'100%', md:300}, flexShrink:0, display:'flex', flexDirection:'column', gap:1 }}>
+                  <Typography variant="h6" sx={{ fontWeight:700, mb:1 }}>Clientes</Typography>
+                  <Box sx={{ maxHeight:500, overflowY:'auto', pr:1 }}>
+                    {loadingDist && <Typography variant="body2">Cargando...</Typography>}
+                    {!loadingDist && distGrouped.length===0 && <Typography variant="body2" color="text.secondary">Sin datos</Typography>}
+                    {distGrouped.map(c => {
+                      const selected = c.client_name === selectedClient;
+                      const percent = c.total_routes ? Math.round((c.active_routes / c.total_routes) * 100) : 0;
+                      return (
+                        <Paper
+                          key={c.client_name}
+                          onClick={() => { setSelectedClient(c.client_name); }}
+                          elevation={0}
+                          sx={{
+                            mb:1.2,
+                            p:1.4,
+                            cursor:'pointer',
+                            position:'relative',
+                            borderRadius:3,
+                            overflow:'hidden',
+                            background: selected
+                              ? 'linear-gradient(135deg,#5c2340 0%,#7d3456 60%,#a65b7d 100%)'
+                              : 'linear-gradient(135deg,#ffffff 0%,#f6f7f8 100%)',
+                            color: selected? '#fff':'#2d3135',
+                            border: '1px solid',
+                            borderColor: selected? 'rgba(255,255,255,0.28)':'#d4d7db',
+                            // Sombras suavizadas
+                            boxShadow: selected
+                              ? '0 0 0 1px rgba(255,255,255,0.4), 0 2px 8px rgba(92,35,64,0.30)'
+                              : '0 1px 2px rgba(0,0,0,0.04), 0 0 0 1px #e6e8ea',
+                            transition:'all .35s cubic-bezier(.4,0,.2,1)',
+                            '&::before': selected ? {
+                              content:'""',
+                              position:'absolute', inset:0, pointerEvents:'none',
+                              background:'radial-gradient(circle at 85% 15%, rgba(255,255,255,0.35), transparent 60%)'
+                            } : {},
+                            '&:hover': {
+                              transform:'translateY(-1px)',
+                              boxShadow: selected
+                                ? '0 0 0 1px rgba(255,255,255,0.55), 0 4px 14px rgba(92,35,64,0.35)'
+                                : '0 2px 6px rgba(0,0,0,0.08)',
+                              borderColor: selected? 'rgba(255,255,255,0.45)' : '#ccd0d3'
+                            },
+                            '&:active': { transform:'translateY(0)', boxShadow: selected? '0 0 0 1px rgba(255,255,255,0.45), 0 2px 6px rgba(92,35,64,0.28)' : '0 1px 3px rgba(0,0,0,0.12)' }
+                          }}
+                        >
+                          <Box sx={{ display:'flex', alignItems:'flex-start', gap:1 }}>
+                            <Box sx={{ flex:1, minWidth:0 }}>
+                              <Typography variant="subtitle2" sx={{ fontWeight:700, fontSize:14, letterSpacing:.3, display:'flex', alignItems:'center', gap:1 }}>
+                                <span style={{whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{c.client_name}</span>
+                                <Chip
+                                  size="small"
+                                  label={`${c.active_routes}/${c.total_routes}`}
+                                  sx={{
+                                    height:22,
+                                    fontSize:11,
+                                    fontWeight:700,
+                                    letterSpacing:.4,
+                                    borderRadius:999,
+                                    bgcolor: selected? 'rgba(255,255,255,0.22)' : 'linear-gradient(135deg,#f1f3f5,#e7eaed)',
+                                    color: selected? '#fff':'#374047',
+                                    border:selected? '1px solid rgba(255,255,255,0.45)' : '1px solid #d2d6da',
+                                    boxShadow: selected? '0 0 0 1px rgba(255,255,255,0.25) inset, 0 1px 2px rgba(0,0,0,0.06)' : '0 1px 1px rgba(0,0,0,0.04)',
+                                    backdropFilter: selected? 'blur(4px)' : 'none',
+                                    '& .MuiChip-label':{ px:1.15, pt:'1px' }
+                                  }}
+                                />
+                              </Typography>
+                              <Box sx={{ display:'flex', alignItems:'center', mt:.4, gap:1, flexWrap:'wrap' }}>
+                                <Typography variant="caption" sx={{ opacity: selected? 0.9:0.75, fontWeight:500 }}>
+                                  {c.min_km!=null && c.max_km!=null ? `${c.min_km} - ${c.max_km} km` : '—'}
+                                </Typography>
+                                <Chip
+                                  size="small"
+                                  label={`${percent}% activas`}
+                                  sx={{
+                                    height:22,
+                                    fontSize:10.5,
+                                    fontWeight:700,
+                                    letterSpacing:.5,
+                                    borderRadius:999,
+                                    textTransform:'uppercase',
+                                    bgcolor: selected? 'rgba(255,255,255,0.20)' : 'linear-gradient(135deg,#f6edf3,#efe0ea)',
+                                    color: selected? '#fff':'#5c2340',
+                                    border:'1px solid',
+                                    borderColor: selected? 'rgba(255,255,255,0.45)' : '#dccfd6',
+                                    boxShadow: selected? '0 0 0 1px rgba(255,255,255,0.30) inset, 0 1px 2px rgba(0,0,0,0.05)' : '0 1px 1px rgba(0,0,0,0.04)',
+                                    '& .MuiChip-label':{ px:1.05, pt:'1px' }
+                                  }}
+                                />
+                              </Box>
+                            </Box>
+                          </Box>
+                          <Box sx={{ mt:1, height:6, borderRadius:3, background: selected? 'rgba(255,255,255,0.25)':'#eceff2', overflow:'hidden', position:'relative' }}>
+                            <Box sx={{ position:'absolute', left:0, top:0, bottom:0, width:`${percent}%`, background: selected? 'linear-gradient(90deg,#ffe3b8,#ffffff)':'linear-gradient(90deg,#5c2340,#7d3456)', transition:'width .6s ease' }} />
+                          </Box>
+                        </Paper>
+                      );
+                    })}
+                  </Box>
+                </Box>
+                <Box sx={{ flex:1, minWidth:0, display:'flex', flexDirection:'column' }}>
+                  <Box sx={{ mb:2 }}>
+                    <Box sx={{ display:'flex', flexWrap:'wrap', alignItems:'center', gap:1.2 }}>
+                      <Typography variant="h6" sx={{ fontWeight:700, mr:1 }}>{selectedClient || 'Selecciona un cliente'}</Typography>
+                      {selectedClient && (
+                        <>
+                          <Chip size="small" label={showOnlyActiveRoutes? 'Activas':'Todas'} onClick={()=>setShowOnlyActiveRoutes(p=>!p)} sx={{ cursor:'pointer', fontWeight:600 }} />
+              <Box sx={{ display:'flex', flexWrap:'wrap', alignItems:'center', gap:1, p:0.5, pl:0, pr:0 }}>
+                            <TextField
+                              size="small"
+                              placeholder="Buscar destino"
+                              value={distFilterText}
+                              onChange={e=> setDistFilterText(e.target.value)}
+                              sx={{ width:230, ...pillFieldSx }}
+                            />
+                            <Button
+                              size="small"
+                              variant="contained"
+                onClick={()=>{ setDistFilterText(''); }}
+                disabled={!distFilterText}
+                              sx={{ textTransform:'none', borderRadius:999, fontWeight:600, background:'linear-gradient(135deg,#5c2340,#7d3456)', '&:hover':{ background:'linear-gradient(135deg,#4a1d33,#6b2d4d)'} }}
+                            >Limpiar</Button>
+                          </Box>
+                        </>
+                      )}
+                    </Box>
+          {selectedClient && distFilterText && (
+                      <Box sx={{ mt:1, display:'flex', flexWrap:'wrap', gap:0.8 }}>
+            <Chip size="small" label={`Texto: "${distFilterText}"`} onDelete={()=>setDistFilterText('')} sx={{ bgcolor:'#eef2f6' }} />
+                      </Box>
+                    )}
+                  </Box>
+                  <Box sx={{ flex:1, position:'relative', borderRadius:'20px', border:'1px solid #d2d6da', overflow:'hidden', background:'#fff', boxShadow:'0 3px 10px rgba(0,0,0,0.06)' }}>
+                    {/* Header columnas */}
+                    <Box sx={{ display:'flex', alignItems:'stretch', background:'linear-gradient(90deg,#eceff3,#e3e6ea)', borderBottom:'1px solid #c8ccd0', borderRadius:'20px 20px 0 0' }}>
+                      {distColumns.map((col, idx)=>{
+                        const sorted = distSortKey===col.key && distSortDir!=='';
+                        const isFlexible = !col.width;
+                        return (
+                          <Box key={col.key}
+                            onClick={(e)=>{ if((e.target as HTMLElement).dataset?.resize) return; setDistSortKey(col.key===distSortKey && distSortDir===''? '' : col.key); setDistSortDir(prev=>{ if(col.key!==distSortKey) return 'asc'; if(prev==='asc') return 'desc'; if(prev==='desc') return ''; return 'asc'; }); }}
+                            onDoubleClick={()=> autoSizeColumnPreciseDist(col.key)}
+                            sx={{ position:'relative', display:'flex', alignItems:'center', justifyContent:'center', gap:0.5, px:1.1, py:0.6, fontSize:12.5, fontWeight:600, cursor:'pointer', userSelect:'none', color: sorted? '#fff':'#2d3135', background: sorted? 'linear-gradient(90deg,#5c2340,#7d3456)':'transparent', borderRight: idx<distColumns.length-1? '1px solid #d0d4d8':'none', flex: isFlexible? '1 1 auto':`0 0 ${col.width}px`, minWidth: isFlexible? 140: col.width, '&:hover':{ background: sorted? 'linear-gradient(90deg,#5c2340,#7d3456)': 'rgba(255,255,255,0.35)' }, transition:'background .25s,color .25s' }}
+                            data-dist-col-header={col.key}
+                          >
+                            <Box data-dist-col-header-inner={col.key} sx={{ display:'flex', alignItems:'center', gap:0.4, width:'100%', justifyContent:'center', pr: sorted ? 0 : 0 }}>
+                              <span style={{ whiteSpace:'nowrap', lineHeight:1 }}>{col.label}</span>
+                              {distSortKey===col.key && distSortDir==='asc' && <ArrowUpward sx={{ fontSize:14 }} />}
+                              {distSortKey===col.key && distSortDir==='desc' && <ArrowDownward sx={{ fontSize:14 }} />}
+                            </Box>
+                            {col.width && (
+                              <Box data-resize onMouseDown={(e)=> beginResizeDist(e,col.key,col.width)} onDoubleClick={(e)=>{ e.stopPropagation(); autoSizeColumnPreciseDist(col.key); }} sx={{ position:'absolute', top:0, right:0, width:6, height:'100%', cursor:'col-resize', '&:hover':{ background:'rgba(0,0,0,0.08)' } }} />
+                            )}
+                          </Box>
+                        );
+                      })}
+                    </Box>
+                    {/* Body */}
+                    <Box ref={routesBodyRef} sx={{ height:DIST_GRID_HEIGHT, overflowY:'auto', fontSize:13, background:'#fbfcfd', position:'relative' }}>
+                      {(!selectedClient) && (
+                        <Box sx={{ p:4, textAlign:'center', color:'text.secondary' }}>Selecciona un cliente para ver sus rutas.</Box>
+                      )}
+                      {selectedClient && loadingRoutes && (
+                        <Box sx={{ p:4, textAlign:'center' }}>Cargando...</Box>
+                      )}
+                      {selectedClient && !loadingRoutes && clientRoutes.length===0 && (
+                        <Box sx={{ p:4, textAlign:'center', color:'text.secondary' }}>Sin rutas para este cliente.</Box>
+                      )}
+                      {selectedClient && !loadingRoutes && clientRoutes.length>0 && (()=>{
+                        // Filtrado
+                        let list = clientRoutes.filter(r => {
+                          const txt = distFilterText.trim().toLowerCase();
+                          if(txt && !(r.destination || '').toLowerCase().includes(txt)) return false;
+                          return true;
+                        });
+                        // Orden
+                        if(distSortKey && distSortDir){
+                          list = [...list].sort((a:any,b:any)=>{
+                            const av = (a as any)[distSortKey];
+                            const bv = (b as any)[distSortKey];
+                            if(av==null && bv==null) return 0; if(av==null) return 1; if(bv==null) return -1;
+                            if(typeof av==='number' && typeof bv==='number') return distSortDir==='asc'? av-bv : bv-av;
+                            return distSortDir==='asc'? String(av).localeCompare(String(bv)) : String(bv).localeCompare(String(av));
+                          });
+                        }
+                        return list.map((r,idx)=>(
+                          <Box key={r.id} sx={{ display:'flex', alignItems:'stretch', background: idx%2===0? '#ffffff':'#f7f9fb', borderBottom:'1px solid #e3e7ea', opacity: r.active?1:0.5 }}>
+                            {distColumns.map(col => {
+                              let content: React.ReactNode;
+                              switch(col.key){
+                                case 'destination': content = r.destination; break;
+                                case 'km': content = r.km; break;
+                                case 'active': content = r.active? <Chip size="small" color="success" label="Activa"/> : <Chip size="small" label="Inactiva"/>; break;
+                                case 'notes': content = r.notes || ''; break;
+                                default: content = (r as any)[col.key];
+                              }
+                              return (
+                                <Box key={col.key} sx={{ flex: col.width? `0 0 ${col.width}px` : '1 1 auto', minWidth: col.width? col.width : 140, padding:'7px 10px', display:'flex', alignItems:'center', justifyContent: col.align==='right'?'flex-end':(col.align==='center'?'center':'flex-start'), fontSize:13, gap:0.4, overflow:'hidden' }}>
+                                  <span data-dist-col-cell-inner={col.key} style={{ display:'inline-block', whiteSpace: col.key==='notes'? 'normal':'nowrap', maxWidth:'100%' }}>{content}</span>
+                                </Box>
+                              );
+                            })}
+                          </Box>
+                        ));
+                      })()}
+                      {loadingRoutes && clientRoutes.length>0 && (
+                        <Box sx={{ p:1.5, textAlign:'center', fontSize:12, color:'text.secondary' }}>Cargando...</Box>
+                      )}
+                    </Box>
+                    {/* Footer resumen */}
+                    {selectedClient && !loadingRoutes && (
+                      <Box px={1.75} py={1.1} display="flex" flexWrap="wrap" alignItems="center" gap={2} sx={{ fontSize:12, background:'linear-gradient(90deg,#f9fafb,#f2f4f6)', borderTop:'1px solid #e3e6e8' }}>
+                        {(() => {
+                          // Reaplicar filtros para contar visibles
+                          const filtered = clientRoutes.filter(r => {
+                            const txt = distFilterText.trim().toLowerCase();
+                            if(txt && !(r.destination || '').toLowerCase().includes(txt)) return false;
+                            return true;
+                          });
+                          return (
+                            <>
+                              <Typography variant="caption" sx={{ fontWeight:600 }}>{filtered.length} / {routesTotal} ruta(s)</Typography>
+                              <Typography variant="caption">Activas: <strong>{filtered.filter(r=>r.active).length}</strong></Typography>
+                            </>
+                          );
+                        })()}
+                        <Typography variant="caption" sx={{ ml:'auto' }}>Actualizado {new Date().toLocaleTimeString()}</Typography>
+                      </Box>
+                    )}
+                  </Box>
+                </Box>
+              </Paper>
+            </Box>
+          </Fade>
+        )}
+
         {tab === 1 && (
           <Fade in timeout={600}>
             <Paper sx={{ p:{ xs:2.5, sm:3}, borderRadius:3, border:'1px solid #e0e0e0', background:'linear-gradient(180deg,#ffffff,#fafafa)' }}>
@@ -1444,8 +1922,9 @@ export const Dietas: React.FC = () => {
                   <Autocomplete
                     options={drivers}
                     size="small"
-                    value={filterUser}
+                    value={filterUser || undefined}
                     onChange={(_,v)=>setFilterUser(v)}
+                    disableClearable
                     popupIcon={<ArrowDropDown sx={{ color:'text.secondary', fontSize:22 }} />}
                     getOptionLabel={(o)=> (o?.full_name || `${o?.first_name||''} ${o?.last_name||''}`).trim()}
                     renderInput={(p)=>(

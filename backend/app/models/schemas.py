@@ -234,3 +234,41 @@ class DietaRecordResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+# -------------------- Distancieros --------------------
+class DistancieroBase(BaseModel):
+    client_name: str
+    destination: str
+    destination_normalized: str
+    km: int
+    active: bool
+    notes: str | None = None
+
+class DistancieroCreate(BaseModel):
+    client_name: str
+    destination: str
+    km: int
+    active: bool = True
+    notes: str | None = None
+
+class DistancieroUpdate(BaseModel):
+    client_name: str | None = None
+    destination: str | None = None
+    km: int | None = None
+    active: bool | None = None
+    notes: str | None = None
+
+class DistancieroResponse(DistancieroBase):
+    id: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class DistancieroGrouped(BaseModel):
+    client_name: str
+    total_routes: int
+    active_routes: int
+    min_km: int | None
+    max_km: int | None

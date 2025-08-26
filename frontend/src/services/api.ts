@@ -382,6 +382,26 @@ export const dietasAPI = {
   get: (id: number): Promise<DietaRecord> => api.get(`/api/dietas/${id}`).then(r=>r.data)
 };
 
+// API Distancieros
+export const distancierosAPI = {
+  listGrouped: (active?: boolean) => {
+    const sp = new URLSearchParams();
+    if (active !== undefined) sp.append('active', String(active));
+    return api.get(`/api/distancieros/grouped?${sp.toString()}`).then(r=>r.data as { client_name:string; total_routes:number; active_routes:number; min_km:number; max_km:number; }[]);
+  },
+  listRoutes: (clientName: string, params?: { onlyActive?: boolean; q?: string; limit?: number; offset?: number; }) => {
+    const sp = new URLSearchParams();
+    if (params?.onlyActive !== undefined) sp.append('only_active', String(params.onlyActive));
+    if (params?.q) sp.append('q', params.q);
+    if (params?.limit) sp.append('limit', String(params.limit));
+    if (params?.offset) sp.append('offset', String(params.offset));
+    return api.get(`/api/distancieros/${encodeURIComponent(clientName)}/routes?${sp.toString()}`).then(r=>r.data as { total:number; items:{ id:number; client_name:string; destination:string; destination_normalized:string; km:number; active:boolean; notes?:string; created_at:string; updated_at:string; }[]; limit:number; offset:number });
+  },
+  create: (data: { client_name:string; destination:string; km:number; active?:boolean; notes?:string; }) => api.post('/api/distancieros/', data).then(r=>r.data),
+  update: (id:number, data: Partial<{ client_name:string; destination:string; km:number; active:boolean; notes:string; }>) => api.put(`/api/distancieros/${id}`, data).then(r=>r.data),
+  remove: (id:number) => api.delete(`/api/distancieros/${id}`).then(r=>r.data)
+};
+
 // API para archivos de usuario
 export const userFilesAPI = {
   // Obtener documentos de una carpeta específica
