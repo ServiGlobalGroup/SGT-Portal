@@ -6,7 +6,7 @@ import { usersAPI } from '../services/api';
 import type { User } from '../types';
 import { calculateDietas, DIETA_RATES, DietaConceptInput, DietaCalculationResult, findKilometerRangeAntiguo } from '../config/dietas';
 import { dietasAPI, distancierosAPI } from '../services/api';
-import { Add, Delete, Calculate, RestaurantMenu, History, FiberNew, Close, ArrowUpward, ArrowDownward, PictureAsPdf, ArrowDropDown, Map, ArrowRightAlt, Flag, TripOrigin, Close as CloseIcon, Undo, Toll, RemoveCircleOutline, CheckCircle, Storage, Cloud } from '@mui/icons-material';
+import { Add, Delete, Calculate, RestaurantMenu, History, FiberNew, Close, ArrowUpward, ArrowDownward, PictureAsPdf, ArrowDropDown, Map, ArrowRightAlt, Flag, TripOrigin, Close as CloseIcon, Undo, Toll, RemoveCircleOutline, CheckCircle, Storage, Cloud, Save } from '@mui/icons-material';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -171,6 +171,7 @@ export const Dietas: React.FC = () => {
   // Export
   const exportingRef = useRef(false);
   const [showSuccess, setShowSuccess] = useState(false);
+  const [snackbar, setSnackbar] = useState<{open: boolean; message: string; severity: 'success' | 'error'}>({open: false, message: '', severity: 'success'});
 
   // Grid registros columnas y orden
   const [recordColumns, setRecordColumns] = useState<any[]>([
@@ -1911,6 +1912,91 @@ export const Dietas: React.FC = () => {
                           >Usar km</Button>
                         </span>
                       </Tooltip>
+                      {/* Botón para guardar ruta manualmente - solo si caché está desactivado */}
+                      {!useRouteCache && (
+                        <Tooltip title={routeStats ? (routeStats.fromCache ? 'Esta ruta ya está guardada' : 'Guardar ruta en distanciero') : 'Calcule una ruta primero'}>
+                          <span>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              disabled={!routeStats || routeStats.fromCache}
+                              onClick={async ()=> {
+                              if(!routeStats || routeStats.fromCache) return;
+                              
+                              try {
+                                // Determinar si la ruta usa peajes
+                                const usesTolls = routeStats.route?.legs?.some((leg: any) => 
+                                  leg.steps?.some((step: any) => 
+                                    step.html_instructions?.toLowerCase().includes('peaje') ||
+                                    step.html_instructions?.toLowerCase().includes('toll') ||
+                                    step.maneuver === 'toll-road'
+                                  )
+                                ) || false;
+                                
+                                // Calcular distancia total en km
+                                const totalDistanceMeters = routeStats.route.legs.reduce((sum: number, leg: any) => sum + leg.distance.value, 0);
+                                const totalDistanceKm = totalDistanceMeters / 1000;
+                                
+                                // Calcular duración total en segundos
+                                const totalDurationSeconds = routeStats.route.legs.reduce((sum: number, leg: any) => sum + leg.duration.value, 0);
+                                
+                                // Crear el objeto de ruta para guardar según el modelo GoogleRouteCreate
+                                const routeData = {
+                                  origin: routeOrigin.trim(),
+                                  destination: routeDestination.trim(),
+                                  mode: 'DRIVING',
+                                  km: parseFloat(totalDistanceKm.toFixed(2)),
+                                  duration_sec: totalDurationSeconds,
+                                  polyline: routeStats.route.overview_polyline?.points || null,
+                                  variant: usesTolls ? 'TOLLS' : 'NOTOLLS',
+                                  uses_tolls: usesTolls
+                                };
+                                
+                                console.log('Guardando ruta manualmente:', routeData);
+                                
+                                const response = await fetch('/api/distancieros/google/route', {
+                                  method: 'POST',
+                                  headers: { 
+                                    'Content-Type': 'application/json',
+                                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                                  },
+                                  body: JSON.stringify(routeData)
+                                });
+                                
+                                if (response.ok) {
+                                  setSnackbar({ open: true, message: `Ruta guardada correctamente (${usesTolls ? 'con peaje' : 'sin peaje'})`, severity: 'success' });
+                                  
+                                  // Marcar como guardado desde caché para deshabilitar el botón
+                                  setRouteStats((prev: any) => prev ? { ...prev, fromCache: true } : null);
+                                } else {
+                                  const errorData = await response.json();
+                                  throw new Error(errorData.detail || 'Error al guardar la ruta');
+                                }
+                              } catch (error) {
+                                console.error('Error saving route:', error);
+                                setSnackbar({ open: true, message: `Error al guardar la ruta: ${error instanceof Error ? error.message : 'Error desconocido'}`, severity: 'error' });
+                              }
+                            }}
+                            startIcon={<Save sx={{ fontSize:16 }} />}
+                            sx={{
+                              borderRadius:999,
+                              fontWeight:600,
+                              textTransform:'none',
+                              minWidth:120,
+                              px:2.2,
+                              justifyContent:'center',
+                              height:36,
+                              borderColor: routeStats?.fromCache ? '#e0e0e0' : '#4caf50',
+                              color: routeStats?.fromCache ? '#9e9e9e' : '#4caf50',
+                              '&:hover': {
+                                borderColor: routeStats?.fromCache ? '#e0e0e0' : '#45a049',
+                                backgroundColor: routeStats?.fromCache ? 'transparent' : 'rgba(76, 175, 80, 0.04)'
+                              }
+                            }}
+                          >Guardar</Button>
+                        </span>
+                      </Tooltip>
+                      )}
                     </Box>
                   </Box>
                   <Divider />
@@ -2702,6 +2788,25 @@ export const Dietas: React.FC = () => {
           <Button onClick={()=>setRecordDetail(null)}>Cerrar</Button>
         </DialogActions>
       </Dialog>
+      {/* Snackbar para mensajes de rutas */}
+      <Snackbar 
+        open={snackbar.open} 
+        autoHideDuration={3500} 
+        onClose={() => setSnackbar(prev => ({...prev, open: false}))}
+        anchorOrigin={{ vertical:'top', horizontal:'center' }}
+      >
+        <MuiAlert 
+          elevation={6} 
+          variant="filled" 
+          severity={snackbar.severity}
+          onClose={() => setSnackbar(prev => ({...prev, open: false}))}
+          sx={{ fontWeight:600 }}
+        >
+          {snackbar.message}
+        </MuiAlert>
+      </Snackbar>
+
+      {/* Snackbar original para registros */}
       <Snackbar open={showSuccess} autoHideDuration={2500} onClose={()=>setShowSuccess(false)} anchorOrigin={{ vertical:'top', horizontal:'center' }}>
         <MuiAlert elevation={6} variant="filled" severity="success" onClose={()=>setShowSuccess(false)} sx={{ fontWeight:600 }}>
           Registro guardado correctamente
