@@ -64,54 +64,74 @@ export const Dietas: React.FC = () => {
   const [loadingRoutes, setLoadingRoutes] = useState(false);
   const [showOnlyActiveRoutes, setShowOnlyActiveRoutes] = useState(true);
   const [routesTotal, setRoutesTotal] = useState(0);
-  const ROUTES_LIMIT = 200;
   const routesBodyRef = useRef<HTMLDivElement | null>(null);
 
   // (efecto se reubicará tras definición de driverType)
 
-  // Carga inicial rutas con paginación
+  // Carga completa de rutas (sin scroll infinito) para pestaña Distancieros
   useEffect(()=>{
-    if(tab!==3 || !selectedClient) return;
-  setClientRoutes([]); setRoutesTotal(0);
-    setLoadingRoutes(true);
-    distancierosAPI.listRoutes(selectedClient, { onlyActive: showOnlyActiveRoutes, limit: ROUTES_LIMIT, offset:0 })
-      .then(data => { setClientRoutes(data.items); setRoutesTotal(data.total); })
-      .catch(()=>{})
-      .finally(()=> setLoadingRoutes(false));
+    let cancelled = false;
+    const loadAll = async () => {
+      if(tab!==3 || !selectedClient){ return; }
+      setClientRoutes([]); setRoutesTotal(0); setLoadingRoutes(true);
+      try {
+        const PAGE = 500;
+        let offset = 0; let total = Infinity; const acc:any[] = [];
+        while(offset < total){
+          const data = await distancierosAPI.listRoutes(selectedClient, { onlyActive: showOnlyActiveRoutes, limit: PAGE, offset });
+          if(cancelled) return;
+          acc.push(...data.items);
+          total = data.total ?? acc.length;
+          if(data.items.length === 0) break;
+          offset += data.items.length;
+          if(offset >= 20000) break; // salvaguarda
+        }
+        if(!cancelled){ setClientRoutes(acc); setRoutesTotal(acc.length); }
+      } catch {
+        if(!cancelled){ setClientRoutes([]); setRoutesTotal(0); }
+      } finally { if(!cancelled) setLoadingRoutes(false); }
+    };
+    loadAll();
+    return ()=> { cancelled = true; };
   },[tab, selectedClient, showOnlyActiveRoutes]);
 
-  // Carga rutas para cálculo (lista compacta)
+  // Carga rutas para cálculo (trae TODAS las activas vía paginado)
   useEffect(()=>{
-    if(!calcClient) { setCalcRoutes([]); setSelectedCalcRoute(null); return; }
-    setLoadingCalcRoutes(true);
-    distancierosAPI.listRoutes(calcClient, { onlyActive: true, limit: 1000, offset:0 })
-      .then(data => {
-        const simple = data.items.map((r:any)=>({ id:r.id, destination:r.destination, km:r.km, active:r.active }));
-        setCalcRoutes(simple);
-        // Si había ruta seleccionada de otro cliente, limpiar
-        setSelectedCalcRoute(null);
-      })
-      .catch(()=>{})
-      .finally(()=> setLoadingCalcRoutes(false));
-  },[calcClient]);
-
-  // Scroll infinito
-  useEffect(()=>{
-    if(tab!==3) return; const el = routesBodyRef.current; if(!el) return;
-    const handler = () => {
-      if(loadingRoutes) return; if(clientRoutes.length >= routesTotal) return;
-      if(el.scrollTop + el.clientHeight >= el.scrollHeight - 60){
-        const nextOffset = clientRoutes.length;
-        setLoadingRoutes(true);
-        distancierosAPI.listRoutes(selectedClient, { onlyActive: showOnlyActiveRoutes, limit: ROUTES_LIMIT, offset: nextOffset })
-          .then(data => { setClientRoutes(prev=>[...prev, ...data.items]); setRoutesTotal(data.total); })
-          .catch(()=>{})
-          .finally(()=> setLoadingRoutes(false));
+    let cancelled = false;
+    const fetchAll = async () => {
+      if(!calcClient){ setCalcRoutes([]); setSelectedCalcRoute(null); return; }
+      setLoadingCalcRoutes(true);
+      try {
+        const PAGE = 500; // tamaño página alto para reducir peticiones
+        let offset = 0;
+        let total = Infinity;
+        const all: { id:number; destination:string; km:number; active:boolean; }[] = [];
+        while(offset < total){
+          const data = await distancierosAPI.listRoutes(calcClient, { onlyActive: true, limit: PAGE, offset });
+          if(cancelled) return;
+            const simple = data.items.map((r:any)=>({ id:r.id, destination:r.destination, km:r.km, active:r.active }));
+          all.push(...simple);
+          total = data.total ?? all.length; // fallback
+          if(data.items.length === 0) break;
+          offset += data.items.length;
+          // corte seguridad por si backend no devuelve total correcto
+          if(offset >= 10000) break;
+        }
+        if(!cancelled){
+          setCalcRoutes(all);
+          setSelectedCalcRoute(null); // limpiar selección previa
+        }
+      } catch(e){
+        if(!cancelled){ setCalcRoutes([]); }
+      } finally {
+        if(!cancelled) setLoadingCalcRoutes(false);
       }
     };
-    el.addEventListener('scroll', handler);
-    return ()=> el.removeEventListener('scroll', handler);
-  },[tab, clientRoutes, routesTotal, loadingRoutes, selectedClient, showOnlyActiveRoutes]);
+    fetchAll();
+    return ()=> { cancelled = true; };
+  },[calcClient]);
+
+  // Eliminado scroll infinito (carga completa arriba)
 
   // Conductores
   const [drivers, setDrivers] = useState<User[]>([]);
@@ -483,6 +503,78 @@ export const Dietas: React.FC = () => {
   }, [canView]);
 
   const driverType = useMemo<'nuevo'|'antiguo'>(() => (selectedDriver?.worker_type === 'nuevo' ? 'nuevo' : 'antiguo'), [selectedDriver]);
+
+  // Tarjeta cliente Distanciero (nuevo diseño)
+  interface DistClientInfo { client_name:string; total_routes:number; active_routes:number; min_km:number; max_km:number; }
+  const DistClientCard: React.FC<{ data:DistClientInfo; selected:boolean; onSelect:()=>void; }> = ({ data, selected, onSelect }) => {
+    const percent = data.total_routes ? Math.round((data.active_routes / data.total_routes) * 100) : 0;
+    return (
+      <Box
+        onClick={onSelect}
+        sx={{
+          mb:1.1,
+          p:1.4,
+          borderRadius: 2.4,
+          cursor:'pointer',
+          position:'relative',
+          overflow:'hidden',
+          background: selected? '#ffffff' : '#f9fafb',
+          border:'1px solid',
+          borderColor: selected? '#5c2340' : '#d9dde1',
+          boxShadow: selected? '0 2px 8px rgba(92,35,64,0.30)' : '0 1px 2px rgba(0,0,0,0.06)',
+          transition:'border-color .3s, box-shadow .3s, background .3s, transform .25s',
+          '&:hover':{
+            background:'#fff',
+            boxShadow: selected? '0 4px 16px rgba(92,35,64,0.35)' : '0 3px 10px rgba(0,0,0,0.10)',
+            transform:'scale(1.005)'
+          },
+          '&:active':{ transform:'scale(0.997)' }
+        }}
+      >
+        {/* Barra lateral color */}
+        <Box sx={{ position:'absolute', top:0, left:0, bottom:0, width:6, bgcolor: selected? 'linear-gradient(180deg,#5c2340,#7d3456)' : 'linear-gradient(180deg,#c2c6ca,#b6bcc1)' }} />
+        <Box sx={{ pl:1.2 }}>
+          <Box sx={{ display:'flex', alignItems:'center', gap:1 }}>
+            <Typography variant="subtitle2" sx={{ fontWeight:700, fontSize:14, flex:1, letterSpacing:.3, color:'#2d3135' }}>
+              {data.client_name}
+            </Typography>
+            <Box sx={{
+              fontSize:11,
+              px:1,
+              py:0.4,
+              borderRadius:1.4,
+              fontWeight:600,
+              bgcolor: selected? 'rgba(92,35,64,0.10)' : '#eef1f4',
+              color: selected? '#5c2340' : '#4a4f53',
+              border:'1px solid',
+              borderColor: selected? 'rgba(92,35,64,0.35)' : '#d2d6da'
+            }}>{data.active_routes}/{data.total_routes}</Box>
+          </Box>
+          <Box sx={{ display:'flex', flexWrap:'wrap', alignItems:'center', gap:1, mt:0.6 }}>
+            <Typography variant="caption" sx={{ fontWeight:500, color:'#555', letterSpacing:.2 }}>
+              {data.min_km!=null && data.max_km!=null ? `${data.min_km} - ${data.max_km} km` : '—'}
+            </Typography>
+            <Box sx={{
+              fontSize:10,
+              px:0.9,
+              py:0.35,
+              borderRadius:1,
+              fontWeight:600,
+              letterSpacing:.5,
+              bgcolor: percent===100? 'rgba(46,125,50,0.10)' : 'rgba(255,152,0,0.15)',
+              color: percent===100? '#2e7d32' : '#8a5200',
+              border:'1px solid',
+              borderColor: percent===100? 'rgba(46,125,50,0.35)' : 'rgba(255,152,0,0.4)'
+            }}>{percent}% ACTIVAS</Box>
+          </Box>
+          {/* Progress */}
+          <Box sx={{ mt:1.2, height:8, borderRadius:5, background:'#eceff2', position:'relative', overflow:'hidden' }}>
+            <Box sx={{ position:'absolute', inset:0, width:`${percent}%`, background: selected? 'linear-gradient(90deg,#5c2340,#9a4f71)' : 'linear-gradient(90deg,#7a7f84,#5c2340)', transition:'width .5s ease' }} />
+          </Box>
+        </Box>
+      </Box>
+    );
+  };
 
   // Cargar grupos distancieros si se entra a pestaña Distancieros o si en cálculo hay conductor antiguo y aún no cargado
   useEffect(()=>{
@@ -1679,103 +1771,12 @@ export const Dietas: React.FC = () => {
               <Paper sx={{ p:{ xs:2, sm:3}, borderRadius:3, border:'1px solid #e0e0e0', background:'linear-gradient(180deg,#ffffff,#fafafa)', display:'flex', flexDirection:{ xs:'column', md:'row'}, gap:3 }}>
                 <Box sx={{ width:{ xs:'100%', md:300}, flexShrink:0, display:'flex', flexDirection:'column', gap:1 }}>
                   <Typography variant="h6" sx={{ fontWeight:700, mb:1 }}>Clientes</Typography>
-                  <Box sx={{ maxHeight:500, overflowY:'auto', pr:1 }}>
+                  <Box sx={{ maxHeight:500, overflowY:'auto', pr:1, mt:1 }}>
                     {loadingDist && <Typography variant="body2">Cargando...</Typography>}
                     {!loadingDist && distGrouped.length===0 && <Typography variant="body2" color="text.secondary">Sin datos</Typography>}
-                    {distGrouped.map(c => {
-                      const selected = c.client_name === selectedClient;
-                      const percent = c.total_routes ? Math.round((c.active_routes / c.total_routes) * 100) : 0;
-                      return (
-                        <Paper
-                          key={c.client_name}
-                          onClick={() => { setSelectedClient(c.client_name); }}
-                          elevation={0}
-                          sx={{
-                            mb:1.2,
-                            p:1.4,
-                            cursor:'pointer',
-                            position:'relative',
-                            borderRadius:3,
-                            overflow:'hidden',
-                            background: selected
-                              ? 'linear-gradient(135deg,#5c2340 0%,#7d3456 60%,#a65b7d 100%)'
-                              : 'linear-gradient(135deg,#ffffff 0%,#f6f7f8 100%)',
-                            color: selected? '#fff':'#2d3135',
-                            border: '1px solid',
-                            borderColor: selected? 'rgba(255,255,255,0.28)':'#d4d7db',
-                            // Sombras suavizadas
-                            boxShadow: selected
-                              ? '0 0 0 1px rgba(255,255,255,0.4), 0 2px 8px rgba(92,35,64,0.30)'
-                              : '0 1px 2px rgba(0,0,0,0.04), 0 0 0 1px #e6e8ea',
-                            transition:'all .35s cubic-bezier(.4,0,.2,1)',
-                            '&::before': selected ? {
-                              content:'""',
-                              position:'absolute', inset:0, pointerEvents:'none',
-                              background:'radial-gradient(circle at 85% 15%, rgba(255,255,255,0.35), transparent 60%)'
-                            } : {},
-                            '&:hover': {
-                              transform:'translateY(-1px)',
-                              boxShadow: selected
-                                ? '0 0 0 1px rgba(255,255,255,0.55), 0 4px 14px rgba(92,35,64,0.35)'
-                                : '0 2px 6px rgba(0,0,0,0.08)',
-                              borderColor: selected? 'rgba(255,255,255,0.45)' : '#ccd0d3'
-                            },
-                            '&:active': { transform:'translateY(0)', boxShadow: selected? '0 0 0 1px rgba(255,255,255,0.45), 0 2px 6px rgba(92,35,64,0.28)' : '0 1px 3px rgba(0,0,0,0.12)' }
-                          }}
-                        >
-                          <Box sx={{ display:'flex', alignItems:'flex-start', gap:1 }}>
-                            <Box sx={{ flex:1, minWidth:0 }}>
-                              <Typography variant="subtitle2" sx={{ fontWeight:700, fontSize:14, letterSpacing:.3, display:'flex', alignItems:'center', gap:1 }}>
-                                <span style={{whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis'}}>{c.client_name}</span>
-                                <Chip
-                                  size="small"
-                                  label={`${c.active_routes}/${c.total_routes}`}
-                                  sx={{
-                                    height:22,
-                                    fontSize:11,
-                                    fontWeight:700,
-                                    letterSpacing:.4,
-                                    borderRadius:999,
-                                    bgcolor: selected? 'rgba(255,255,255,0.22)' : 'linear-gradient(135deg,#f1f3f5,#e7eaed)',
-                                    color: selected? '#fff':'#374047',
-                                    border:selected? '1px solid rgba(255,255,255,0.45)' : '1px solid #d2d6da',
-                                    boxShadow: selected? '0 0 0 1px rgba(255,255,255,0.25) inset, 0 1px 2px rgba(0,0,0,0.06)' : '0 1px 1px rgba(0,0,0,0.04)',
-                                    backdropFilter: selected? 'blur(4px)' : 'none',
-                                    '& .MuiChip-label':{ px:1.15, pt:'1px' }
-                                  }}
-                                />
-                              </Typography>
-                              <Box sx={{ display:'flex', alignItems:'center', mt:.4, gap:1, flexWrap:'wrap' }}>
-                                <Typography variant="caption" sx={{ opacity: selected? 0.9:0.75, fontWeight:500 }}>
-                                  {c.min_km!=null && c.max_km!=null ? `${c.min_km} - ${c.max_km} km` : '—'}
-                                </Typography>
-                                <Chip
-                                  size="small"
-                                  label={`${percent}% activas`}
-                                  sx={{
-                                    height:22,
-                                    fontSize:10.5,
-                                    fontWeight:700,
-                                    letterSpacing:.5,
-                                    borderRadius:999,
-                                    textTransform:'uppercase',
-                                    bgcolor: selected? 'rgba(255,255,255,0.20)' : 'linear-gradient(135deg,#f6edf3,#efe0ea)',
-                                    color: selected? '#fff':'#5c2340',
-                                    border:'1px solid',
-                                    borderColor: selected? 'rgba(255,255,255,0.45)' : '#dccfd6',
-                                    boxShadow: selected? '0 0 0 1px rgba(255,255,255,0.30) inset, 0 1px 2px rgba(0,0,0,0.05)' : '0 1px 1px rgba(0,0,0,0.04)',
-                                    '& .MuiChip-label':{ px:1.05, pt:'1px' }
-                                  }}
-                                />
-                              </Box>
-                            </Box>
-                          </Box>
-                          <Box sx={{ mt:1, height:6, borderRadius:3, background: selected? 'rgba(255,255,255,0.25)':'#eceff2', overflow:'hidden', position:'relative' }}>
-                            <Box sx={{ position:'absolute', left:0, top:0, bottom:0, width:`${percent}%`, background: selected? 'linear-gradient(90deg,#ffe3b8,#ffffff)':'linear-gradient(90deg,#5c2340,#7d3456)', transition:'width .6s ease' }} />
-                          </Box>
-                        </Paper>
-                      );
-                    })}
+                    {distGrouped.map(c => (
+                      <DistClientCard key={c.client_name} data={c} selected={c.client_name===selectedClient} onSelect={()=> setSelectedClient(c.client_name)} />
+                    ))}
                   </Box>
                 </Box>
                 <Box sx={{ flex:1, minWidth:0, display:'flex', flexDirection:'column' }}>
