@@ -19,6 +19,8 @@ class Distanciero(Base):
     polyline = Column(Text, nullable=True)  # overview_polyline
     hash_key = Column(String(300), nullable=True, index=True, unique=True)
     uses_tolls = Column(Boolean, nullable=True)  # True si ruta con peaje (variant TOLLS)
+    verified_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=True)  # Última verificación
+    usage_count = Column(Integer, server_default='0', nullable=True)  # Contador de uso
     active = Column(Boolean, nullable=False, server_default='true')
     notes = Column(String(500), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

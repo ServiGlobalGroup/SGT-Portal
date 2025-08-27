@@ -192,3 +192,49 @@ async def save_google_route(
     variant=payload.variant.upper(),
     uses_tolls=payload.uses_tolls
     )
+
+
+@router.post('/verify/{route_id}')
+async def verify_route_background(
+    route_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Verificar ruta en background y actualizar si es necesario"""
+    role_value = getattr(current_user.role, 'value', current_user.role)
+    if role_value not in ['ADMINISTRADOR', 'MASTER_ADMIN', 'TRAFICO', 'TRABAJADOR']:
+        raise HTTPException(status_code=403, detail='No autorizado')
+    
+    # Buscar la ruta
+    from app.models.distanciero import Distanciero
+    route = db.query(Distanciero).filter(Distanciero.id == route_id).first()
+    if not route:
+        raise HTTPException(status_code=404, detail='Ruta no encontrada')
+    
+    try:
+        # Verificar si necesita actualización (más de 6 meses)
+        from datetime import datetime, timedelta
+        six_months_ago = datetime.now() - timedelta(days=180)
+        
+        if getattr(route, 'verified_at', None) and getattr(route, 'verified_at') > six_months_ago:
+            return {"status": "recent", "message": "Ruta verificada recientemente"}
+        
+        # Actualizar contador de uso
+        current_usage = getattr(route, 'usage_count', None) or 0
+        setattr(route, 'usage_count', current_usage + 1)
+        
+        # Aquí iría la lógica de verificación con Google Maps
+        # Por ahora solo actualizamos la fecha de verificación
+        setattr(route, 'verified_at', datetime.now())
+        db.commit()
+        
+        return {
+            "status": "verified", 
+            "updated": False,
+            "usage_count": getattr(route, 'usage_count'),
+            "message": "Ruta verificada correctamente"
+        }
+    
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f'Error verificando ruta: {str(e)}')

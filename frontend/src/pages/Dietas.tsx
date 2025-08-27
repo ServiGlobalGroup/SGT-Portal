@@ -44,7 +44,7 @@ const ExcelIcon: React.FC<{ size?: number }> = ({ size=20 }) => (
 );
 
 export const Dietas: React.FC = () => {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const canView = !!user && hasPermission(user, Permission.VIEW_DIETAS);
 
   // Estado pestañas
@@ -56,10 +56,10 @@ export const Dietas: React.FC = () => {
   const [selectedClient, setSelectedClient] = useState<string>('');
   // Para pestaña cálculo: selección cliente/ruta
   const [calcClient, setCalcClient] = useState<string>('');
-  const [calcRoutes, setCalcRoutes] = useState<{ id:number; destination:string; km:number; active:boolean; uses_tolls?:boolean; }[]>([]);
+  const [calcRoutes, setCalcRoutes] = useState<{ id:number; destination:string; km:number; active:boolean; uses_tolls?:boolean; verified_at?:string; created_at?:string; }[]>([]);
   const [loadingCalcRoutes, setLoadingCalcRoutes] = useState(false);
   const [calcRouteFilter, setCalcRouteFilter] = useState('');
-  const [selectedCalcRoute, setSelectedCalcRoute] = useState<{ id:number; destination:string; km:number; uses_tolls?:boolean;} | null>(null);
+  const [selectedCalcRoute, setSelectedCalcRoute] = useState<{ id:number; destination:string; km:number; uses_tolls?:boolean; verified_at?:string; created_at?:string;} | undefined>(undefined);
   const [clientRoutes, setClientRoutes] = useState<{ id:number; client_name:string; destination:string; destination_normalized:string; km:number; active:boolean; notes?:string; created_at:string; updated_at:string; }[]>([]);
   const [loadingRoutes, setLoadingRoutes] = useState(false);
   const [showOnlyActiveRoutes, setShowOnlyActiveRoutes] = useState(true);
@@ -99,7 +99,7 @@ export const Dietas: React.FC = () => {
   useEffect(()=>{
     let cancelled = false;
     const fetchAll = async () => {
-      if(!calcClient){ setCalcRoutes([]); setSelectedCalcRoute(null); return; }
+      if(!calcClient){ setCalcRoutes([]); setSelectedCalcRoute(undefined); return; }
       setLoadingCalcRoutes(true);
       try {
         const PAGE = 500; // tamaño página alto para reducir peticiones
@@ -120,7 +120,7 @@ export const Dietas: React.FC = () => {
         }
         if(!cancelled){
           setCalcRoutes(all);
-          setSelectedCalcRoute(null); // limpiar selección previa
+          setSelectedCalcRoute(undefined); // limpiar selección previa
         }
       } catch(e){
         if(!cancelled){ setCalcRoutes([]); }
@@ -137,7 +137,7 @@ export const Dietas: React.FC = () => {
   // Conductores
   const [drivers, setDrivers] = useState<User[]>([]);
   const [loadingDrivers, setLoadingDrivers] = useState(false);
-  const [selectedDriver, setSelectedDriver] = useState<User | null>(null);
+  const [selectedDriver, setSelectedDriver] = useState<User | undefined>(undefined);
 
   // Cálculo
   const [rows, setRows] = useState<ConceptRow[]>([]);
@@ -160,7 +160,7 @@ export const Dietas: React.FC = () => {
   // Registros
   const [records, setRecords] = useState<DietaRecordRow[]>([]);
   const [recordsLoading, setRecordsLoading] = useState(false);
-  const [filterUser, setFilterUser] = useState<User | null>(null);
+  const [filterUser, setFilterUser] = useState<User | undefined>(undefined);
   const [filterWorkerType, setFilterWorkerType] = useState('');
   const [filterOrder, setFilterOrder] = useState('');
   const [filterStart, setFilterStart] = useState('');
@@ -171,7 +171,7 @@ export const Dietas: React.FC = () => {
   // Export
   const exportingRef = useRef(false);
   const [showSuccess, setShowSuccess] = useState(false);
-  const [snackbar, setSnackbar] = useState<{open: boolean; message: string; severity: 'success' | 'error'}>({open: false, message: '', severity: 'success'});
+  const [snackbar, setSnackbar] = useState<{open: boolean; message: string; severity: 'success' | 'error' | 'info'}>({open: false, message: '', severity: 'success'});
 
   // Grid registros columnas y orden
   const [recordColumns, setRecordColumns] = useState<any[]>([
@@ -627,7 +627,7 @@ export const Dietas: React.FC = () => {
         return rate && (!rate.onlyFor || rate.onlyFor === 'nuevo');
       }));
       setKmsAntiguo('');
-  setSelectedCalcRoute(null);
+  setSelectedCalcRoute(undefined);
     }
   }, [driverType]);
 
@@ -782,6 +782,51 @@ export const Dietas: React.FC = () => {
       setMapReady(false);
     }
   },[tab]);
+
+  // Función para verificar ruta en background cuando se selecciona
+  const verifyRouteInBackground = async (route: any) => {
+    if (!token) {
+      console.warn('No hay token de autenticación disponible para verificar ruta');
+      return;
+    }
+    
+    try {
+      const response = await fetch(`/api/distancieros/verify/${route.id}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log('🔍 Verificación de ruta:', result);
+        
+        if (result.updated) {
+          setSnackbar({
+            open: true,
+            message: `Ruta ${route.destination} actualizada automáticamente`,
+            severity: 'info'
+          });
+        }
+      }
+    } catch (error) {
+      console.warn('Error verificando ruta en background:', error);
+      // No mostrar error al usuario, es un proceso silencioso
+    }
+  };
+
+  // Función para verificar si una ruta necesita verificación (más de 6 meses)
+  const isRouteExpired = (route: any) => {
+    if (!route.verified_at && !route.created_at) return true; // Sin fechas = verificar
+    
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    
+    const lastVerified = route.verified_at ? new Date(route.verified_at) : new Date(route.created_at);
+    return lastVerified < sixMonthsAgo;
+  };
 
   // Función para colocar marcadores de origen y destino
   const placeMarkers = (opt:any) => {
@@ -1267,7 +1312,7 @@ export const Dietas: React.FC = () => {
       // Tras breve pausa permitir feedback visual y luego resetear para nuevo registro
       setTimeout(() => {
         // Limpiar también el conductor (pedido del usuario)
-        setSelectedDriver(null);
+        setSelectedDriver(undefined);
         setRows([]);
         setResult(null);
         setOrderNumber('');
@@ -1437,7 +1482,7 @@ export const Dietas: React.FC = () => {
                 <History sx={{ mr:0.6, fontSize:18 }} /> Registros
               </ToggleButton>
               <ToggleButton value={2}>
-                <Map sx={{ mr:0.6, fontSize:18 }} /> Rutas
+                <Map sx={{ mr:0.6, fontSize:18 }} /> Rutas (Maps)
               </ToggleButton>
               <ToggleButton value={3}>
                 Distancieros
@@ -1460,7 +1505,7 @@ export const Dietas: React.FC = () => {
               ListboxProps={{ style:{ maxHeight: 300 }}}
               getOptionLabel={(o) => (o?.full_name || `${o?.first_name || ''} ${o?.last_name || ''}` || o?.dni_nie || '').trim()}
               noOptionsText={loadingDrivers ? 'Cargando...' : 'Sin resultados'}
-              value={selectedDriver || undefined}
+              value={selectedDriver}
               onChange={(_, val) => { setSelectedDriver(val); setRows([]); setResult(null); }}
               isOptionEqualToValue={(opt, val) => opt.id === val.id}
               renderOption={(props, option) => {
@@ -1543,7 +1588,7 @@ export const Dietas: React.FC = () => {
             <Box minWidth={{ xs:'100%', md:'220px' }}>
               <Autocomplete
                 options={distGrouped.map(g=>g.client_name)}
-                value={calcClient || undefined}
+                value={calcClient}
                 onChange={(_,v)=> setCalcClient(v||'')}
                 size="small"
                 disableClearable
@@ -1581,11 +1626,19 @@ export const Dietas: React.FC = () => {
                     : '';
                   return option.destination + tollInfo;
                 }}
-                value={selectedCalcRoute || undefined}
+                value={selectedCalcRoute}
                 onInputChange={(_,val)=> setCalcRouteFilter(val)}
                 onChange={(_,val)=> {
-                  setSelectedCalcRoute(val || null);
-                  if(val) setKmsAntiguo(String(val.km));
+                  setSelectedCalcRoute(val || undefined);
+                  if(val) {
+                    setKmsAntiguo(String(val.km));
+                    
+                    // Verificar ruta en background si está vencida
+                    if (isRouteExpired(val)) {
+                      console.log('🕒 Ruta vencida, verificando en background:', val.destination);
+                      verifyRouteInBackground(val);
+                    }
+                  }
                 }}
                 renderOption={(props, option) => {
                   console.log('🎨 Renderizando opción:', option.destination, 'uses_tolls:', option.uses_tolls, 'calcClient:', calcClient);
@@ -2416,7 +2469,7 @@ export const Dietas: React.FC = () => {
                   <Autocomplete
                     options={drivers}
                     size="small"
-                    value={filterUser || undefined}
+                    value={filterUser}
                     onChange={(_,v)=>setFilterUser(v)}
                     disableClearable
                     popupIcon={<ArrowDropDown sx={{ color:'text.secondary', fontSize:22 }} />}
@@ -2458,7 +2511,7 @@ export const Dietas: React.FC = () => {
         <Button
                   variant="contained"
                   size="small"
-                  onClick={()=>{setFilterUser(null);setFilterWorkerType('');setFilterOrder('');setFilterStart('');setFilterEnd(''); loadRecords();}}
+                  onClick={()=>{setFilterUser(undefined);setFilterWorkerType('');setFilterOrder('');setFilterStart('');setFilterEnd(''); loadRecords();}}
                   sx={{
                     borderRadius:999,
                     textTransform:'none',
