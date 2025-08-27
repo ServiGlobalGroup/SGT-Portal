@@ -6,7 +6,7 @@ import { usersAPI } from '../services/api';
 import type { User } from '../types';
 import { calculateDietas, DIETA_RATES, DietaConceptInput, DietaCalculationResult, findKilometerRangeAntiguo } from '../config/dietas';
 import { dietasAPI, distancierosAPI } from '../services/api';
-import { Add, Delete, Calculate, RestaurantMenu, History, FiberNew, Close, ArrowUpward, ArrowDownward, PictureAsPdf, ArrowDropDown, Map, ArrowRightAlt, Flag, TripOrigin, Close as CloseIcon, Undo, Toll, RemoveCircleOutline, CheckCircle } from '@mui/icons-material';
+import { Add, Delete, Calculate, RestaurantMenu, History, FiberNew, Close, ArrowUpward, ArrowDownward, PictureAsPdf, ArrowDropDown, Map, ArrowRightAlt, Flag, TripOrigin, Close as CloseIcon, Undo, Toll, RemoveCircleOutline, CheckCircle, Storage, Cloud } from '@mui/icons-material';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -56,10 +56,10 @@ export const Dietas: React.FC = () => {
   const [selectedClient, setSelectedClient] = useState<string>('');
   // Para pestaña cálculo: selección cliente/ruta
   const [calcClient, setCalcClient] = useState<string>('');
-  const [calcRoutes, setCalcRoutes] = useState<{ id:number; destination:string; km:number; active:boolean; }[]>([]);
+  const [calcRoutes, setCalcRoutes] = useState<{ id:number; destination:string; km:number; active:boolean; uses_tolls?:boolean; }[]>([]);
   const [loadingCalcRoutes, setLoadingCalcRoutes] = useState(false);
   const [calcRouteFilter, setCalcRouteFilter] = useState('');
-  const [selectedCalcRoute, setSelectedCalcRoute] = useState<{ id:number; destination:string; km:number;} | null>(null);
+  const [selectedCalcRoute, setSelectedCalcRoute] = useState<{ id:number; destination:string; km:number; uses_tolls?:boolean;} | null>(null);
   const [clientRoutes, setClientRoutes] = useState<{ id:number; client_name:string; destination:string; destination_normalized:string; km:number; active:boolean; notes?:string; created_at:string; updated_at:string; }[]>([]);
   const [loadingRoutes, setLoadingRoutes] = useState(false);
   const [showOnlyActiveRoutes, setShowOnlyActiveRoutes] = useState(true);
@@ -105,11 +105,12 @@ export const Dietas: React.FC = () => {
         const PAGE = 500; // tamaño página alto para reducir peticiones
         let offset = 0;
         let total = Infinity;
-        const all: { id:number; destination:string; km:number; active:boolean; }[] = [];
+        const all: { id:number; destination:string; km:number; active:boolean; uses_tolls?:boolean; }[] = [];
         while(offset < total){
           const data = await distancierosAPI.listRoutes(calcClient, { onlyActive: true, limit: PAGE, offset });
           if(cancelled) return;
-            const simple = data.items.map((r:any)=>({ id:r.id, destination:r.destination, km:r.km, active:r.active }));
+            const simple = data.items.map((r:any)=>({ id:r.id, destination:r.destination, km:r.km, active:r.active, uses_tolls:r.uses_tolls }));
+          console.log('🔍 Datos cargados para', calcClient, ':', simple.slice(0, 3)); // Log primeros 3 elementos
           all.push(...simple);
           total = data.total ?? all.length; // fallback
           if(data.items.length === 0) break;
@@ -194,6 +195,20 @@ export const Dietas: React.FC = () => {
     { key:'active', label:'Estado', width:110 },
     { key:'notes', label:'Notas' } // columna flexible
   ]);
+
+  // Actualizar columnas dinámicamente según cliente seleccionado
+  useEffect(() => {
+    const baseColumns: any[] = [
+      { key:'destination', label:'Destino', width:360 },
+      { key:'km', label:'Km', width:90, align:'right' },
+      { key:'active', label:'Estado', width:110 },
+    ];
+    if (selectedClient === 'GOOGLE MAPS') {
+      baseColumns.splice(2, 0, { key:'uses_tolls', label:'Peaje', width:100, align:'center' }); // insertar antes de Estado
+    }
+    baseColumns.push({ key:'notes', label:'Notas' }); // siempre al final (columna flexible, sin width)
+    setDistColumns(baseColumns);
+  }, [selectedClient]);
   const [distSortKey, setDistSortKey] = useState<string>('');
   const [distSortDir, setDistSortDir] = useState<'asc'|'desc'|''>('');
   const DIST_GRID_HEIGHT = 500; // misma altura que registros
@@ -242,18 +257,6 @@ export const Dietas: React.FC = () => {
   const routePolylinesRef = useRef<any[]>([]);
   const startMarkerRef = useRef<any>(null);
   const endMarkerRef = useRef<any>(null);
-  const autocompleteServiceRef = useRef<any>(null); // servicio de sugerencias
-  const searchInputRef = useRef<HTMLInputElement | null>(null);
-  const searchBoxRef = useRef<any>(null);
-
-  // Sugerencias de lugares (origen/destino)
-  const [originOptions, setOriginOptions] = useState<string[]>([]);
-  const [destinationOptions, setDestinationOptions] = useState<string[]>([]);
-  const originDebounceRef = useRef<number | null>(null);
-  const destinationDebounceRef = useRef<number | null>(null);
-  const [nextStopOptions, setNextStopOptions] = useState<string[]>([]);
-  const nextStopDebounceRef = useRef<number | null>(null);
-
   // Funciones auxiliares que usan estado deben estar después de las definiciones anteriores
 
   const beginResize = (e: React.MouseEvent, key:string, width:number) => {
@@ -638,14 +641,24 @@ export const Dietas: React.FC = () => {
   // Carga perezosa del script sólo cuando se entra a la pestaña Rutas
   const initializeMap = () => {
     try {
-      if(!mapDivRef.current) return;
+      // Verificar que Google Maps esté completamente disponible
+      if(!(window as any).google?.maps?.Map || typeof (window as any).google.maps.Map !== 'function') {
+        setTimeout(initializeMap, 200);
+        return;
+      }
+      
+      // Esperar hasta que mapDivRef esté disponible
+      if(!mapDivRef.current) {
+        setTimeout(initializeMap, 100);
+        return;
+      }
+      
       gMapRef.current = new (window as any).google.maps.Map(mapDivRef.current, {
         center:{lat:40.4168,lng:-3.7038},
         zoom:6,
         mapTypeControl:false,
         fullscreenControl:true,
         streetViewControl:false,
-        // Configuración para mostrar solo carreteras (sin transporte público)
         styles: [
           {
             featureType: "transit",
@@ -661,45 +674,96 @@ export const Dietas: React.FC = () => {
           }
         ]
       });
-  directionsServiceRef.current = new (window as any).google.maps.DirectionsService();
-      try { autocompleteServiceRef.current = new (window as any).google.maps.places.AutocompleteService(); } catch {}
-      if(searchInputRef.current){
-        searchBoxRef.current = new (window as any).google.maps.places.SearchBox(searchInputRef.current);
-        searchBoxRef.current.addListener('places_changed', () => {
-          const places = searchBoxRef.current.getPlaces();
-          if(!places || !places.length) return;
-          const bounds = new (window as any).google.maps.LatLngBounds();
-            places.forEach((p:any)=>{ if(p.geometry?.viewport) bounds.union(p.geometry.viewport); else if(p.geometry?.location) bounds.extend(p.geometry.location); });
-          gMapRef.current.fitBounds(bounds);
-        });
-      }
+      
+      directionsServiceRef.current = new (window as any).google.maps.DirectionsService();
+      
+      // Eliminamos AutocompleteService para ahorrar en API
+      // try { 
+      //   autocompleteServiceRef.current = new (window as any).google.maps.places.AutocompleteService(); 
+      // } catch(e) {
+      //   // AutocompleteService no disponible, continuar sin él
+      // }
+      
+      // Eliminamos SearchBox para ahorrar en API
+      // if(searchInputRef.current){
+      //   searchBoxRef.current = new (window as any).google.maps.places.SearchBox(searchInputRef.current);
+      //   searchBoxRef.current.addListener('places_changed', () => {
+      //     const places = searchBoxRef.current.getPlaces();
+      //     if(!places || !places.length) return;
+      //     const bounds = new (window as any).google.maps.LatLngBounds();
+      //       places.forEach((p:any)=>{ if(p.geometry?.viewport) bounds.union(p.geometry.viewport); else if(p.geometry?.location) bounds.extend(p.geometry.location); });
+      //     gMapRef.current.fitBounds(bounds);
+      //   });
+      // }
+      
       setMapReady(true);
       // Si ya tenemos una ruta previa, volver a dibujarla
       if(routeStats && routeOrigin && routeDestination){
         setTimeout(()=> { handleCalculateRoute(); }, 50);
       }
-    } catch(e:any){ setMapsError('Error inicializando mapa'); }
+    } catch(e:any){ 
+      setMapsError(`Error inicializando mapa: ${e?.message || 'Error desconocido'}`); 
+    }
   };
 
   useEffect(()=>{
     if(tab!==2) return;
+    
     // Si ya listo y referencia válida, sólo forzar resize
     if(mapReady && gMapRef.current){
       setTimeout(()=>{ try { (window as any).google?.maps?.event?.trigger(gMapRef.current,'resize'); } catch {}; }, 120);
       return;
     }
+    
     const apiKey = import.meta.env.VITE_GOOGLE_MAPS_KEY;
-    if(!apiKey){ setMapsError('Falta VITE_GOOGLE_MAPS_KEY en .env'); return; }
+    if(!apiKey){ 
+      setMapsError('Falta clave de Google Maps'); 
+      return; 
+    }
+    
     const existing = document.querySelector('script[data-gmaps]') as HTMLScriptElement | null;
     if(existing){
-      if((window as any).google?.maps) initializeMap(); else existing.addEventListener('load', initializeMap, { once:true });
+      // Verificar si Google Maps ya está disponible
+      if((window as any).google?.maps?.Map && typeof (window as any).google.maps.Map === 'function') {
+        initializeMap();
+      } else {
+        // Esperar a que se cargue completamente
+        const checkLoaded = () => {
+          if((window as any).google?.maps?.Map && typeof (window as any).google.maps.Map === 'function') {
+            initializeMap();
+          } else {
+            setTimeout(checkLoaded, 100);
+          }
+        };
+        checkLoaded();
+      }
       return;
     }
+    
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=places`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&libraries=geometry&loading=async`;
     script.async = true; script.defer = true; script.dataset.gmaps='1';
-    script.onload = initializeMap;
-    script.onerror = ()=> setMapsError('No se pudo cargar Google Maps');
+    script.onload = () => {
+      // Esperar un poco más para asegurar que todo esté listo
+      setTimeout(() => {
+        if((window as any).google?.maps?.Map && typeof (window as any).google.maps.Map === 'function') {
+          initializeMap();
+        } else {
+          // Si aún no está listo, intentar con polling
+          const checkReady = () => {
+            if((window as any).google?.maps?.Map && typeof (window as any).google.maps.Map === 'function') {
+              initializeMap();
+            } else {
+              setTimeout(checkReady, 100);
+            }
+          };
+          checkReady();
+        }
+      }, 300);
+    };
+    script.onerror = () => {
+      setMapsError('No se pudo cargar Google Maps. Verifica tu conexión.');
+    };
     document.head.appendChild(script);
   },[tab]);
 
@@ -717,63 +781,6 @@ export const Dietas: React.FC = () => {
       setMapReady(false);
     }
   },[tab]);
-
-  // Buscar sugerencias para origen
-  useEffect(()=>{
-    if(tab!==2) return; // solo pestaña rutas
-    if(!autocompleteServiceRef.current) return;
-    if(originDebounceRef.current) window.clearTimeout(originDebounceRef.current);
-    if(!routeOrigin || routeOrigin.trim().length < 3){ setOriginOptions([]); return; }
-    originDebounceRef.current = window.setTimeout(()=>{
-      autocompleteServiceRef.current.getPlacePredictions({ 
-        input: routeOrigin, 
-        componentRestrictions: { country: ['es','pt','fr'] },
-        types: ['geocode'] // Solo direcciones geográficas, no estaciones de transporte
-      }, (preds:any[], status:string)=>{
-        if(status!=='OK' || !Array.isArray(preds)){ setOriginOptions([]); return; }
-        setOriginOptions(preds.map(p=>p.description));
-      });
-    }, 280);
-    return ()=>{ if(originDebounceRef.current) window.clearTimeout(originDebounceRef.current); };
-  },[routeOrigin, tab]);
-
-  // Buscar sugerencias para destino
-  useEffect(()=>{
-    if(tab!==2) return; // solo pestaña rutas
-    if(!autocompleteServiceRef.current) return;
-    if(destinationDebounceRef.current) window.clearTimeout(destinationDebounceRef.current);
-    if(!routeDestination || routeDestination.trim().length < 3){ setDestinationOptions([]); return; }
-    destinationDebounceRef.current = window.setTimeout(()=>{
-      autocompleteServiceRef.current.getPlacePredictions({ 
-        input: routeDestination, 
-        componentRestrictions: { country: ['es','pt','fr'] },
-        types: ['geocode'] // Solo direcciones geográficas, no estaciones de transporte
-      }, (preds:any[], status:string)=>{
-        if(status!=='OK' || !Array.isArray(preds)){ setDestinationOptions([]); return; }
-        setDestinationOptions(preds.map(p=>p.description));
-      });
-    }, 280);
-    return ()=>{ if(destinationDebounceRef.current) window.clearTimeout(destinationDebounceRef.current); };
-  },[routeDestination, tab]);
-
-  // Sugerencias para nuevo tramo
-  useEffect(()=>{
-    if(tab!==2) return; // solo rutas
-    if(!autocompleteServiceRef.current) return;
-    if(nextStopDebounceRef.current) window.clearTimeout(nextStopDebounceRef.current);
-    if(!nextStop || nextStop.trim().length < 3){ setNextStopOptions([]); return; }
-    nextStopDebounceRef.current = window.setTimeout(()=>{
-      autocompleteServiceRef.current.getPlacePredictions({ 
-        input: nextStop, 
-        componentRestrictions: { country: ['es','pt','fr'] },
-        types: ['geocode'] // Solo direcciones geográficas, no estaciones de transporte
-      }, (preds:any[], status:string)=>{
-        if(status!=='OK' || !Array.isArray(preds)){ setNextStopOptions([]); return; }
-        setNextStopOptions(preds.map(p=>p.description));
-      });
-    },280);
-    return ()=>{ if(nextStopDebounceRef.current) window.clearTimeout(nextStopDebounceRef.current); };
-  },[nextStop, tab]);
 
   const handleCalculateRoute = async () => {
     if(!routeOrigin.trim() || !routeDestination.trim()){
@@ -906,17 +913,21 @@ export const Dietas: React.FC = () => {
       try {
         const { googleRoutesService } = await import('../services/googleRoutesService');
     // Intentar primero ruta sin peaje
+    console.log('🔍 Buscando rutas en caché:', routeOrigin, 'a', routeDestination);
     const cachedNo = await googleRoutesService.getCached(routeOrigin, routeDestination, 'DRIVING','NOTOLLS');
     const cachedToll = await googleRoutesService.getCached(routeOrigin, routeDestination, 'DRIVING','TOLLS');
+    console.log('📋 Resultado caché - SinPeaje:', cachedNo ? `✅ ${cachedNo.km}km` : '❌', 'ConPeaje:', cachedToll ? `✅ ${cachedToll.km}km` : '❌');
+    
     // Prioridad: si tenemos al menos la sin peaje la usamos; luego añadimos (on-demand) la de peaje tras dibujar
     const cached = cachedNo || cachedToll;
     if(cached && cached.polyline){
           // Decodificar polyline y dibujar manualmente
           const libReady = (window as any).google?.maps?.geometry?.encoding;
           if(!libReady){
-            // Si geometry no está cargada, recargar script con librería geometry
-            // (Simple fallback: continuar con cálculo normal)
+            console.warn('⚠️ google.maps.geometry.encoding no disponible, recargando con librería geometry...');
+            // Si geometry no está cargada, hacer fallback a API normal
           } else {
+            console.log('✅ Usando ruta desde caché:', cached.variant, cached.km + 'km');
             const path = (window as any).google.maps.geometry.encoding.decodePath(cached.polyline);
             // Crear polyline
             routePolylinesRef.current.forEach(p=>{ try { p.setMap(null); } catch {} });
@@ -924,7 +935,8 @@ export const Dietas: React.FC = () => {
             const polyline = new (window as any).google.maps.Polyline({
               map: gMapRef.current,
               path,
-              strokeColor:'#1e5fb8', strokeOpacity:0.95, strokeWeight:6, zIndex:70
+              strokeColor: cached.uses_tolls ? '#ff9800' : '#1e5fb8', // naranja peaje / azul sin peaje
+              strokeOpacity:0.95, strokeWeight:6, zIndex:70
             });
             routePolylinesRef.current.push(polyline);
             // Ajustar bounds
@@ -966,6 +978,7 @@ export const Dietas: React.FC = () => {
         }
       } catch(e){ /* silencioso */ }
     }
+    console.log('🌐 Llamando a Google Maps API (no hay caché disponible)');
     Promise.all([
       directionsServiceRef.current.route({ ...reqBase, avoidTolls: true }), // siempre 1+ rutas sin peaje
       directionsServiceRef.current.route({ ...reqBase, avoidTolls: false }).catch(()=>null) // rutas potenciales con peaje
@@ -1036,12 +1049,14 @@ export const Dietas: React.FC = () => {
           // Guardar ambas variantes si existen
           const polylineBase = base?.route?.overview_polyline?.encodedPath || base?.route?.overview_polyline?.points || base?.route?.overview_polyline || null;
           if(polylineBase){
-            googleRoutesService.save({ origin: routeOrigin, destination: routeDestination, mode: 'DRIVING', km: base.totalKmNumber, duration_sec: base?.seconds || undefined, polyline: polylineBase, variant: 'NOTOLLS' });
+            console.log('💾 Guardando ruta SIN peaje en caché:', base.totalKmNumber + 'km');
+            googleRoutesService.save({ origin: routeOrigin, destination: routeDestination, mode: 'DRIVING', km: base.totalKmNumber, duration_sec: base?.seconds || undefined, polyline: polylineBase, variant: 'NOTOLLS', uses_tolls:false });
           }
           if(tollCandidate){
             const polylineToll = tollCandidate?.route?.overview_polyline?.encodedPath || tollCandidate?.route?.overview_polyline?.points || tollCandidate?.route?.overview_polyline || null;
             if(polylineToll){
-              googleRoutesService.save({ origin: routeOrigin, destination: routeDestination, mode: 'DRIVING', km: tollCandidate.totalKmNumber, duration_sec: tollCandidate?.seconds || undefined, polyline: polylineToll, variant: 'TOLLS' });
+              console.log('💾 Guardando ruta CON peaje en caché:', tollCandidate.totalKmNumber + 'km');
+              googleRoutesService.save({ origin: routeOrigin, destination: routeDestination, mode: 'DRIVING', km: tollCandidate.totalKmNumber, duration_sec: tollCandidate?.seconds || undefined, polyline: polylineToll, variant: 'TOLLS', uses_tolls:true });
             }
           }
         } catch {}
@@ -1478,13 +1493,41 @@ export const Dietas: React.FC = () => {
             </Box>
             <Box flex={1} minWidth={{ xs:'100%', md:'340px' }}>
               <Autocomplete
-                options={calcRoutes.filter(r=> !calcRouteFilter.trim() || r.destination.toLowerCase().includes(calcRouteFilter.toLowerCase())).map(r=> r.destination)}
-                value={selectedCalcRoute?.destination || '' /* mantener string vacío */}
+                options={calcRoutes.filter(r=> !calcRouteFilter.trim() || r.destination.toLowerCase().includes(calcRouteFilter.toLowerCase()))}
+                getOptionLabel={(option) => {
+                  if (typeof option === 'string') return option;
+                  const tollInfo = calcClient === 'GOOGLE MAPS' && typeof option.uses_tolls === 'boolean' 
+                    ? (option.uses_tolls ? ' (Peaje)' : ' (Sin peaje)') 
+                    : '';
+                  return option.destination + tollInfo;
+                }}
+                value={selectedCalcRoute || undefined}
                 onInputChange={(_,val)=> setCalcRouteFilter(val)}
                 onChange={(_,val)=> {
-                  const route = calcRoutes.find(r=> r.destination===val);
-                  setSelectedCalcRoute(route || null);
-                  if(route) setKmsAntiguo(String(route.km));
+                  setSelectedCalcRoute(val || null);
+                  if(val) setKmsAntiguo(String(val.km));
+                }}
+                renderOption={(props, option) => {
+                  console.log('🎨 Renderizando opción:', option.destination, 'uses_tolls:', option.uses_tolls, 'calcClient:', calcClient);
+                  return (
+                    <Box component="li" {...props} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <span>{option.destination}</span>
+                      {calcClient === 'GOOGLE MAPS' && typeof option.uses_tolls === 'boolean' && (
+                        <Chip 
+                          size="small" 
+                          label={option.uses_tolls ? "Peaje" : "Sin peaje"} 
+                          sx={{ 
+                            fontSize: 9, 
+                            height: 18, 
+                            bgcolor: option.uses_tolls ? 'rgba(255,152,0,0.15)' : 'rgba(46,125,50,0.15)', 
+                            color: option.uses_tolls ? '#8a5200' : '#2e7d32', 
+                            border: option.uses_tolls ? '1px solid rgba(255,152,0,0.4)' : '1px solid rgba(46,125,50,0.4)', 
+                            fontWeight: 600 
+                          }} 
+                        />
+                      )}
+                    </Box>
+                  );
                 }}
                 disableClearable
                 disabled={!calcClient}
@@ -1629,13 +1672,13 @@ export const Dietas: React.FC = () => {
                   <Box sx={{ display:'flex', flexWrap:'wrap', gap:2, mb:2 }}>
           <Autocomplete
                       freeSolo
-                      options={originOptions}
+                      options={[]}
                       value={routeOrigin}
-                      onInputChange={(_,val)=> setRouteOrigin(val)}
-                      onChange={(_,val)=>{ if(typeof val==='string') setRouteOrigin(val); }}
+                      onInputChange={(_,val)=> setRouteOrigin(val?.toUpperCase() || '')}
+                      onChange={(_,val)=>{ if(typeof val==='string') setRouteOrigin(val.toUpperCase()); }}
                       disableClearable
                       ListboxProps={{ style:{ maxHeight:260 } }}
-                      noOptionsText={routeOrigin.trim().length<3? 'Escribe 3+ letras' : 'Sin sugerencias'}
+                      noOptionsText={'Sin sugerencias automáticas'}
                       renderInput={(params)=>(
             <TextField {...params} variant="outlined" label="Origen" size="small" placeholder="Ciudad / Dirección" sx={pillFieldSx} />
                       )}
@@ -1643,13 +1686,13 @@ export const Dietas: React.FC = () => {
                     />
                     <Autocomplete
                       freeSolo
-                      options={destinationOptions}
+                      options={[]}
                       value={routeDestination}
-                      onInputChange={(_,val)=> setRouteDestination(val)}
-                      onChange={(_,val)=>{ if(typeof val==='string') setRouteDestination(val); }}
+                      onInputChange={(_,val)=> setRouteDestination(val?.toUpperCase() || '')}
+                      onChange={(_,val)=>{ if(typeof val==='string') setRouteDestination(val.toUpperCase()); }}
                       disableClearable
                       ListboxProps={{ style:{ maxHeight:260 } }}
-                      noOptionsText={routeDestination.trim().length<3? 'Escribe 3+ letras' : 'Sin sugerencias'}
+                      noOptionsText={'Sin sugerencias automáticas'}
                       renderInput={(params)=>(
             <TextField {...params} variant="outlined" label="Destino" size="small" placeholder="Ciudad / Dirección" sx={pillFieldSx} />
                       )}
@@ -1705,13 +1748,13 @@ export const Dietas: React.FC = () => {
                     </Box>
           <Autocomplete
                       freeSolo
-                      options={nextStopOptions}
+                      options={[]}
                       value={nextStop}
-                      onInputChange={(_,val)=> setNextStop(val)}
-                      onChange={(_,val)=> { if(typeof val==='string') setNextStop(val); }}
+                      onInputChange={(_,val)=> setNextStop(val?.toUpperCase() || '')}
+                      onChange={(_,val)=> { if(typeof val==='string') setNextStop(val.toUpperCase()); }}
                       disableClearable
                       ListboxProps={{ style:{ maxHeight:260 } }}
-                      noOptionsText={nextStop.trim().length<3? 'Escribe 3+ letras' : 'Sin sugerencias'}
+                      noOptionsText={'Sin sugerencias automáticas'}
                       renderInput={(params)=>(
             <TextField {...params} variant="outlined" label="Nuevo tramo" size="small" placeholder="Añadir ciudad" sx={{ ...pillFieldSx, minWidth:200 }} />
                       )}
@@ -1722,7 +1765,7 @@ export const Dietas: React.FC = () => {
                         <IconButton
                           size="small"
                           disabled={!nextStop.trim() || !routeOrigin.trim() || !routeDestination.trim()}
-                          onClick={()=>{ const val = nextStop.trim(); if(!val) return; setWaypoints(prev=>[...prev, routeDestination]); setRouteDestination(val); setNextStop(''); setRouteStats(null); }}
+                          onClick={()=>{ const val = nextStop.trim().toUpperCase(); if(!val) return; setWaypoints(prev=>[...prev, routeDestination]); setRouteDestination(val); setNextStop(''); setRouteStats(null); }}
                           sx={{
                             bgcolor: (!nextStop.trim() || !routeOrigin.trim() || !routeDestination.trim())? '#e0e0e0' : '#5c2340',
                             color:'#fff',
@@ -1746,14 +1789,27 @@ export const Dietas: React.FC = () => {
                       </Tooltip>
                     )}
                   </Box>
-                  {mapsError && <Alert severity="error" sx={{ mb:2 }}>{mapsError}</Alert>}
+                  {mapsError && <Alert severity="error" sx={{ mb:2 }}>
+                    {mapsError}
+                    <Button 
+                      size="small" 
+                      onClick={() => { 
+                        setMapsError(null); 
+                        setMapReady(false); 
+                        setTimeout(initializeMap, 500); 
+                      }} 
+                      sx={{ ml:2 }}
+                    >
+                      Reintentar
+                    </Button>
+                  </Alert>}
                   <Box sx={{ height:680, borderRadius:3, overflow:'hidden', border:'1px solid #d0d4d8', position:'relative', background:'#eef1f4' }}>
                     {!mapReady && !mapsError && (
                       <Box sx={{ position:'absolute', inset:0, display:'flex', alignItems:'center', justifyContent:'center' }}>
                         <Typography variant="body2" fontWeight={500}>Cargando mapa...</Typography>
                       </Box>
                     )}
-                    <Box ref={mapDivRef} sx={{ position:'absolute', inset:0 }} />
+                    <Box ref={mapDivRef} sx={{ position:'absolute', inset:0, minHeight:'400px' }} />
                   </Box>
                 </Paper>
                 {/* Panel lateral resumen siempre visible */}
@@ -1775,12 +1831,38 @@ export const Dietas: React.FC = () => {
                       <Typography sx={{ fontWeight:700, fontSize:34, lineHeight:1, letterSpacing:.5 }}>
                         {activeTotals.distanceLabel}
                       </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ fontWeight:500, mt:0.5 }}>
+                      <Typography variant="body2" component="div" color="text.secondary" sx={{ fontWeight:500, mt:0.5, display:'flex', alignItems:'center', gap:1 }}>
                         {activeTotals.durationLabel}
-                        {routeStats?.fromCache && (
-                          <Typography component="span" sx={{ ml: 1, fontSize: '0.75rem', color: 'success.main', fontWeight: 600 }}>
-                            (Caché)
-                          </Typography>
+                        {routeStats?.fromCache ? (
+                          <Chip 
+                            size="small" 
+                            icon={<Storage sx={{ fontSize:14 }} />}
+                            label="Caché" 
+                            sx={{ 
+                              fontSize:10, 
+                              height:22, 
+                              bgcolor:'rgba(46,125,50,0.15)', 
+                              color:'#2e7d32', 
+                              border:'1px solid rgba(46,125,50,0.35)', 
+                              fontWeight:600,
+                              '& .MuiChip-icon': { color:'#2e7d32', fontSize:'14px !important' }
+                            }} 
+                          />
+                        ) : routeStats && (
+                          <Chip 
+                            size="small" 
+                            icon={<Cloud sx={{ fontSize:14 }} />}
+                            label="API Google" 
+                            sx={{ 
+                              fontSize:10, 
+                              height:22, 
+                              bgcolor:'rgba(33,150,243,0.15)', 
+                              color:'#1976d2', 
+                              border:'1px solid rgba(33,150,243,0.35)', 
+                              fontWeight:600,
+                              '& .MuiChip-icon': { color:'#1976d2', fontSize:'14px !important' }
+                            }} 
+                          />
                         )}
                       </Typography>
                       {routeStats?.route?.summary && (
@@ -1832,6 +1914,23 @@ export const Dietas: React.FC = () => {
                     </Box>
                   </Box>
                   <Divider />
+                  {/* Indicador de fuente de información */}
+                  {routeStats && (
+                    <Box sx={{ px:1, py:0.5, display:'flex', alignItems:'center', justifyContent:'center' }}>
+                      {routeStats.fromCache ? (
+                        <Box sx={{ display:'flex', alignItems:'center', gap:0.5, fontSize:11, color:'#2e7d32', fontWeight:600 }}>
+                          <Storage sx={{ fontSize:14 }} />
+                          <span>Datos desde distanciero local</span>
+                        </Box>
+                      ) : (
+                        <Box sx={{ display:'flex', alignItems:'center', gap:0.5, fontSize:11, color:'#1976d2', fontWeight:600 }}>
+                          <Cloud sx={{ fontSize:14 }} />
+                          <span>Datos desde Google Maps API</span>
+                        </Box>
+                      )}
+                    </Box>
+                  )}
+                  {routeStats && <Divider />}
                   {/* Lista de opciones de rutas ocultada: selección sólo haciendo clic en la polilínea del mapa */}
                   {routeStats ? (
                     <Box sx={{ display:'flex', flexDirection:'column', gap:1, overflowY:'auto' }}>
@@ -2079,8 +2178,27 @@ export const Dietas: React.FC = () => {
                             {distColumns.map(col => {
                               let content: React.ReactNode;
                               switch(col.key){
-                                case 'destination': content = r.destination; break;
+                                case 'destination': 
+                                  content = (
+                                    <Box sx={{ display:'flex', alignItems:'center', gap:1, minWidth:0 }}>
+                                      <span style={{ flex:'1 1 auto', minWidth:0, overflow:'hidden', textOverflow:'ellipsis' }}>{r.destination}</span>
+                                      {selectedClient === 'GOOGLE MAPS' && (r as any).uses_tolls === true && (
+                                        <Chip size="small" label="Peaje" sx={{ fontSize:10, height:20, bgcolor:'rgba(255,152,0,0.15)', color:'#8a5200', border:'1px solid rgba(255,152,0,0.4)', fontWeight:600 }} />
+                                      )}
+                                      {selectedClient === 'GOOGLE MAPS' && (r as any).uses_tolls === false && (
+                                        <Chip size="small" label="Sin peaje" sx={{ fontSize:10, height:20, bgcolor:'rgba(46,125,50,0.15)', color:'#2e7d32', border:'1px solid rgba(46,125,50,0.4)', fontWeight:600 }} />
+                                      )}
+                                    </Box>
+                                  ); 
+                                  break;
                                 case 'km': content = r.km; break;
+                                case 'uses_tolls': 
+                                  content = (r as any).uses_tolls === true 
+                                    ? <Chip size="small" label="Peaje" sx={{ fontSize:10, height:22, bgcolor:'rgba(255,152,0,0.15)', color:'#8a5200', border:'1px solid rgba(255,152,0,0.4)', fontWeight:600 }} />
+                                    : (r as any).uses_tolls === false
+                                      ? <Chip size="small" label="Sin peaje" sx={{ fontSize:10, height:22, bgcolor:'rgba(46,125,50,0.15)', color:'#2e7d32', border:'1px solid rgba(46,125,50,0.4)', fontWeight:600 }} />
+                                      : '—';
+                                  break;
                                 case 'active': content = r.active? <Chip size="small" color="success" label="Activa"/> : <Chip size="small" label="Inactiva"/>; break;
                                 case 'notes': content = r.notes || ''; break;
                                 default: content = (r as any)[col.key];

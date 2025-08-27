@@ -32,11 +32,17 @@ class DistancieroService:
 
     @staticmethod
     def save_google_route(db: Session, origin: str, destination: str, mode: str, km: float,
-                          duration_sec: int | None, polyline: str | None, variant: str = 'NOTOLLS') -> Distanciero:
+                          duration_sec: int | None, polyline: str | None, variant: str = 'NOTOLLS', uses_tolls: bool | None = None) -> Distanciero:
         o_norm = normalize_destination(origin)
         d_norm = normalize_destination(destination)
         base_key = DistancieroService.build_route_hash(o_norm, d_norm, mode)
         hash_key = base_key if variant.upper()=='NOTOLLS' else base_key + '|T'
+        
+        # Para destination_normalized, incluir información del peaje para evitar conflictos de unicidad
+        destination_normalized = d_norm
+        if variant.upper() == 'TOLLS':
+            destination_normalized = d_norm + '|tolls'
+        
         entity = (db.query(Distanciero)
                     .filter(Distanciero.hash_key == hash_key)
                     .first())
@@ -45,13 +51,20 @@ class DistancieroService:
             entity.km = km  # type: ignore[attr-defined]
             entity.duration_sec = duration_sec  # type: ignore[attr-defined]
             entity.polyline = polyline  # type: ignore[attr-defined]
+            entity.uses_tolls = uses_tolls  # type: ignore[attr-defined]
+            # Actualizar formato ORIGEN-DESTINO
+            entity.destination = f"{origin.strip()}-{destination.strip()}"  # type: ignore[attr-defined]
+            entity.destination_normalized = destination_normalized  # type: ignore[attr-defined]
             db.commit()
             db.refresh(entity)
             return entity
+        # Crear formato ORIGEN-DESTINO para el campo destination
+        formatted_destination = f"{origin.strip()}-{destination.strip()}"
+        
         entity = Distanciero(
             client_name='GOOGLE MAPS',
-            destination=destination.strip(),
-            destination_normalized=d_norm,
+            destination=formatted_destination,
+            destination_normalized=destination_normalized,
             km=km,
             active=True,
             notes=None,
@@ -60,7 +73,8 @@ class DistancieroService:
             mode=mode.upper(),
             duration_sec=duration_sec,
             polyline=polyline,
-            hash_key=hash_key
+            hash_key=hash_key,
+            uses_tolls=uses_tolls
         )
         db.add(entity)
         db.commit()

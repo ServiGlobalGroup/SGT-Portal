@@ -18,6 +18,7 @@ class Distanciero(Base):
     duration_sec = Column(Integer, nullable=True)
     polyline = Column(Text, nullable=True)  # overview_polyline
     hash_key = Column(String(300), nullable=True, index=True, unique=True)
+    uses_tolls = Column(Boolean, nullable=True)  # True si ruta con peaje (variant TOLLS)
     active = Column(Boolean, nullable=False, server_default='true')
     notes = Column(String(500), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

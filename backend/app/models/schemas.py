@@ -249,6 +249,7 @@ class DistancieroBase(BaseModel):
     mode: str | None = None
     duration_sec: int | None = None
     polyline: str | None = None
+    uses_tolls: bool | None = None
 
 class DistancieroCreate(BaseModel):
     client_name: str

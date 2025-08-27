@@ -17,6 +17,7 @@ class GoogleRouteCreate(BaseModel):
     duration_sec: int | None = None
     polyline: str | None = None
     variant: str = 'NOTOLLS'  # NOTOLLS | TOLLS
+    uses_tolls: bool | None = None
 
 class GoogleRouteResponse(BaseModel):
     origin: str
@@ -27,6 +28,7 @@ class GoogleRouteResponse(BaseModel):
     polyline: str | None
     cached: bool = True
     variant: str = 'NOTOLLS'
+    uses_tolls: bool | None = None
 
 router = APIRouter()
 
@@ -176,7 +178,8 @@ async def save_google_route(
         km=payload.km,
         duration_sec=payload.duration_sec,
         polyline=payload.polyline,
-        variant=payload.variant
+    variant=payload.variant,
+    uses_tolls=payload.uses_tolls
     )
     return GoogleRouteResponse(  # type: ignore[arg-type]
         origin=getattr(entity, 'origin', None) or payload.origin,
@@ -186,5 +189,6 @@ async def save_google_route(
         duration_sec=getattr(entity, 'duration_sec'),
         polyline=getattr(entity, 'polyline'),
         cached=True,
-        variant=payload.variant.upper()
+    variant=payload.variant.upper(),
+    uses_tolls=payload.uses_tolls
     )
