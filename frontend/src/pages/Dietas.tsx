@@ -939,13 +939,23 @@ export const Dietas: React.FC = () => {
             const mins = Math.round((seconds%3600)/60);
             const totalDuration = seconds? (hours ? `${hours} h ${mins} min` : `${mins} min`) : '—';
             
+            // Crear tramos sintéticos para mostrar origen-destino
+            const syntheticLegs = [{
+              from: routeOrigin.split(',')[0].trim(),
+              to: routeDestination.split(',')[0].trim(),
+              distance: totalDistance,
+              duration: totalDuration,
+              kmNumber: km,
+              secNumber: seconds,
+            }];
+            
             const path = (window as any).google.maps.geometry.encoding.decodePath(cached.polyline);
             const pseudoRoute = { overview_path: path, bounds: null, legs: [] };
             const baseOption = { 
               totalDistance, 
               totalDuration, 
               totalKmNumber: km, 
-              legs: [], 
+              legs: syntheticLegs, // Agregar los tramos sintéticos
               crossesPortugal:false, 
               crossesFrance:false, 
               usesTolls: cached.variant==='TOLLS', 
@@ -975,11 +985,21 @@ export const Dietas: React.FC = () => {
                 const minsOther = Math.round((secondsOther%3600)/60);
                 const totalDurationOther = secondsOther ? (hoursOther ? `${hoursOther} h ${minsOther} min` : `${minsOther} min`) : '—';
                 
+                // Crear tramos sintéticos para la segunda variante
+                const syntheticLegsOther = [{
+                  from: routeOrigin.split(',')[0].trim(),
+                  to: routeDestination.split(',')[0].trim(),
+                  distance: totalDistanceOther,
+                  duration: totalDurationOther,
+                  kmNumber: kmOther,
+                  secNumber: secondsOther,
+                }];
+                
                 const otherOption = {
                   totalDistance: totalDistanceOther,
                   totalDuration: totalDurationOther,
                   totalKmNumber: kmOther,
-                  legs: [],
+                  legs: syntheticLegsOther, // Agregar los tramos sintéticos
                   crossesPortugal: false,
                   crossesFrance: false,
                   usesTolls: otherVariant.variant === 'TOLLS',
