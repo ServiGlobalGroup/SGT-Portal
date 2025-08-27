@@ -783,6 +783,56 @@ export const Dietas: React.FC = () => {
     }
   },[tab]);
 
+  // Función para colocar marcadores de origen y destino
+  const placeMarkers = (opt:any) => {
+    try {
+      const legs = opt?.route?.legs||[];
+      let startLoc, endLoc;
+      
+      // Si hay legs con ubicaciones (rutas de API)
+      if(legs.length && legs[0].start_location && legs[legs.length-1].end_location) {
+        startLoc = legs[0].start_location;
+        endLoc = legs[legs.length-1].end_location;
+      }
+      // Si es ruta de caché, usar el primer y último punto de la polyline
+      else if(opt?.route?.overview_path && opt.route.overview_path.length > 0) {
+        const path = opt.route.overview_path;
+        startLoc = path[0];
+        endLoc = path[path.length - 1];
+      }
+      
+      // Colocar marcador de origen
+      if(startLoc){
+        if(!startMarkerRef.current){
+          startMarkerRef.current = new (window as any).google.maps.Marker({ 
+            map: gMapRef.current, 
+            position: startLoc, 
+            label: 'O',
+            title: 'Origen'
+          });
+        } else {
+          startMarkerRef.current.setPosition(startLoc);
+        }
+      }
+      
+      // Colocar marcador de destino
+      if(endLoc){
+        if(!endMarkerRef.current){
+          endMarkerRef.current = new (window as any).google.maps.Marker({ 
+            map: gMapRef.current, 
+            position: endLoc, 
+            label: 'D',
+            title: 'Destino'
+          });
+        } else {
+          endMarkerRef.current.setPosition(endLoc);
+        }
+      }
+    } catch(e) {
+      console.warn('Error colocando marcadores:', e);
+    }
+  };
+
   const handleCalculateRoute = async () => {
     if(!routeOrigin.trim() || !routeDestination.trim()){
       setMapsError('Origen y destino requeridos'); return;
@@ -881,6 +931,8 @@ export const Dietas: React.FC = () => {
           setSelectedRouteIdx(idx);
           setRouteStats(opt);
           setDisabledLegs(new Set());
+          // Actualizar marcadores cuando se cambia de ruta
+          placeMarkers(opt);
         });
         routePolylinesRef.current.push(polyline);
       });
@@ -888,25 +940,6 @@ export const Dietas: React.FC = () => {
       try { const sel = candidates[selected]; if(sel?.route?.bounds) gMapRef.current.fitBounds(sel.route.bounds); } catch {}
       // Colocar marcadores de inicio/fin de la seleccionada
       placeMarkers(candidates[selected]);
-    };
-
-    const placeMarkers = (opt:any) => {
-      try {
-        const legs = opt?.route?.legs||[];
-        if(!legs.length) return;
-        const startLoc = legs[0].start_location;
-        const endLoc = legs[legs.length-1].end_location;
-        if(startLoc){
-          if(!startMarkerRef.current){
-            startMarkerRef.current = new (window as any).google.maps.Marker({ map:gMapRef.current, position:startLoc, label:'O' });
-          } else startMarkerRef.current.setPosition(startLoc);
-        }
-        if(endLoc){
-          if(!endMarkerRef.current){
-            endMarkerRef.current = new (window as any).google.maps.Marker({ map:gMapRef.current, position:endLoc, label:'D' });
-          } else endMarkerRef.current.setPosition(endLoc);
-        }
-      } catch {}
     };
 
     // Intentar caché sólo cuando no hay waypoints Y usuario permite caché
@@ -1150,16 +1183,10 @@ export const Dietas: React.FC = () => {
       } catch {}
     });
     try { const sel = routeOptions[selectedRouteIdx]; if(sel?.route?.bounds) gMapRef.current.fitBounds(sel.route.bounds); } catch {}
-    // actualizar marcadores
+    // actualizar marcadores usando la función mejorada
     try {
       const opt = routeOptions[selectedRouteIdx];
-      const legs = opt?.route?.legs||[];
-      if(legs.length){
-        const startLoc = legs[0].start_location;
-        const endLoc = legs[legs.length-1].end_location;
-        if(startLoc){ if(!startMarkerRef.current) startMarkerRef.current = new (window as any).google.maps.Marker({ map:gMapRef.current, position:startLoc, label:'O'}); else startMarkerRef.current.setPosition(startLoc); }
-        if(endLoc){ if(!endMarkerRef.current) endMarkerRef.current = new (window as any).google.maps.Marker({ map:gMapRef.current, position:endLoc, label:'D'}); else endMarkerRef.current.setPosition(endLoc); }
-      }
+      placeMarkers(opt);
     } catch {}
   }, [selectedRouteIdx, routeOptions]);
 
