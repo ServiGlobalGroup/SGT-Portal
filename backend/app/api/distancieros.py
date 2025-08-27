@@ -5,7 +5,28 @@ from app.database.connection import get_db
 from app.api.auth import get_current_user
 from app.models.user import User
 from app.models.schemas import DistancieroResponse, DistancieroCreate, DistancieroUpdate, DistancieroGrouped
-from app.services.distanciero_service import DistancieroService
+from app.services.distanciero_service import DistancieroService, normalize_destination
+from pydantic import BaseModel
+
+
+class GoogleRouteCreate(BaseModel):
+    origin: str
+    destination: str
+    mode: str = 'DRIVING'
+    km: float
+    duration_sec: int | None = None
+    polyline: str | None = None
+    variant: str = 'NOTOLLS'  # NOTOLLS | TOLLS
+
+class GoogleRouteResponse(BaseModel):
+    origin: str
+    destination: str
+    mode: str
+    km: float
+    duration_sec: int | None
+    polyline: str | None
+    cached: bool = True
+    variant: str = 'NOTOLLS'
 
 router = APIRouter()
 
@@ -22,13 +43,26 @@ async def list_grouped_distancieros(
     if role_value not in ['ADMINISTRADOR', 'MASTER_ADMIN', 'TRAFICO', 'TRABAJADOR']:
         raise HTTPException(status_code=403, detail='No autorizado')
     rows = DistancieroService.list_grouped(db, active)
-    return [DistancieroGrouped(
-        client_name=r.client_name,
-        total_routes=r.total_routes,
-        active_routes=r.active_routes or 0,
-        min_km=r.min_km,
-        max_km=r.max_km
-    ) for r in rows]
+    result = []
+    for r in rows:
+        try:
+            result.append(DistancieroGrouped(
+                client_name=r.client_name,
+                total_routes=r.total_routes,
+                active_routes=r.active_routes or 0,
+                min_km=float(r.min_km) if r.min_km is not None else None,
+                max_km=float(r.max_km) if r.max_km is not None else None
+            ))
+        except Exception:
+            # fallback defensivo
+            result.append(DistancieroGrouped(
+                client_name=str(getattr(r,'client_name','?')),
+                total_routes=int(getattr(r,'total_routes',0)),
+                active_routes=int(getattr(r,'active_routes',0) or 0),
+                min_km=None,
+                max_km=None
+            ))
+    return result
 
 
 @router.get('/{client_name}/routes')
@@ -95,3 +129,62 @@ async def delete_distanciero(
     if not ok:
         raise HTTPException(status_code=404, detail='No encontrado')
     return {"status": "deleted"}
+
+
+@router.get('/google/route', response_model=GoogleRouteResponse)
+async def get_google_cached_route(
+    origin: str,
+    destination: str,
+    mode: str = 'DRIVING',
+    variant: str = 'NOTOLLS',
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    role_value = getattr(current_user.role, 'value', current_user.role)
+    if role_value not in ['ADMINISTRADOR', 'MASTER_ADMIN', 'TRAFICO', 'TRABAJADOR']:
+        raise HTTPException(status_code=403, detail='No autorizado')
+    entity = DistancieroService.get_cached_route(db, origin, destination, mode, variant=variant)
+    if not entity:
+        raise HTTPException(status_code=404, detail='No caché')
+    return GoogleRouteResponse(  # type: ignore[arg-type]
+        origin=getattr(entity, 'origin', None) or origin,
+        destination=getattr(entity, 'destination'),
+        mode=getattr(entity, 'mode', None) or mode,
+        km=getattr(entity, 'km'),
+        duration_sec=getattr(entity, 'duration_sec'),
+        polyline=getattr(entity, 'polyline'),
+        cached=True,
+        variant=variant.upper()
+    )
+
+
+@router.post('/google/route', response_model=GoogleRouteResponse)
+async def save_google_route(
+    payload: GoogleRouteCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    role_value = getattr(current_user.role, 'value', current_user.role)
+    # Permitir a todos los roles autenticados para maximizar reutilización (ajustar si necesario)
+    if role_value not in ['ADMINISTRADOR', 'MASTER_ADMIN', 'TRAFICO', 'TRABAJADOR']:
+        raise HTTPException(status_code=403, detail='No autorizado')
+    entity = DistancieroService.save_google_route(
+        db,
+        origin=payload.origin,
+        destination=payload.destination,
+        mode=payload.mode,
+        km=payload.km,
+        duration_sec=payload.duration_sec,
+        polyline=payload.polyline,
+        variant=payload.variant
+    )
+    return GoogleRouteResponse(  # type: ignore[arg-type]
+        origin=getattr(entity, 'origin', None) or payload.origin,
+        destination=getattr(entity, 'destination'),
+        mode=getattr(entity, 'mode', None) or payload.mode,
+        km=getattr(entity, 'km'),
+        duration_sec=getattr(entity, 'duration_sec'),
+        polyline=getattr(entity, 'polyline'),
+        cached=True,
+        variant=payload.variant.upper()
+    )

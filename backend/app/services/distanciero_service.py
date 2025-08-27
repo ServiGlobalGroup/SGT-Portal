@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import func, case
 from typing import List, Optional
+import hashlib
 from app.models.distanciero import Distanciero
 from app.models.schemas import DistancieroCreate, DistancieroUpdate
 
@@ -10,6 +11,61 @@ def normalize_destination(destination: str) -> str:
 
 
 class DistancieroService:
+    @staticmethod
+    def build_route_hash(origin_norm: str, dest_norm: str, mode: str) -> str:
+        base = f"{origin_norm}|{dest_norm}|{mode.upper()}"
+        # Hash corto para asegurar longitud consistente (pero guardamos también clave en claro si quieres)
+        h = hashlib.sha1(base.encode('utf-8')).hexdigest()[:16]
+        return f"{base}|{h}"
+
+    @staticmethod
+    def get_cached_route(db: Session, origin: str, destination: str, mode: str = 'DRIVING', variant: str = 'NOTOLLS') -> Distanciero | None:
+        o_norm = normalize_destination(origin)
+        d_norm = normalize_destination(destination)
+        base_key = DistancieroService.build_route_hash(o_norm, d_norm, mode)
+        hash_key = base_key if variant.upper()=='NOTOLLS' else base_key + '|T'
+        return (db.query(Distanciero)
+                  .filter(
+                      Distanciero.client_name == 'GOOGLE MAPS',
+                      Distanciero.hash_key == hash_key
+                  ).first())
+
+    @staticmethod
+    def save_google_route(db: Session, origin: str, destination: str, mode: str, km: float,
+                          duration_sec: int | None, polyline: str | None, variant: str = 'NOTOLLS') -> Distanciero:
+        o_norm = normalize_destination(origin)
+        d_norm = normalize_destination(destination)
+        base_key = DistancieroService.build_route_hash(o_norm, d_norm, mode)
+        hash_key = base_key if variant.upper()=='NOTOLLS' else base_key + '|T'
+        entity = (db.query(Distanciero)
+                    .filter(Distanciero.hash_key == hash_key)
+                    .first())
+        if entity:
+            # Update existente (por si cambió distancia o polyline)
+            entity.km = km  # type: ignore[attr-defined]
+            entity.duration_sec = duration_sec  # type: ignore[attr-defined]
+            entity.polyline = polyline  # type: ignore[attr-defined]
+            db.commit()
+            db.refresh(entity)
+            return entity
+        entity = Distanciero(
+            client_name='GOOGLE MAPS',
+            destination=destination.strip(),
+            destination_normalized=d_norm,
+            km=km,
+            active=True,
+            notes=None,
+            origin=origin.strip(),
+            origin_normalized=o_norm,
+            mode=mode.upper(),
+            duration_sec=duration_sec,
+            polyline=polyline,
+            hash_key=hash_key
+        )
+        db.add(entity)
+        db.commit()
+        db.refresh(entity)
+        return entity
     @staticmethod
     def list_grouped(db: Session, active: Optional[bool] = None):
         q = db.query(

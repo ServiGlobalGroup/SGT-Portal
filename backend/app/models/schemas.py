@@ -240,21 +240,27 @@ class DistancieroBase(BaseModel):
     client_name: str
     destination: str
     destination_normalized: str
-    km: int
+    km: float
     active: bool
     notes: str | None = None
+    # Campos de caché (pueden venir nulos para registros clásicos)
+    origin: str | None = None
+    origin_normalized: str | None = None
+    mode: str | None = None
+    duration_sec: int | None = None
+    polyline: str | None = None
 
 class DistancieroCreate(BaseModel):
     client_name: str
     destination: str
-    km: int
+    km: float
     active: bool = True
     notes: str | None = None
 
 class DistancieroUpdate(BaseModel):
     client_name: str | None = None
     destination: str | None = None
-    km: int | None = None
+    km: float | None = None
     active: bool | None = None
     notes: str | None = None
 
@@ -270,5 +276,8 @@ class DistancieroGrouped(BaseModel):
     client_name: str
     total_routes: int
     active_routes: int
-    min_km: int | None
-    max_km: int | None
+    min_km: float | None
+    max_km: float | None
+
+    class Config:
+        from_attributes = True
