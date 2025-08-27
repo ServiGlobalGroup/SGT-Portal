@@ -929,24 +929,8 @@ export const Dietas: React.FC = () => {
             // Si geometry no está cargada, hacer fallback a API normal
           } else {
             console.log('✅ Usando ruta desde caché:', cached.variant, cached.km + 'km');
-            const path = (window as any).google.maps.geometry.encoding.decodePath(cached.polyline);
-            // Crear polyline
-            routePolylinesRef.current.forEach(p=>{ try { p.setMap(null); } catch {} });
-            routePolylinesRef.current = [];
-            const polyline = new (window as any).google.maps.Polyline({
-              map: gMapRef.current,
-              path,
-              strokeColor: cached.uses_tolls ? '#ff9800' : '#1e5fb8', // naranja peaje / azul sin peaje
-              strokeOpacity:0.95, strokeWeight:6, zIndex:70
-            });
-            routePolylinesRef.current.push(polyline);
-            // Ajustar bounds
-            try {
-              const bounds = new (window as any).google.maps.LatLngBounds();
-              path.forEach((pt:any)=> bounds.extend(pt));
-              gMapRef.current.fitBounds(bounds);
-            } catch {}
-            // Stats sintéticos
+            
+            // Stats sintéticos para la ruta base
             const km = cached.km;
             const meters = km*1000;
             const seconds = cached.duration_sec || 0;
@@ -954,26 +938,74 @@ export const Dietas: React.FC = () => {
             const hours = Math.floor(seconds/3600);
             const mins = Math.round((seconds%3600)/60);
             const totalDuration = seconds? (hours ? `${hours} h ${mins} min` : `${mins} min`) : '—';
+            
+            const path = (window as any).google.maps.geometry.encoding.decodePath(cached.polyline);
             const pseudoRoute = { overview_path: path, bounds: null, legs: [] };
-            const baseOption = { totalDistance, totalDuration, totalKmNumber: km, legs: [], crossesPortugal:false, crossesFrance:false, usesTolls: cached.variant==='TOLLS', meters, seconds, route:pseudoRoute, parentResult:null, fromCache:true };
+            const baseOption = { 
+              totalDistance, 
+              totalDuration, 
+              totalKmNumber: km, 
+              legs: [], 
+              crossesPortugal:false, 
+              crossesFrance:false, 
+              usesTolls: cached.variant==='TOLLS', 
+              meters, 
+              seconds, 
+              route:pseudoRoute, 
+              parentResult:null, 
+              fromCache:true 
+            };
+            
             let opts:any[] = [baseOption];
+            
             // Si tenemos la otra variante en caché, agregarla
             if(cachedNo && cachedToll && cachedNo.polyline && cachedToll.polyline){
               try {
                 const lib = (window as any).google?.maps?.geometry?.encoding;
-                const addVariant = async (variantCache:any) => {
-                  if(variantCache===cached) return; // ya incluida
-                  const pathV = lib.decodePath(variantCache.polyline);
-                  const pseudoRouteV = { overview_path: pathV, bounds: null, legs: [] };
-                  opts.push({ ...baseOption, route:pseudoRouteV, usesTolls: variantCache.variant==='TOLLS', totalKmNumber: variantCache.km, totalDistance: (variantCache.km>100?variantCache.km.toFixed(0):variantCache.km.toFixed(2))+' km', meters: variantCache.km*1000, seconds: variantCache.duration_sec||0 });
+                const otherVariant = cached === cachedNo ? cachedToll : cachedNo;
+                
+                const pathOther = lib.decodePath(otherVariant.polyline);
+                const pseudoRouteOther = { overview_path: pathOther, bounds: null, legs: [] };
+                
+                const kmOther = otherVariant.km;
+                const metersOther = kmOther * 1000;
+                const secondsOther = otherVariant.duration_sec || 0;
+                const totalDistanceOther = (kmOther > 100 ? kmOther.toFixed(0) : kmOther.toFixed(2)) + ' km';
+                const hoursOther = Math.floor(secondsOther/3600);
+                const minsOther = Math.round((secondsOther%3600)/60);
+                const totalDurationOther = secondsOther ? (hoursOther ? `${hoursOther} h ${minsOther} min` : `${minsOther} min`) : '—';
+                
+                const otherOption = {
+                  totalDistance: totalDistanceOther,
+                  totalDuration: totalDurationOther,
+                  totalKmNumber: kmOther,
+                  legs: [],
+                  crossesPortugal: false,
+                  crossesFrance: false,
+                  usesTolls: otherVariant.variant === 'TOLLS',
+                  meters: metersOther,
+                  seconds: secondsOther,
+                  route: pseudoRouteOther,
+                  parentResult: null,
+                  fromCache: true
                 };
-                await addVariant(cachedNo.variant==='NOTOLLS'? cachedToll: cachedNo);
-              } catch {}
+                
+                opts.push(otherOption);
+                console.log('✅ Agregada variante adicional desde caché:', otherVariant.variant, otherVariant.km + 'km');
+              } catch(e) {
+                console.warn('Error agregando variante adicional:', e);
+              }
             }
+            
+            // Configurar estado y dibujar todas las polylines
             setRouteOptions(opts);
             setSelectedRouteIdx(0);
             setRouteStats(baseOption);
             setDisabledLegs(new Set());
+            
+            // Dibujar todas las rutas con estilos diferenciados
+            drawAllPolylines(opts, 0);
+            
             return; // Evitar llamadas a API Directions
           }
         }
