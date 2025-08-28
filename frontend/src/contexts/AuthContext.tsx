@@ -265,7 +265,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.detail || 'Error de autenticación');
+        
+        // Mensajes más específicos según el código de error
+        if (response.status === 401) {
+          throw new Error('Usuario o contraseña incorrectos');
+        } else if (response.status === 422) {
+          throw new Error('Datos de login inválidos');
+        } else if (response.status === 429) {
+          throw new Error('Demasiados intentos. Intenta más tarde');
+        } else {
+          throw new Error(errorData.detail || 'Error de autenticación');
+        }
       }
 
       const data = await response.json();

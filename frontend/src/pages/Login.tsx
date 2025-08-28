@@ -317,7 +317,9 @@ const Login: React.FC = () => {
       await login(credentials.username, credentials.password);
     } catch (err: unknown) {
       const error = err as Error;
-      setError(error.message || 'Error al iniciar sesión');
+      // Mejorar el mensaje de error
+      const errorMessage = error.message || 'Error al iniciar sesión';
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -383,7 +385,16 @@ const Login: React.FC = () => {
                   severity="error" 
                   sx={{ 
                     mb: 3,
-                    borderRadius: 1
+                    borderRadius: 2,
+                    backgroundColor: '#ffebee',
+                    color: '#d32f2f',
+                    border: '1px solid #ffcdd2',
+                    '& .MuiAlert-icon': { 
+                      color: '#d32f2f' 
+                    },
+                    '& .MuiAlert-message': {
+                      fontWeight: 500
+                    }
                   }}
                 >
                   {error}
