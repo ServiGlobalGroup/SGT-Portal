@@ -28,7 +28,7 @@ export const DIETA_RATES: DietaRate[] = [
   { code: 'cargas_descargas', label: 'Cargas/Descargas', unit: 'ud', amount: 25, onlyFor: 'antiguo' },
   { code: 'servicios_locales', label: 'Servicios Locales', unit: 'ud', amount: 9, onlyFor: 'antiguo' },
   { code: 'repartos_inditex', label: 'Repartos Inditex', unit: 'ud', amount: 6, onlyFor: 'antiguo' },
-  { code: 'canon_tti', label: 'Canon TTI', unit: 'ud', amount: 20, onlyFor: 'antiguo' },
+  { code: 'canon_tti', label: 'Canon TTI', unit: 'ud', amount: 20 }, // Disponible para antiguo y nuevo
   { code: 'adr', label: 'ADR (+5% tramo kms)', unit: 'ud', percentKmTramo: 0.05, onlyFor: 'antiguo' },
   { code: 'reefer', label: 'Reefer (+10% tramo kms)', unit: 'ud', percentKmTramo: 0.10, onlyFor: 'antiguo' },
   // Nuevos: solo pernocta y festivos, ambos 50€

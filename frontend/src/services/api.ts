@@ -1,4 +1,20 @@
 import axios from 'axios';
+import type { AxiosError, InternalAxiosRequestConfig } from 'axios';
+
+// Flag simple para evitar bucles infinitos de refresh
+let isRefreshing = false;
+let pendingQueue: { resolve: (token: string) => void; reject: (err: unknown) => void; }[] = [];
+
+const processQueue = (error: unknown, newToken: string | null) => {
+  pendingQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else if (newToken) {
+      prom.resolve(newToken);
+    }
+  });
+  pendingQueue = [];
+};
 import type { TrafficData, VacationRequest, Document, TrafficFolder, TrafficDocument, PayrollDocument, PayrollStats, User, DietaRecord } from '../types';
 
 // Usar variable de entorno en Vite para configurar el backend en dev/prod
@@ -22,6 +38,62 @@ api.interceptors.request.use((config) => {
   }
   return config;
 });
+
+// Interceptor de respuesta para manejar expiración (401)
+api.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError) => {
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      // Evitar reintentos múltiples simultáneos
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          pendingQueue.push({
+            resolve: (token: string) => {
+              if (originalRequest.headers) originalRequest.headers.Authorization = `Bearer ${token}`;
+              resolve(api(originalRequest));
+            },
+            reject
+          });
+        });
+      }
+      originalRequest._retry = true;
+      isRefreshing = true;
+      try {
+        const currentToken = localStorage.getItem('access_token');
+        if (!currentToken) throw error;
+        const refreshRes = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${currentToken}` }
+        });
+        if (!refreshRes.ok) {
+          throw error;
+        }
+        const data = await refreshRes.json();
+        localStorage.setItem('access_token', data.access_token);
+        localStorage.setItem('user_data', JSON.stringify(data.user));
+        processQueue(null, data.access_token);
+        if (originalRequest.headers) originalRequest.headers.Authorization = `Bearer ${data.access_token}`;
+        return api(originalRequest);
+      } catch (err) {
+        processQueue(err, null);
+        // Limpiar credenciales y redirigir a login
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user_data');
+        if (typeof window !== 'undefined') {
+          // Evitar múltiples redirecciones
+          if (!window.location.pathname.includes('login')) {
+            window.location.replace('/login');
+          }
+        }
+        return Promise.reject(err);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 export const trafficAPI = {
   getTrafficData: (): Promise<TrafficData[]> => 
