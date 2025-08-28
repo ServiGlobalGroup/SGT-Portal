@@ -90,31 +90,37 @@ export const ForcePasswordModal: React.FC<ForcePasswordModalProps> = ({ open }) 
       onClose={() => {}}
       PaperProps={{
         sx: {
-          borderRadius: 3,
+          borderRadius: { xs: 3, sm: 3 },
           background: 'white',
           color: '#333',
           p: 0,
           boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+          margin: { xs: 2, sm: 2 },
+          maxHeight: { xs: 'calc(100vh - 32px)', sm: 'calc(100vh - 64px)' },
+          width: { xs: 'calc(100vw - 32px)', sm: 'auto' },
         }
       }}
     >
-      <DialogContent sx={{ p: 4 }}>
+      <DialogContent sx={{ p: { xs: 3, sm: 4 } }}>
         {/* Header */}
         <Box sx={{ 
           display: 'flex', 
           alignItems: 'center', 
           justifyContent: 'space-between', 
-          mb: 3,
-          p: 2,
+          mb: { xs: 2, sm: 3 },
+          p: { xs: 2, sm: 2 },
           background: 'linear-gradient(135deg, #501B39 0%, #6B2449 100%)',
           color: 'white',
-          borderRadius: '12px 12px 0 0',
-          mx: -4,
-          mt: -4,
+          borderRadius: { xs: '12px 12px 0 0', sm: '12px 12px 0 0' },
+          mx: { xs: -3, sm: -4 },
+          mt: { xs: -3, sm: -4 },
         }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            <Lock />
-            <Typography variant="h6" sx={{ fontWeight: 600 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 1.5 } }}>
+            <Lock sx={{ fontSize: { xs: 20, sm: 24 } }} />
+            <Typography variant="h6" sx={{ 
+              fontWeight: 600,
+              fontSize: { xs: '1rem', sm: '1.25rem' }
+            }}>
               Cambio de contraseña requerido
             </Typography>
           </Box>
@@ -122,17 +128,24 @@ export const ForcePasswordModal: React.FC<ForcePasswordModalProps> = ({ open }) 
             onClick={logout}
             sx={{ 
               color: 'white',
+              padding: { xs: 0.5, sm: 1 },
               '&:hover': { 
                 backgroundColor: 'rgba(255, 255, 255, 0.1)',
               }
             }}
           >
-            <Close />
+            <Close sx={{ fontSize: { xs: 20, sm: 24 } }} />
           </IconButton>
         </Box>
 
         {/* Descripción */}
-        <Typography sx={{ mb: 3, opacity: 0.7, color: '#666' }}>
+        <Typography sx={{ 
+          mb: { xs: 2, sm: 3 }, 
+          opacity: 0.7, 
+          color: '#666',
+          fontSize: { xs: '0.875rem', sm: '1rem' },
+          lineHeight: { xs: 1.4, sm: 1.5 }
+        }}>
           Por seguridad, debes establecer una nueva contraseña antes de continuar.
         </Typography>
 
@@ -141,11 +154,12 @@ export const ForcePasswordModal: React.FC<ForcePasswordModalProps> = ({ open }) 
           <Alert 
             severity="error" 
             sx={{ 
-              mb: 3,
+              mb: { xs: 2, sm: 3 },
               backgroundColor: '#ffebee',
               color: '#d32f2f',
               '& .MuiAlert-icon': { color: '#d32f2f' },
-              border: '1px solid #ffcdd2'
+              border: '1px solid #ffcdd2',
+              fontSize: { xs: '0.875rem', sm: '1rem' }
             }}
           >
             {error}
@@ -156,11 +170,12 @@ export const ForcePasswordModal: React.FC<ForcePasswordModalProps> = ({ open }) 
           <Alert 
             severity="success" 
             sx={{ 
-              mb: 3,
+              mb: { xs: 2, sm: 3 },
               backgroundColor: '#e8f5e8',
               color: '#2e7d32',
               '& .MuiAlert-icon': { color: '#2e7d32' },
-              border: '1px solid #c8e6c9'
+              border: '1px solid #c8e6c9',
+              fontSize: { xs: '0.875rem', sm: '1rem' }
             }}
           >
             Contraseña actualizada correctamente. Recargando...
@@ -177,10 +192,10 @@ export const ForcePasswordModal: React.FC<ForcePasswordModalProps> = ({ open }) 
             fullWidth
             disabled={loading || success}
             sx={{ 
-              mb: 3,
+              mb: { xs: 2, sm: 3 },
               '& .MuiOutlinedInput-root': {
                 backgroundColor: '#f8f9fa',
-                borderRadius: 2,
+                borderRadius: { xs: 12, sm: 8 },
                 '& fieldset': {
                   border: '1px solid #e0e0e0',
                 },
@@ -193,10 +208,15 @@ export const ForcePasswordModal: React.FC<ForcePasswordModalProps> = ({ open }) 
               },
               '& .MuiInputLabel-root': {
                 color: '#666',
+                fontSize: { xs: '0.875rem', sm: '1rem' },
                 '&.Mui-focused': {
                   color: '#501B39',
                 },
               },
+              '& .MuiOutlinedInput-input': {
+                fontSize: { xs: '0.875rem', sm: '1rem' },
+                padding: { xs: '14px 16px', sm: '14px 16px' }
+              }
             }}
             InputProps={{
               endAdornment: (
@@ -228,10 +248,10 @@ export const ForcePasswordModal: React.FC<ForcePasswordModalProps> = ({ open }) 
             error={!!passwordError && newPassword.length > 0}
             helperText={passwordError || 'Mínimo 8 caracteres con mayúscula, minúscula y número'}
             sx={{ 
-              mb: 3,
+              mb: { xs: 2, sm: 3 },
               '& .MuiOutlinedInput-root': {
                 backgroundColor: '#f8f9fa',
-                borderRadius: 2,
+                borderRadius: { xs: 12, sm: 8 },
                 '& fieldset': {
                   border: '1px solid #e0e0e0',
                 },
@@ -244,12 +264,18 @@ export const ForcePasswordModal: React.FC<ForcePasswordModalProps> = ({ open }) 
               },
               '& .MuiInputLabel-root': {
                 color: '#666',
+                fontSize: { xs: '0.875rem', sm: '1rem' },
                 '&.Mui-focused': {
                   color: '#501B39',
                 },
               },
+              '& .MuiOutlinedInput-input': {
+                fontSize: { xs: '0.875rem', sm: '1rem' },
+                padding: { xs: '14px 16px', sm: '14px 16px' }
+              },
               '& .MuiFormHelperText-root': {
                 color: '#666',
+                fontSize: { xs: '0.75rem', sm: '0.875rem' },
                 '&.Mui-error': {
                   color: '#d32f2f',
                 },
@@ -285,10 +311,10 @@ export const ForcePasswordModal: React.FC<ForcePasswordModalProps> = ({ open }) 
             error={!!confirmError}
             helperText={confirmError || ' '}
             sx={{ 
-              mb: 4,
+              mb: { xs: 3, sm: 4 },
               '& .MuiOutlinedInput-root': {
                 backgroundColor: '#f8f9fa',
-                borderRadius: 2,
+                borderRadius: { xs: 12, sm: 8 },
                 '& fieldset': {
                   border: '1px solid #e0e0e0',
                 },
@@ -301,12 +327,18 @@ export const ForcePasswordModal: React.FC<ForcePasswordModalProps> = ({ open }) 
               },
               '& .MuiInputLabel-root': {
                 color: '#666',
+                fontSize: { xs: '0.875rem', sm: '1rem' },
                 '&.Mui-focused': {
                   color: '#501B39',
                 },
               },
+              '& .MuiOutlinedInput-input': {
+                fontSize: { xs: '0.875rem', sm: '1rem' },
+                padding: { xs: '14px 16px', sm: '14px 16px' }
+              },
               '& .MuiFormHelperText-root': {
                 color: '#666',
+                fontSize: { xs: '0.75rem', sm: '0.875rem' },
                 '&.Mui-error': {
                   color: '#d32f2f',
                 },
@@ -333,17 +365,24 @@ export const ForcePasswordModal: React.FC<ForcePasswordModalProps> = ({ open }) 
           />
 
           {/* Botones */}
-          <Box sx={{ display: 'flex', gap: 2 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            gap: { xs: 1.5, sm: 2 },
+            flexDirection: { xs: 'column', sm: 'row' }
+          }}>
             <Button
               type="submit"
               variant="contained"
               disabled={!isFormValid}
               sx={{ 
                 flex: 1,
-                py: 1.5,
+                py: { xs: 1.5, sm: 1.5 },
+                fontSize: { xs: '0.875rem', sm: '1rem' },
                 backgroundColor: '#501B39',
                 color: 'white',
                 fontWeight: 600,
+                borderRadius: { xs: 12, sm: 8 },
+                order: { xs: 2, sm: 1 },
                 '&:hover': {
                   backgroundColor: '#3d1428',
                 },
@@ -352,7 +391,7 @@ export const ForcePasswordModal: React.FC<ForcePasswordModalProps> = ({ open }) 
                   color: '#9e9e9e',
                 },
               }}
-              startIcon={loading ? <CircularProgress size={20} color="inherit" /> : null}
+              startIcon={loading ? <CircularProgress size={16} color="inherit" /> : null}
             >
               {loading ? 'Cambiando...' : 'Cambiar contraseña'}
             </Button>
@@ -364,6 +403,12 @@ export const ForcePasswordModal: React.FC<ForcePasswordModalProps> = ({ open }) 
               sx={{ 
                 border: '1px solid #501B39',
                 color: '#501B39',
+                py: { xs: 1.5, sm: 1.5 },
+                fontSize: { xs: '0.875rem', sm: '1rem' },
+                fontWeight: 600,
+                borderRadius: { xs: 12, sm: 8 },
+                order: { xs: 1, sm: 2 },
+                minWidth: { xs: 'auto', sm: '100px' },
                 '&:hover': {
                   backgroundColor: 'rgba(80, 27, 57, 0.04)',
                   borderColor: '#3d1428',
