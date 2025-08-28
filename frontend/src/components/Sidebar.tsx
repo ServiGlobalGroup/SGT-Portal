@@ -578,7 +578,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </Box>
         
         {/* Menú del perfil */}
-        <Menu
+      <Menu
           anchorEl={anchorEl}
           open={open}
           onClose={handleClose}
@@ -586,11 +586,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           anchorOrigin={{ horizontal: 'left', vertical: 'top' }}
           sx={{
             '& .MuiPaper-root': {
-              borderRadius: '8px',
-              minWidth: 200,
-              boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
-              border: '1px solid rgba(0, 0, 0, 0.1)',
-              background: '#ffffff',
+        borderRadius: '8px',
+        minWidth: 180,
+        boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
+        border: '1px solid rgba(0, 0, 0, 0.1)',
+        background: '#ffffff',
+        paddingY: 0.5,
             },
           }}
         >
@@ -620,12 +621,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </MenuItem>
           )}
           
-          <Divider sx={{ my: 1 }} />
+          {hasPermission(user, Permission.VIEW_SETTINGS) && (
+            <Divider sx={{ my: 1 }} />
+          )}
           
-          <MenuItem 
+      <MenuItem 
             onClick={() => handleMenuAction('cerrar-sesion')}
             sx={{
-              py: 1.5,
+        py: 1,
               '&:hover': {
                 backgroundColor: 'rgba(211, 47, 47, 0.05)',
               },

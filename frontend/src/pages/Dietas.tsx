@@ -6,7 +6,7 @@ import { usersAPI } from '../services/api';
 import type { User } from '../types';
 import { calculateDietas, DIETA_RATES, DietaConceptInput, DietaCalculationResult, findKilometerRangeAntiguo } from '../config/dietas';
 import { dietasAPI, distancierosAPI } from '../services/api';
-import { Add, Delete, Calculate, RestaurantMenu, History, FiberNew, Close, ArrowUpward, ArrowDownward, PictureAsPdf, ArrowDropDown, Map, ArrowRightAlt, Flag, TripOrigin, Close as CloseIcon, Undo, Toll, RemoveCircleOutline, CheckCircle, Storage, Cloud, Save } from '@mui/icons-material';
+import { Add, Delete, Calculate, RestaurantMenu, History, FiberNew, Close, ArrowUpward, ArrowDownward, PictureAsPdf, ArrowDropDown, Map, ArrowRightAlt, Flag, TripOrigin, Close as CloseIcon, Undo, Toll, RemoveCircleOutline, CheckCircle, Storage, Cloud, Save, SwapVert } from '@mui/icons-material';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -331,6 +331,30 @@ export const Dietas: React.FC = () => {
         ))}
       </Box>
     );
+  };
+
+  // Intercambiar origen y destino (y reordenar tramos)
+  const swapOriginDestination = () => {
+    if(!routeOrigin && !routeDestination) return;
+    setRouteStats(null); // forzar recalculo
+    setSelectedRouteIdx(0);
+    setDisabledLegs(new Set());
+    // Si no hay waypoints basta con intercambiar
+    if(waypoints.length === 0){
+      setRouteOrigin(routeDestination);
+      setRouteDestination(routeOrigin);
+      return;
+    }
+    // Si hay waypoints invertimos toda la cadena: origin -> w1 -> w2 -> ... -> dest
+    // pasa a ser: dest -> ... -> w2 -> w1 -> origin
+    const full = [routeOrigin, ...waypoints, routeDestination].filter(Boolean);
+    const reversed = [...full].reverse();
+    const newOrigin = reversed[0] || '';
+    const newDestination = reversed[reversed.length-1] || '';
+    const newWaypoints = reversed.slice(1, reversed.length-1);
+    setRouteOrigin(newOrigin);
+    setRouteDestination(newDestination);
+    setWaypoints(newWaypoints as string[]);
   };
   // --- AQUI CONTINUA EL CODIGO ORIGINAL DEL COMPONENTE ---
   // El resto del archivo (a partir de buildExportRows etc.) ya contiene lógica y JSX.
@@ -1817,6 +1841,25 @@ export const Dietas: React.FC = () => {
                       )}
                       sx={{ flex:1, minWidth:250 }}
                     />
+                    <Tooltip title="Intercambiar origen y destino">
+                      <span>
+                        <IconButton
+                          onClick={swapOriginDestination}
+                          disabled={!routeOrigin && !routeDestination}
+                          sx={{
+                            alignSelf:'stretch',
+                            minHeight:42,
+                            borderRadius:3,
+                            border:'1px solid #cfd3d7',
+                            bgcolor: (!routeOrigin && !routeDestination)? '#f1f2f3':'#ffffff',
+                            color:'#5c2340',
+                            '&:hover':{ bgcolor: (!routeOrigin && !routeDestination)? '#f1f2f3':'#f7f0f3' }
+                          }}
+                        >
+                          <SwapVert sx={{ fontSize:24 }} />
+                        </IconButton>
+                      </span>
+                    </Tooltip>
                     <Autocomplete
                       freeSolo
                       options={[]}
