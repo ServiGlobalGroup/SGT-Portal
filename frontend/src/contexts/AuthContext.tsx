@@ -14,9 +14,11 @@ interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  mustChangePassword: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
   checkAuth: () => Promise<boolean>;
+  updatePasswordChanged: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -31,6 +33,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [mustChangePassword, setMustChangePassword] = useState(false);
   const refreshTimerRef = useRef<number | null>(null);
   const inactivityTimerRef = useRef<number | null>(null);
   const heartbeatRef = useRef<number | null>(null);
@@ -105,6 +108,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const userData = JSON.parse(savedUser);
         setToken(savedToken);
         setUser(userData);
+  setMustChangePassword(!!userData.must_change_password);
         
         // Verificar si el token sigue siendo válido
         verifyToken(savedToken).then((valid) => {
@@ -235,6 +239,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }, HEARTBEAT_INTERVAL_MS) as unknown as number;
   }, [token, MAX_INACTIVITY_MS, scheduleTokenExpiryWatch]);
 
+  const updatePasswordChanged = useCallback(() => {
+    // Resetear flag después de cambiar contraseña
+    setMustChangePassword(false);
+    // Actualizar datos de usuario en localStorage
+    if (user) {
+      const updatedUser = { ...user, must_change_password: false };
+      localStorage.setItem('user_data', JSON.stringify(updatedUser));
+      setUser(updatedUser);
+    }
+  }, [user]);
+
   const login = async (username: string, password: string): Promise<void> => {
     setIsLoading(true);
     
@@ -261,6 +276,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       setToken(data.access_token);
       setUser(data.user);
+  setMustChangePassword(!!data.user?.must_change_password);
   if (data.expires_in) scheduleRefresh(data.expires_in);
   if (data.access_token) scheduleTokenExpiryWatch(data.access_token);
   scheduleInactivityLogout();
@@ -312,12 +328,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     token,
     isAuthenticated,
     isLoading,
+    mustChangePassword,
     login,
     logout,
     checkAuth,
-  };
-
-  return (
+    updatePasswordChanged,
+  };  return (
     <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>

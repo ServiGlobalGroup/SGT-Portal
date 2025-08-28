@@ -78,6 +78,7 @@ class UserResponse(UserBase):
     created_at: datetime
     updated_at: datetime
     last_login: Optional[datetime] = None
+    must_change_password: bool | None = False
     
     # Propiedades calculadas
     full_name: str = Field(..., description="Nombre completo")

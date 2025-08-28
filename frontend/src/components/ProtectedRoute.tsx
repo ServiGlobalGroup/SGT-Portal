@@ -11,7 +11,7 @@ interface ProtectedRouteProps {
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
   children
 }) => {
-  const { user, isLoading } = useAuth();
+  const { user, isLoading } = useAuth() as any;
   const location = useLocation();
 
   // Mostrar loading mientras se verifica la autenticación

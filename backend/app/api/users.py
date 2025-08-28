@@ -231,6 +231,10 @@ async def change_user_password(
                 detail="Error al cambiar la contraseña"
             )
         
+        # Forzar cambio de contraseña en el próximo login
+        setattr(user, 'must_change_password', True)
+        db.commit()
+        
         return {"message": "Contraseña cambiada exitosamente"}
     except Exception as e:
         raise HTTPException(

@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import { Box, useMediaQuery, useTheme } from '@mui/material';
 import { Sidebar } from './Sidebar';
+import { ForcePasswordModal } from './ForcePasswordModal';
+import { useAuth } from '../hooks/useAuth';
 
 const drawerWidth = 280;
 const collapsedWidth = 80;
@@ -14,6 +16,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [isCollapsed, setIsCollapsed] = useState(isMobile);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const { mustChangePassword } = useAuth() as any;
   
   const currentWidth = isCollapsed ? collapsedWidth : drawerWidth;
 
@@ -64,6 +67,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           {children}
         </Box>
       </Box>
+      
+      {/* Modal para cambio obligatorio de contraseña */}
+      <ForcePasswordModal open={mustChangePassword} />
     </Box>
   );
 };

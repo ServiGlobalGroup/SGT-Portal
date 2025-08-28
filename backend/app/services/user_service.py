@@ -100,6 +100,7 @@ class UserService:
             hashed_password=hashed_password,
             is_active=True,
             is_verified=False,
+            must_change_password=True,
         )
 
         # Crear la carpeta del usuario

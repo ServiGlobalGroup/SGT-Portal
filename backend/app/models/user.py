@@ -98,6 +98,8 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="Fecha de creación")
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), comment="Fecha de última actualización")
     last_login = Column(DateTime(timezone=True), nullable=True, comment="Último inicio de sesión")
+    # Forzar cambio de contraseña al primer inicio (o tras reseteo admin)
+    must_change_password = Column(Boolean, nullable=False, server_default='0', comment="Debe cambiar contraseña en próximo login")
     
     def __repr__(self):
         return f"<User(dni_nie='{self.dni_nie}', email='{self.email}', name='{self.first_name} {self.last_name}')>"

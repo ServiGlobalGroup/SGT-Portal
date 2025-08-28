@@ -63,7 +63,8 @@ def user_to_response(user, is_master=False) -> UserResponse:
             updated_at=user.updated_at,
             last_login=user.last_login,
             full_name=user.full_name,
-            initials=user.initials
+            initials=user.initials,
+            must_change_password=False
         )
     else:
         # Usuario de BD - usar el método original que funciona
@@ -95,7 +96,8 @@ def user_to_response(user, is_master=False) -> UserResponse:
             "updated_at": user.updated_at,
             "last_login": user.last_login,
             "full_name": full_name,
-            "initials": initials
+            "initials": initials,
+            "must_change_password": getattr(user, 'must_change_password', False)
         }
         
         return UserResponse(**user_data)
@@ -281,3 +283,31 @@ async def refresh_token(current_user = Depends(get_current_active_user)):
         expires_in=settings.access_token_expire_minutes * 60,
         user=user_response
     )
+
+@router.post('/change-password-first')
+async def change_password_first(data: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
+    """Permite al usuario cambiar su contraseña la primera vez (o cuando el flag must_change_password está activo)."""
+    from app.services.user_service import UserService
+    current_pwd = data.get('current_password')
+    new_pwd = data.get('new_password')
+    if not current_pwd or not new_pwd:
+        raise HTTPException(status_code=400, detail='Datos incompletos')
+    # Validar contraseña actual
+    if not UserService.verify_password(current_pwd, current_user.hashed_password):  # type: ignore[arg-type]
+        raise HTTPException(status_code=400, detail='Contraseña actual incorrecta')
+    if len(new_pwd) < 8:
+        raise HTTPException(status_code=400, detail='La nueva contraseña es demasiado corta')
+    # Validaciones de fuerza de contraseña
+    import re
+    if not re.search(r'[A-Z]', new_pwd):
+        raise HTTPException(status_code=400, detail='La contraseña debe contener al menos una mayúscula')
+    if not re.search(r'[a-z]', new_pwd):
+        raise HTTPException(status_code=400, detail='La contraseña debe contener al menos una minúscula')
+    if not re.search(r'\d', new_pwd):
+        raise HTTPException(status_code=400, detail='La contraseña debe contener al menos un número')
+    # Actualizar
+    hashed = UserService.hash_password(new_pwd)
+    setattr(current_user, 'hashed_password', hashed)
+    setattr(current_user, 'must_change_password', False)
+    db.commit()
+    return {'status':'ok'}
