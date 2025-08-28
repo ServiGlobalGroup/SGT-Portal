@@ -1,4 +1,15 @@
-import fitz  # PyMuPDF
+"""Servicio de procesamiento de PDFs de nóminas.
+
+Se hace el import de PyMuPDF (fitz) de forma opcional para permitir que el
+backend arranque aunque la librería no esté instalada (por ejemplo en una
+demo rápida donde no se necesita procesar PDFs). Si la funcionalidad se
+invoca sin la dependencia, se lanzará una excepción clara.
+"""
+
+try:  # pragma: no cover - import condicional
+    import fitz  # PyMuPDF
+except ImportError:  # pragma: no cover
+    fitz = None  # type: ignore
 import re
 import os
 from pathlib import Path
@@ -55,8 +66,11 @@ class PayrollPDFProcessor:
             return results
         
         try:
-            # Abrir el PDF
-            pdf_document = fitz.open(pdf_file_path)
+            if fitz is None:
+                raise RuntimeError("PyMuPDF (fitz) no está instalado. Instale con 'pip install PyMuPDF' para procesar PDFs de nóminas.")
+
+            # Abrir el PDF (fitz garantizado disponible aquí)
+            pdf_document = fitz.open(pdf_file_path)  # type: ignore[operator]
             total_pages = pdf_document.page_count
             results["total_pages"] = total_pages
             
@@ -96,7 +110,7 @@ class PayrollPDFProcessor:
         
         return results
     
-    def _process_single_page(self, pdf_document: fitz.Document, page_num: int, 
+    def _process_single_page(self, pdf_document, page_num: int, 
                            month_year: Optional[str], original_filename: str, document_type: str = "nominas") -> Dict[str, Any]:
         """
         Procesa una página individual del PDF.
@@ -160,7 +174,7 @@ class PayrollPDFProcessor:
             output_path = document_folder / filename
             
             # Crear un nuevo PDF con solo esta página
-            new_pdf = fitz.open()
+            new_pdf = fitz.open()  # type: ignore[operator]
             new_pdf.insert_pdf(pdf_document, from_page=page_num, to_page=page_num)
             new_pdf.save(str(output_path))
             new_pdf.close()
@@ -396,7 +410,9 @@ class PayrollPDFProcessor:
         }
         
         try:
-            pdf_document = fitz.open(pdf_file_path)
+            if fitz is None:
+                raise RuntimeError("PyMuPDF (fitz) no está instalado. Debug no disponible.")
+            pdf_document = fitz.open(pdf_file_path)  # type: ignore[operator]
             
             if page_number >= pdf_document.page_count:
                 debug_info["error"] = f"Página {page_number} no existe. Total de páginas: {pdf_document.page_count}"
