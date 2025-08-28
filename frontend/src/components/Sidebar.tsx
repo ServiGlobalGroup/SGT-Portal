@@ -26,7 +26,6 @@ import {
   RestaurantMenu,
   MenuOpen,
   Close,
-  AccountCircle,
   Settings,
   Logout,
   Menu as MenuIcon,
@@ -137,9 +136,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const handleMenuAction = (action: string) => {
     switch (action) {
-      case 'perfil':
-        navigate('/profile');
-        break;
+  // case 'perfil': eliminado: ya no existe página de perfil
       case 'configuracion':
         navigate('/settings');
         break;
@@ -597,26 +594,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             },
           }}
         >
-          <MenuItem 
-            onClick={() => handleMenuAction('perfil')}
-            sx={{
-              py: 1.5,
-              '&:hover': {
-                backgroundColor: 'rgba(0, 0, 0, 0.04)',
-              },
-            }}
-          >
-            <ListItemIcon>
-              <AccountCircle sx={{ color: '#501b36' }} />
-            </ListItemIcon>
-            <ListItemText 
-              primary="Mi Perfil" 
-              primaryTypographyProps={{
-                fontSize: '0.95rem',
-                fontWeight: 500,
-              }}
-            />
-          </MenuItem>
+          {/* Elemento "Mi Perfil" eliminado */}
           
           {/* Solo mostrar Configuración si el usuario tiene permisos */}
           {hasPermission(user, Permission.VIEW_SETTINGS) && (

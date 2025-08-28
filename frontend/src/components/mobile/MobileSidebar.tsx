@@ -21,7 +21,6 @@ import {
   ExitToApp,
   Close,
   Person,
-  BusinessCenter,
   Assignment,
   // CalendarToday, // Temporalmente oculto
   Receipt,
@@ -58,7 +57,6 @@ export const MobileSidebar: React.FC<MobileSidebarProps> = ({
     // { icon: <CalendarToday />, text: 'Vacaciones', path: '/vacations' },
     { icon: <Assignment />, text: 'Permisos', path: '/permissions' },
     { icon: <DirectionsCar />, text: 'Tráfico', path: '/traffic' },
-    { icon: <BusinessCenter />, text: 'Perfil', path: '/profile' },
     { icon: <Settings />, text: 'Configuración', path: '/settings' },
   ];
 

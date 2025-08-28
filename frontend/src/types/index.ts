@@ -96,28 +96,6 @@ export interface User {
   initials: string;
 }
 
-export interface UserProfile {
-  id: number;
-  dni_nie: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone: string;
-  role: 'MASTER_ADMIN' | 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR';
-  department: string;
-  position: string;
-  hire_date: string;
-  birth_date: string;
-  address: string;
-  city: string;
-  postal_code: string;
-  emergency_contact_name: string;
-  emergency_contact_phone: string;
-  avatar?: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
 
 export interface PayrollStats {
   total_documents: number;

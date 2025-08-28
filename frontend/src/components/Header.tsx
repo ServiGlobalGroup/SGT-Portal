@@ -14,7 +14,6 @@ import {
   Chip
 } from '@mui/material';
 import { 
-  AccountCircle, 
   Settings, 
   Logout, 
   Person,
@@ -23,7 +22,7 @@ import {
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { hasPermission, Permission, getRoleColor as getPermissionRoleColor } from '../utils/permissions';
+import { hasPermission, Permission } from '../utils/permissions';
 
 const drawerWidth = 240;
 const collapsedWidth = 80;
@@ -49,9 +48,6 @@ export const Header: React.FC<HeaderProps> = ({ isCollapsed }) => {
 
   const handleMenuAction = async (action: string) => {
     switch (action) {
-      case 'perfil':
-        navigate('/profile');
-        break;
       case 'configuracion':
         navigate('/settings');
         break;
@@ -219,26 +215,7 @@ export const Header: React.FC<HeaderProps> = ({ isCollapsed }) => {
               },
             }}
           >
-            <MenuItem 
-              onClick={() => handleMenuAction('perfil')}
-              sx={{
-                py: 1.5,
-                '&:hover': {
-                  backgroundColor: 'rgba(80, 27, 54, 0.05)',
-                },
-              }}
-            >
-              <ListItemIcon>
-                <AccountCircle sx={{ color: '#501b36' }} />
-              </ListItemIcon>
-              <ListItemText 
-                primary="Mi Perfil" 
-                primaryTypographyProps={{
-                  fontSize: '0.95rem',
-                  fontWeight: 500,
-                }}
-              />
-            </MenuItem>
+  // case 'perfil': eliminado: ya no hay página de perfil
             
             {/* Solo mostrar Configuración si el usuario tiene permisos */}
             {hasPermission(user, Permission.VIEW_SETTINGS) && (

@@ -16,7 +16,6 @@ const Dietas = lazy(() => import('./pages/Dietas').then(m => ({ default: m.Dieta
 const Orders = lazy(() => import('./pages/Orders').then(m => ({ default: m.Orders })));
 const Users = lazy(() => import('./pages/Users'));
 const DocumentationPanel = lazy(() => import('./pages/DocumentationPanel'));
-const Profile = lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
 const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })));
 const Login = lazy(() => import('./pages/Login'));
 import { useAuth } from './hooks/useAuth';
@@ -104,11 +103,6 @@ function App() {
                     <Route path="/gestor" element={
                       <ProtectedRoute>
                         <DocumentationPanel />
-                      </ProtectedRoute>
-                    } />
-                    <Route path="/profile" element={
-                      <ProtectedRoute>
-                        <Profile />
                       </ProtectedRoute>
                     } />
                     <Route path="/settings" element={

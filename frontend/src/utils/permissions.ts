@@ -147,8 +147,7 @@ export const canAccessRoute = (user: User | null, route: string): boolean => {
     case '/settings':
       // Solo el usuario maestro puede acceder a configuración
       return user.role === 'MASTER_ADMIN';
-    case '/profile':
-      return true; // Todos pueden ver su perfil
+  // case '/profile': eliminado
     default:
       return false;
   }
@@ -183,7 +182,7 @@ export const getDefaultRoute = (user: User | null): string => {
   if (hasPermission(user, Permission.VIEW_USERS)) return '/users';
   if (hasPermission(user, Permission.VIEW_GESTOR)) return '/gestor';
   
-  return '/profile'; // Fallback a perfil que todos pueden ver
+  return '/login'; // Fallback actualizado (perfil eliminado)
 };
 
 // Función para obtener el color de un rol
