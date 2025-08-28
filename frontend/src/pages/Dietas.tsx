@@ -2133,7 +2133,8 @@ export const Dietas: React.FC = () => {
                                   method: 'POST',
                                   headers: { 
                                     'Content-Type': 'application/json',
-                                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                                    // Unificar clave de token (fallback a 'token' por retrocompatibilidad)
+                                    'Authorization': `Bearer ${localStorage.getItem('access_token') || localStorage.getItem('token')}`
                                   },
                                   body: JSON.stringify(routeData)
                                 });
