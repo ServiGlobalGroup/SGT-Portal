@@ -118,25 +118,110 @@ class User(Base):
     def create_user_folder(self, base_path: str) -> str:
         """
         Crea la carpeta personal del usuario basada en su DNI/NIE.
+        Estructura optimizada para conductores y personal de transporte.
         Retorna la ruta de la carpeta creada.
         """
         # Sanitizar el DNI/NIE para usar como nombre de carpeta
         folder_name = self.dni_nie.replace("/", "_").replace("\\", "_")
         user_folder = os.path.join(base_path, folder_name)
         
-        # Crear las subcarpetas necesarias
-        folders_to_create = [
+        # Crear las subcarpetas necesarias según el rol del usuario
+        base_folders = [
             user_folder,
-            os.path.join(user_folder, "documentos"),
-            os.path.join(user_folder, "nominas"),
-            os.path.join(user_folder, "vacaciones"),
-            os.path.join(user_folder, "permisos"),
-            os.path.join(user_folder, "circulacion"),
-            os.path.join(user_folder, "perfil")
+            os.path.join(user_folder, "documentos_personales"),  # DNI, pasaporte, etc.
+            os.path.join(user_folder, "nominas"),               # Nóminas mensuales
+            os.path.join(user_folder, "dietas"),                # Dietas de viaje
+            os.path.join(user_folder, "contratos"),             # Contratos laborales
+            os.path.join(user_folder, "vacaciones"),            # Solicitudes de vacaciones
+            os.path.join(user_folder, "permisos"),              # Permisos y ausencias
         ]
         
-        for folder in folders_to_create:
+        # Carpetas específicas para conductores
+        if self.role.name == 'TRABAJADOR':
+            conductor_folders = [
+                os.path.join(user_folder, "licencias_conducir"),    # Carnet de conducir
+                os.path.join(user_folder, "formacion_conductor"),   # CAP, ADR, etc.
+                os.path.join(user_folder, "certificados_medicos"), # Reconocimientos médicos
+                os.path.join(user_folder, "multas_infracciones"),  # Multas e infracciones
+                os.path.join(user_folder, "tacografo"),            # Registros del tacógrafo
+                os.path.join(user_folder, "vehiculos_asignados"),  # Documentación vehículos
+            ]
+            base_folders.extend(conductor_folders)
+        
+        # Carpetas específicas para personal de tráfico
+        elif self.role.name == 'TRAFICO':
+            trafico_folders = [
+                os.path.join(user_folder, "planificacion"),        # Planificación de rutas
+                os.path.join(user_folder, "documentos_carga"),     # CMR, albaranes, etc.
+                os.path.join(user_folder, "clientes"),             # Documentación clientes
+            ]
+            base_folders.extend(trafico_folders)
+        
+        # Carpetas específicas para administradores
+        elif self.role.name == 'ADMINISTRADOR':
+            admin_folders = [
+                os.path.join(user_folder, "reportes"),             # Reportes y análisis
+                os.path.join(user_folder, "configuracion"),       # Archivos de configuración
+                os.path.join(user_folder, "backups"),             # Copias de seguridad
+            ]
+            base_folders.extend(admin_folders)
+        
+        # Crear todas las carpetas
+        for folder in base_folders:
             os.makedirs(folder, exist_ok=True)
+        
+        # Crear archivo README con información de la estructura
+        readme_path = os.path.join(user_folder, "README.txt")
+        try:
+            with open(readme_path, "w", encoding="utf-8") as f:
+                f.write(f"CARPETA PERSONAL - {self.first_name} {self.last_name}\n")
+                f.write(f"DNI/NIE: {self.dni_nie}\n")
+                f.write(f"Rol: {self.role.name}\n")
+                f.write(f"Departamento: {self.department}\n")
+                f.write(f"Creado: {datetime.now().strftime('%d/%m/%Y %H:%M')}\n\n")
+                f.write("ESTRUCTURA DE CARPETAS:\n")
+                f.write("========================\n")
+                
+                # Documentar las carpetas creadas
+                for folder in sorted(base_folders):
+                    if folder != user_folder:  # Excluir la carpeta raíz
+                        subfolder_name = os.path.basename(folder)
+                        f.write(f"📁 {subfolder_name}/\n")
+                        
+                        # Añadir descripción de cada carpeta
+                        descriptions = {
+                            "documentos_personales": "  → DNI, pasaporte, documentos de identidad",
+                            "nominas": "  → Nóminas mensuales en formato PDF",
+                            "dietas": "  → Dietas de viaje y gastos",
+                            "contratos": "  → Contratos laborales y anexos",
+                            "vacaciones": "  → Solicitudes de vacaciones y permisos",
+                            "permisos": "  → Permisos médicos, personales, etc.",
+                            "licencias_conducir": "  → Carnet de conducir y renovaciones",
+                            "formacion_conductor": "  → CAP, ADR, cursos de formación",
+                            "certificados_medicos": "  → Reconocimientos médicos obligatorios",
+                            "multas_infracciones": "  → Multas de tráfico e infracciones",
+                            "tacografo": "  → Registros y descargas del tacógrafo",
+                            "vehiculos_asignados": "  → ITV, seguros, fichas técnicas",
+                            "planificacion": "  → Rutas, horarios, planificación",
+                            "documentos_carga": "  → CMR, albaranes, documentos de carga",
+                            "clientes": "  → Contactos y documentos de clientes",
+                            "reportes": "  → Informes y análisis administrativos",
+                            "configuracion": "  → Archivos de configuración del sistema",
+                            "backups": "  → Copias de seguridad y respaldos"
+                        }
+                        
+                        if subfolder_name in descriptions:
+                            f.write(f"{descriptions[subfolder_name]}\n")
+                        f.write("\n")
+                
+                f.write("\nNOTAS:\n")
+                f.write("- Mantén los archivos organizados en sus carpetas correspondientes\n")
+                f.write("- Los archivos PDF son preferibles para documentos oficiales\n")
+                f.write("- Nombres de archivo descriptivos y con fecha cuando sea relevante\n")
+                f.write("- No elimines este archivo README\n")
+                
+        except Exception as e:
+            print(f"Error creando README para usuario {self.dni_nie}: {str(e)}")
         
         return user_folder
 

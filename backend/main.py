@@ -10,10 +10,11 @@ BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
-from app.api import dashboard, traffic, vacations, documents, payroll, orders, profile, settings, users, auth, user_files, documentation, activity, dietas, distancieros
+from app.api import dashboard, traffic, vacations, documents, payroll, orders, profile, settings, users, auth, user_files, documentation, activity, dietas, distancieros, folder_management
 from app.database.connection import check_database_connection
 from app.middleware.maintenance import MaintenanceMiddleware
 from app.config import settings as app_settings
+from app.services.folder_structure_service import FolderStructureService
 
 app = FastAPI(title="Portal API", version="1.0.0")
 
@@ -45,6 +46,14 @@ app.include_router(settings.router, prefix="/api", tags=["settings"])
 app.include_router(activity.router, prefix="/api/activity", tags=["activity"]) 
 app.include_router(dietas.router, prefix="/api/dietas", tags=["dietas"]) 
 app.include_router(distancieros.router, prefix="/api/distancieros", tags=["distancieros"])
+app.include_router(folder_management.router, prefix="/api", tags=["folder-management"])
+
+# Inicializar sistema de carpetas al arrancar
+try:
+    FolderStructureService.initialize_system_folders()
+    print("✅ Sistema de carpetas inicializado correctamente")
+except Exception as e:
+    print(f"⚠️ Error inicializando sistema de carpetas: {str(e)}")
 
 # Nota: la ruta raíz '/' será servida por el fallback de la SPA si existe el build
 

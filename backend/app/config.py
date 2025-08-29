@@ -30,9 +30,13 @@ class Settings(BaseSettings):
     maintenance_mode: bool = False
     maintenance_message: str = "Sistema en mantenimiento. Por favor, intente más tarde."
     
-    # File Storage
-    user_files_base_path: str = os.getenv("USER_FILES_BASE_PATH", "../user_files")
-    traffic_files_base_path: str = os.getenv("TRAFFIC_FILES_BASE_PATH", "../traffic_files")
+    # File Storage - Unified structure
+    files_base_path: str = os.getenv("FILES_BASE_PATH", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "files")))
+    user_files_base_path: str = os.getenv("USER_FILES_BASE_PATH", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "files", "users")))
+    traffic_files_base_path: str = os.getenv("TRAFFIC_FILES_BASE_PATH", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "files", "traffic")))
+    documents_files_base_path: str = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "files", "documents"))
+    payroll_files_base_path: str = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "files", "payroll"))
+    orders_files_base_path: str = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "files", "orders"))
     upload_max_size: int = 10485760  # 10MB
     allowed_extensions: List[str] = [".pdf", ".doc", ".docx", ".xls", ".xlsx", ".jpg", ".jpeg", ".png"]
     
@@ -61,8 +65,10 @@ class Settings(BaseSettings):
 # Instancia global de configuración
 settings = Settings()
 
-# Crear directorio base para archivos de usuarios si no existe
+# Crear directorios base para la estructura unificada si no existen
+os.makedirs(settings.files_base_path, exist_ok=True)
 os.makedirs(settings.user_files_base_path, exist_ok=True)
-
-# Crear directorio base para archivos de tráfico si no existe  
 os.makedirs(settings.traffic_files_base_path, exist_ok=True)
+os.makedirs(settings.documents_files_base_path, exist_ok=True)
+os.makedirs(settings.payroll_files_base_path, exist_ok=True)
+os.makedirs(settings.orders_files_base_path, exist_ok=True)

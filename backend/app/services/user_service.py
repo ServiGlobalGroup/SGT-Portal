@@ -3,6 +3,7 @@ from sqlalchemy import or_
 from app.models.user import User, UserRole
 from app.models.user_schemas import UserCreate, UserUpdate
 from app.config import settings
+from app.services.folder_structure_service import FolderStructureService
 from passlib.context import CryptContext
 from typing import Optional, List
 import os
@@ -103,13 +104,21 @@ class UserService:
             must_change_password=True,
         )
 
-        # Crear la carpeta del usuario
+        # Crear la carpeta del usuario con la nueva estructura
         try:
-            user_folder_path = db_user.create_user_folder(settings.user_files_base_path)
+            user_folder_path = FolderStructureService.create_user_folder_structure(
+                dni_nie=user_create.dni_nie,
+                role=user_create.role,
+                first_name=user_create.first_name,
+                last_name=user_create.last_name,
+                department=user_create.department
+            )
             # Asignar ruta sólo si el modelo tiene el atributo (evita advertencias del analizador)
             if hasattr(db_user, "user_folder_path"):
                 setattr(db_user, "user_folder_path", user_folder_path)
         except Exception as e:
+            # Hacer rollback de la transacción si falla la creación de carpetas
+            db.rollback()
             raise Exception(f"Error creando carpeta de usuario: {str(e)}")
 
         # Guardar en la base de datos

@@ -64,6 +64,12 @@ uploads/
 backend/.trash/
 backend/maintenance_status.json
 
+# Sistema de archivos unificado - Carpetas de usuarios (datos personales)
+files/users/*/
+!files/users/.gitkeep
+
+# Mantener estructura base pero ignorar contenido de usuarios
+
 # Archivos de base de datos locales
 *.db
 *.sqlite
