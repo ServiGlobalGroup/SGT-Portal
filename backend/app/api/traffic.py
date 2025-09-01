@@ -1,257 +1,241 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+"""
+API real para gestión de carpetas y archivos de Tráfico.
+Elimina la simulación previa y opera directamente sobre el filesystem
+usando settings.traffic_files_base_path.
+"""
+
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
 from fastapi.responses import FileResponse
-from app.models.schemas import TrafficData, TrafficFolder, TrafficDocument
-from datetime import datetime, timedelta
+from pydantic import BaseModel, field_validator
 from typing import List, Optional
-import random
+from datetime import datetime
+from pathlib import Path
 import os
-import uuid
 import shutil
+import unicodedata
+
+from app.config import settings
 
 router = APIRouter()
 
-# Simulación de base de datos en memoria con datos de ejemplo
-folders_db = [
-    TrafficFolder(
-        id=1,
-        name="Transportes ABC S.A.",
-        type="company",
-        parent_id=None,
-        created_date=datetime.now() - timedelta(days=30)
-    ),
-    TrafficFolder(
-        id=2,
-        name="Logística DEF Ltda.",
-        type="company",
-        parent_id=None,
-        created_date=datetime.now() - timedelta(days=25)
-    ),
-    TrafficFolder(
-        id=3,
-        name="Servicios GHI Corp.",
-        type="company",
-        parent_id=None,
-        created_date=datetime.now() - timedelta(days=20)
-    ),
-    TrafficFolder(
-        id=4,
-        name="Tractoras",
-        type="vehicle_type",
-        parent_id=1,
-        created_date=datetime.now() - timedelta(days=15)
-    ),
-    TrafficFolder(
-        id=5,
-        name="Bateas",
-        type="vehicle_type",
-        parent_id=1,
-        created_date=datetime.now() - timedelta(days=15)
-    ),
-    TrafficFolder(
-        id=6,
-        name="ABC-1234",
-        type="vehicle",
-        parent_id=4,
-        created_date=datetime.now() - timedelta(days=10)
-    ),
-    TrafficFolder(
-        id=7,
-        name="ABC-5678",
-        type="vehicle",
-        parent_id=4,
-        created_date=datetime.now() - timedelta(days=8)
-    ),
-    TrafficFolder(
-        id=8,
-        name="BAN-9012",
-        type="vehicle",
-        parent_id=5,
-        created_date=datetime.now() - timedelta(days=5)
+BASE_PATH = Path(settings.traffic_files_base_path).resolve()
+BASE_PATH.mkdir(parents=True, exist_ok=True)
+
+ILLEGAL_CHARS = set('<>:\\"|?*')
+
+
+def _secure_name(name: str) -> str:
+    # Normalizar y eliminar caracteres no permitidos
+    name = unicodedata.normalize('NFKC', name).strip()
+    if any(c in ILLEGAL_CHARS for c in name):
+        raise HTTPException(status_code=400, detail="Nombre contiene caracteres no permitidos")
+    # Evitar path traversal
+    if '/' in name or '\\' in name:
+        raise HTTPException(status_code=400, detail="Nombre de carpeta inválido")
+    if not name:
+        raise HTTPException(status_code=400, detail="Nombre vacío")
+    return name
+
+
+def _resolve_relative(rel: str | None) -> Path:
+    rel = (rel or '').strip().replace('\\', '/').lstrip('/')
+    full = (BASE_PATH / rel).resolve()
+    if BASE_PATH not in full.parents and full != BASE_PATH:
+        raise HTTPException(status_code=400, detail="Ruta fuera del directorio permitido")
+    return full
+
+
+class TrafficFolderCreate(BaseModel):
+    name: str
+    parent_path: Optional[str] = None
+
+    @field_validator('name')
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        return _secure_name(v)
+
+
+class TrafficFolderInfo(BaseModel):
+    name: str
+    relative_path: str
+    created_at: datetime
+    updated_at: datetime
+    type: str = "folder"
+
+
+class TrafficFileInfo(BaseModel):
+    name: str
+    relative_path: str
+    size: int
+    mime_type: Optional[str]
+    created_at: datetime
+    updated_at: datetime
+
+
+@router.get('/folders', response_model=List[TrafficFolderInfo])
+def list_folders(parent_path: Optional[str] = Query(None, description="Ruta relativa desde la raíz de tráfico")):
+    target = _resolve_relative(parent_path)
+    # Si no existe la creamos silenciosamente para evitar 404 iniciales
+    if not target.exists():
+        target.mkdir(parents=True, exist_ok=True)
+    if not target.is_dir():
+        raise HTTPException(status_code=400, detail="La ruta no es un directorio")
+
+    items: List[TrafficFolderInfo] = []
+    for entry in sorted(target.iterdir()):
+        if entry.is_dir():
+            stat = entry.stat()
+            items.append(TrafficFolderInfo(
+                name=entry.name,
+                relative_path=str(entry.relative_to(BASE_PATH)).replace('\\\\', '/'),
+                created_at=datetime.fromtimestamp(stat.st_ctime),
+                updated_at=datetime.fromtimestamp(stat.st_mtime),
+                type="folder"
+            ))
+    return items
+
+
+@router.post('/folders', response_model=TrafficFolderInfo, status_code=201)
+def create_folder(payload: TrafficFolderCreate):
+    parent_dir = _resolve_relative(payload.parent_path)
+    if not parent_dir.exists():
+        raise HTTPException(status_code=404, detail="Carpeta padre no existe")
+    if not parent_dir.is_dir():
+        raise HTTPException(status_code=400, detail="Ruta padre no es un directorio")
+
+    new_dir = parent_dir / payload.name
+    if new_dir.exists():
+        raise HTTPException(status_code=409, detail="La carpeta ya existe")
+
+    new_dir.mkdir(parents=False, exist_ok=False)
+    stat = new_dir.stat()
+    return TrafficFolderInfo(
+        name=new_dir.name,
+        relative_path=str(new_dir.relative_to(BASE_PATH)).replace('\\\\', '/'),
+        created_at=datetime.fromtimestamp(stat.st_ctime),
+        updated_at=datetime.fromtimestamp(stat.st_mtime),
+        type="folder"
     )
-]
 
-documents_db = [
-    TrafficDocument(
-        id=1,
-        name="Seguro_ABC-1234.pdf",
-        file_url="/api/traffic/documents/download/1",
-        file_size=245760,
-        file_type="application/pdf",
-        folder_id=6,
-        uploaded_date=datetime.now() - timedelta(days=7),
-        uploaded_by="Admin"
-    ),
-    TrafficDocument(
-        id=2,
-        name="ITV_ABC-1234.pdf",
-        file_url="/api/traffic/documents/download/2",
-        file_size=187392,
-        file_type="application/pdf",
-        folder_id=6,
-        uploaded_date=datetime.now() - timedelta(days=5),
-        uploaded_by="Admin"
-    ),
-    TrafficDocument(
-        id=3,
-        name="Permiso_Circulacion_BAN-9012.pdf",
-        file_url="/api/traffic/documents/download/3",
-        file_size=312450,
-        file_type="application/pdf",
-        folder_id=8,
-        uploaded_date=datetime.now() - timedelta(days=3),
-        uploaded_by="Admin"
-    )
-]
 
-@router.get("/", response_model=List[TrafficData])
-async def get_traffic_data():
-    # Datos de ejemplo
-    traffic_data = []
-    for i in range(7):
-        date = datetime.now() - timedelta(days=i)
-        traffic_data.append(TrafficData(
-            id=i,
-            timestamp=date,
-            page=f"page_{i}",
-            visitors=random.randint(100, 1000),
-            duration=random.uniform(30, 300)
-        ))
-    return traffic_data
+@router.delete('/folders')
+def delete_folder(path: str = Query(..., description="Ruta relativa de la carpeta a eliminar"), recursive: bool = Query(False)):
+    target = _resolve_relative(path)
+    if not target.exists() or not target.is_dir():
+        raise HTTPException(status_code=404, detail="Carpeta no encontrada")
+    if any(target.iterdir()) and not recursive:
+        raise HTTPException(status_code=409, detail="Carpeta no vacía. Usa recursive=true para forzar.")
+    if recursive:
+        shutil.rmtree(target)
+    else:
+        target.rmdir()
+    return {"message": "Carpeta eliminada"}
 
-@router.get("/analytics")
-async def get_traffic_analytics():
-    return {
-        "total_visits": 15420,
-        "unique_visitors": 8230,
-        "bounce_rate": 0.35,
-        "avg_session_duration": 180.5,
-        "top_pages": [
-            {"page": "/dashboard", "visits": 3420},
-            {"page": "/documents", "visits": 2890},
-            {"page": "/vacations", "visits": 1560},
-            {"page": "/traffic", "visits": 1240}
-        ]
-    }
 
-# Endpoints para gestión de carpetas
-@router.get("/folders", response_model=List[TrafficFolder])
-async def get_folders():
-    return folders_db
+class UploadResponse(BaseModel):
+    files: List[TrafficFileInfo]
 
-@router.post("/folders", response_model=TrafficFolder)
-async def create_folder(folder: TrafficFolder):
-    new_folder = TrafficFolder(
-        id=len(folders_db) + 1,
-        name=folder.name,
-        type=folder.type,
-        parent_id=folder.parent_id,
-        created_date=datetime.now()
-    )
-    folders_db.append(new_folder)
-    return new_folder
 
-@router.put("/folders/{folder_id}", response_model=TrafficFolder)
-async def update_folder(folder_id: int, folder_update: TrafficFolder):
-    for i, folder in enumerate(folders_db):
-        if folder.id == folder_id:
-            folders_db[i].name = folder_update.name
-            folders_db[i].type = folder_update.type
-            return folders_db[i]
-    raise HTTPException(status_code=404, detail="Folder not found")
+@router.get('/files', response_model=List[TrafficFileInfo])
+def list_files(path: Optional[str] = Query(None, description="Ruta relativa de la carpeta")):
+    target = _resolve_relative(path)
+    if not target.exists():
+        # Crear automáticamente la carpeta solicitada para no devolver 404
+        target.mkdir(parents=True, exist_ok=True)
+    if not target.is_dir():
+        raise HTTPException(status_code=400, detail="La ruta no es un directorio")
+    files: List[TrafficFileInfo] = []
+    for entry in sorted(target.iterdir()):
+        if entry.is_file():
+            stat = entry.stat()
+            files.append(TrafficFileInfo(
+                name=entry.name,
+                relative_path=str(entry.relative_to(BASE_PATH)).replace('\\\\', '/'),
+                size=stat.st_size,
+                mime_type=None,  # Se podría inferir con mimetypes
+                created_at=datetime.fromtimestamp(stat.st_ctime),
+                updated_at=datetime.fromtimestamp(stat.st_mtime)
+            ))
+    return files
 
-@router.delete("/folders/{folder_id}")
-async def delete_folder(folder_id: int):
-    global folders_db, documents_db
-    
-    # Eliminar documentos en la carpeta
-    documents_db = [doc for doc in documents_db if doc.folder_id != folder_id]
-    
-    # Eliminar subcarpetas recursivamente
-    def delete_subfolder(parent_id):
-        subfolders = [f for f in folders_db if f.parent_id == parent_id]
-        for subfolder in subfolders:
-            documents_db = [doc for doc in documents_db if doc.folder_id != subfolder.id]
-            delete_subfolder(subfolder.id)
-        folders_db[:] = [f for f in folders_db if f.parent_id != parent_id]
-    
-    delete_subfolder(folder_id)
-    
-    # Eliminar la carpeta principal
-    folders_db[:] = [f for f in folders_db if f.id != folder_id]
-    
-    return {"message": "Folder deleted successfully"}
 
-# Endpoints para gestión de documentos
-@router.get("/documents", response_model=List[TrafficDocument])
-async def get_documents(folder_id: Optional[int] = None):
-    if folder_id is None:
-        return documents_db
-    return [doc for doc in documents_db if doc.folder_id == folder_id]
+@router.post('/upload', response_model=UploadResponse, status_code=201)
+def upload_files(target_path: Optional[str] = Form(None), files: List[UploadFile] = File(...)):
+    directory = _resolve_relative(target_path)
+    if not directory.exists():
+        raise HTTPException(status_code=404, detail="Carpeta destino no existe")
+    if not directory.is_dir():
+        raise HTTPException(status_code=400, detail="Ruta destino no es un directorio")
 
-@router.post("/documents/upload", response_model=List[TrafficDocument])
-async def upload_documents(
-    folder_id: int = Form(...),
-    files: List[UploadFile] = File(...)
-):
-    uploaded_docs = []
-    
-    # Crear directorio si no existe
-    upload_dir = f"uploads/traffic/{folder_id}"
-    os.makedirs(upload_dir, exist_ok=True)
-    
-    for file in files:
-        # Validar que el archivo tenga nombre
-        if not file.filename:
+    saved: List[TrafficFileInfo] = []
+    for f in files:
+        if not f.filename:
             continue
-            
-        # Generar nombre único para el archivo
-        file_extension = file.filename.split('.')[-1] if '.' in file.filename else ''
-        unique_filename = f"{uuid.uuid4()}.{file_extension}"
-        file_path = os.path.join(upload_dir, unique_filename)
-        
-        # Guardar archivo
-        with open(file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-        
-        # Crear registro en la base de datos
-        new_document = TrafficDocument(
-            id=len(documents_db) + 1,
-            name=file.filename,
-            file_url=f"/api/traffic/documents/download/{len(documents_db) + 1}",
-            file_size=os.path.getsize(file_path),
-            file_type=file.content_type or "application/octet-stream",
-            folder_id=folder_id,
-            uploaded_date=datetime.now(),
-            uploaded_by="Usuario"
-        )
-        
-        documents_db.append(new_document)
-        uploaded_docs.append(new_document)
-    
-    return uploaded_docs
+        safe_name = _secure_name(f.filename)
+        destination = directory / safe_name
+        # Evitar sobrescritura
+        counter = 1
+        base_name = destination.stem
+        suffix = destination.suffix
+        while destination.exists():
+            destination = directory / f"{base_name} ({counter}){suffix}"
+            counter += 1
+        with open(destination, 'wb') as out:
+            shutil.copyfileobj(f.file, out)
+        stat = destination.stat()
+        saved.append(TrafficFileInfo(
+            name=destination.name,
+            relative_path=str(destination.relative_to(BASE_PATH)).replace('\\\\', '/'),
+            size=stat.st_size,
+            mime_type=f.content_type,
+            created_at=datetime.fromtimestamp(stat.st_ctime),
+            updated_at=datetime.fromtimestamp(stat.st_mtime)
+        ))
+    return UploadResponse(files=saved)
 
-@router.get("/documents/download/{document_id}")
-async def download_document(document_id: int):
-    document = next((doc for doc in documents_db if doc.id == document_id), None)
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
-    
-    # En una implementación real, aquí buscarías el archivo real
-    # Por ahora, retornamos un error indicando que es una simulación
-    raise HTTPException(status_code=501, detail="Download simulation not implemented")
 
-@router.delete("/documents/{document_id}")
-async def delete_document(document_id: int):
-    global documents_db
+@router.get('/download')
+def download_file(path: str = Query(..., description="Ruta relativa del archivo")):
+    file_path = _resolve_relative(path)
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    return FileResponse(str(file_path), filename=file_path.name)
+
+
+@router.delete('/files')
+def delete_file(path: str = Query(..., description="Ruta relativa del archivo a eliminar")):
+    file_path = _resolve_relative(path)
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    file_path.unlink()
+    return {"message": "Archivo eliminado"}
+
+@router.get('/preview/{relative_path:path}')
+def preview_file(relative_path: str):
+    """Previsualizar archivo (especialmente PDFs) en el navegador"""
+    file_path = _resolve_relative(relative_path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    if not file_path.is_file():
+        raise HTTPException(status_code=400, detail="La ruta no corresponde a un archivo")
     
-    document = next((doc for doc in documents_db if doc.id == document_id), None)
-    if not document:
-        raise HTTPException(status_code=404, detail="Document not found")
+    # Obtener el tipo MIME
+    import mimetypes
+    content_type, _ = mimetypes.guess_type(str(file_path))
+    if content_type is None:
+        content_type = 'application/octet-stream'
     
-    # Eliminar archivo físico (en implementación real)
-    # os.remove(document.file_path)
+    # Para PDFs, establecer content-type correcto para visualización
+    if file_path.suffix.lower() == '.pdf':
+        content_type = 'application/pdf'
     
-    # Eliminar de la base de datos
-    documents_db[:] = [doc for doc in documents_db if doc.id != document_id]
-    
-    return {"message": "Document deleted successfully"}
+    # Retornar archivo para visualización (sin forzar descarga)
+    from fastapi.responses import FileResponse
+    return FileResponse(
+        path=str(file_path),
+        media_type=content_type,
+        headers={"Content-Disposition": "inline"}
+    )
+
+
+

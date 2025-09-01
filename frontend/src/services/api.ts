@@ -126,6 +126,55 @@ export const trafficAPI = {
     api.delete(`/api/traffic/documents/${id}`).then(res => res.data),
 };
 
+// Nueva API para el sistema de archivos de Traffic
+export const trafficFilesAPI = {
+  // Obtener carpetas
+  getFolders: (path?: string) => {
+    const queryParams = path ? `?path=${encodeURIComponent(path)}` : '';
+    return api.get(`/api/traffic/folders${queryParams}`).then(res => res.data);
+  },
+  
+  // Crear carpeta
+  createFolder: (name: string, path?: string) => {
+    return api.post('/api/traffic/folders', { name, path }).then(res => res.data);
+  },
+  
+  // Obtener archivos
+  getFiles: (path?: string) => {
+    const queryParams = path ? `?path=${encodeURIComponent(path)}` : '';
+    return api.get(`/api/traffic/files${queryParams}`).then(res => res.data);
+  },
+  
+  // Subir archivos
+  uploadFiles: (files: File[], targetPath?: string) => {
+    const formData = new FormData();
+    files.forEach(file => formData.append('files', file));
+    if (targetPath) {
+      formData.append('target_path', targetPath);
+    }
+    return api.post('/api/traffic/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }).then(res => res.data);
+  },
+  
+  // Descargar archivo
+  downloadFile: (relativePath: string) => {
+    return api.get(`/api/traffic/download/${encodeURIComponent(relativePath)}`, {
+      responseType: 'blob'
+    });
+  },
+  
+  // Eliminar archivo
+  deleteFile: (relativePath: string) => {
+    return api.delete(`/api/traffic/delete/${encodeURIComponent(relativePath)}`).then(res => res.data);
+  },
+  
+  // Eliminar carpeta
+  deleteFolder: (relativePath: string) => {
+    return api.delete(`/api/traffic/folders/${encodeURIComponent(relativePath)}`).then(res => res.data);
+  }
+};
+
 export const vacationsAPI = {
   getVacationRequests: (): Promise<VacationRequest[]> => 
     api.get('/api/vacations/').then(res => res.data),

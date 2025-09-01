@@ -1,4 +1,4 @@
-import React, { useState, useContext, useEffect } from 'react';
+import React, { useState, useContext } from 'react';
 import {
   Box,
   Typography,
@@ -18,19 +18,6 @@ import {
   IconButton,
   Tooltip,
   Snackbar,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  LinearProgress,
-  Pagination,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TablePagination,
 } from '@mui/material';
 import { AuthContext } from '../contexts/AuthContext';
 import { alpha } from '@mui/material/styles';
@@ -54,9 +41,9 @@ import {
   MoreVert,
   DriveEta,
   AccountTree,
+  Warning,
   GridView,
   ViewList,
-  Warning,
 } from '@mui/icons-material';
 
 interface TrafficFolder {
@@ -77,10 +64,6 @@ interface TrafficFile {
   uploadDate: string;
   url: string;
 }
-
-type UnifiedItem = 
-  | (TrafficFolder & { itemType: 'folder' })
-  | (TrafficFile & { itemType: 'file' });
 
 export const Traffic: React.FC = () => {
   // Contexto de autenticación
@@ -165,11 +148,6 @@ export const Traffic: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  
-  // Estados para paginación
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
-  const [unifiedItems, setUnifiedItems] = useState<UnifiedItem[]>([]);
 
   // Estados de modales
   const [createFolderModal, setCreateFolderModal] = useState(false);
@@ -189,24 +167,6 @@ export const Traffic: React.FC = () => {
   const showSnackbar = (message: string, severity: 'success' | 'error' | 'warning' | 'info' = 'info') => {
     setSnackbar({ open: true, message, severity });
   };
-
-  // Crear elementos unificados para vista lista
-  useEffect(() => {
-    const currentFolders = getCurrentFolders();
-    const currentFiles = getCurrentFiles();
-    
-    const folderItems: UnifiedItem[] = currentFolders.map((folder: TrafficFolder) => ({
-      ...folder,
-      itemType: 'folder' as const
-    }));
-    
-    const fileItems: UnifiedItem[] = currentFiles.map((file: TrafficFile) => ({
-      ...file,
-      itemType: 'file' as const
-    }));
-    
-    setUnifiedItems([...folderItems, ...fileItems]);
-  }, [currentFolderId, searchTerm, folders, files]);
 
   // Funciones auxiliares
   const getCurrentFolders = () => {
@@ -299,32 +259,6 @@ export const Traffic: React.FC = () => {
   const filteredFiles = getCurrentFiles().filter(file => 
     file.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
-
-  // Filtrar elementos unificados por búsqueda para vista lista
-  const filteredUnifiedItems = unifiedItems.filter(item =>
-    item.name.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  // Paginación para vista lista
-  const paginatedItems = filteredUnifiedItems.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage
-  );
-
-  const handleChangePage = (event: unknown, newPage: number) => {
-    setPage(newPage);
-  };
-
-  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
-
-  // Función para manejar la apertura de archivos
-  const handleOpenFile = (file: TrafficFile) => {
-    // Por ahora, solo mostrar en consola
-    console.log('Abrir archivo:', file);
-  };
 
   return (
     <>
@@ -828,9 +762,7 @@ export const Traffic: React.FC = () => {
                   )}
                 </Box>
               ) : (
-                // Contenido dinámico basado en modo de vista
-                viewMode === 'grid' ? (
-                  // Vista de Grid (existente)
+                // Grid/Lista de contenido
                 <Box sx={{ 
                   display: 'grid',
                   gridTemplateColumns: {
@@ -1027,239 +959,6 @@ export const Traffic: React.FC = () => {
                     </Card>
                   ))}
                 </Box>
-                ) : (
-                  // Vista de Lista Unificada
-                  <TableContainer component={Paper} sx={{ 
-                    borderRadius: 3,
-                    border: '1px solid #e2e8f0',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                    overflow: 'hidden'
-                  }}>
-                    <Table stickyHeader>
-                      <TableHead>
-                        <TableRow sx={{ 
-                          '& th': {
-                            bgcolor: '#f8fafc',
-                            fontWeight: 700,
-                            fontSize: '0.875rem',
-                            color: 'text.primary',
-                            borderBottom: '2px solid #e2e8f0'
-                          }
-                        }}>
-                          <TableCell sx={{ width: '40px', pl: 3 }}></TableCell>
-                          <TableCell>Nombre</TableCell>
-                          <TableCell>Tipo</TableCell>
-                          <TableCell>Fecha</TableCell>
-                          <TableCell>Tamaño</TableCell>
-                          <TableCell align="right" sx={{ pr: 3 }}>Acciones</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {paginatedItems.map((item) => (
-                          <TableRow
-                            key={`${item.itemType}-${item.id}`}
-                            hover
-                            sx={{
-                              cursor: 'pointer',
-                              transition: 'all 0.2s ease',
-                              '&:hover': {
-                                bgcolor: alpha('#501b36', 0.02),
-                                transform: 'translateX(4px)',
-                              },
-                            }}
-                            onClick={() => item.itemType === 'folder' 
-                              ? handleFolderClick(item.id) 
-                              : handleOpenFile(item as TrafficFile)
-                            }
-                          >
-                            <TableCell sx={{ pl: 3 }}>
-                              <Box
-                                sx={{
-                                  p: 1,
-                                  borderRadius: 2,
-                                  bgcolor: alpha(
-                                    item.itemType === 'folder' 
-                                      ? getFolderTypeColor((item as TrafficFolder).type)
-                                      : '#501b36',
-                                    0.1
-                                  ),
-                                  color: item.itemType === 'folder' 
-                                    ? getFolderTypeColor((item as TrafficFolder).type)
-                                    : '#501b36',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                }}
-                              >
-                                {item.itemType === 'folder' 
-                                  ? getTypeIcon((item as TrafficFolder).type)
-                                  : <InsertDriveFile fontSize="small" />
-                                }
-                              </Box>
-                            </TableCell>
-                            
-                            <TableCell>
-                              <Box>
-                                <Typography
-                                  variant="subtitle2"
-                                  sx={{ 
-                                    fontWeight: 600, 
-                                    color: 'text.primary',
-                                    mb: 0.5
-                                  }}
-                                >
-                                  {item.name}
-                                </Typography>
-                                {item.itemType === 'folder' && (item as TrafficFolder).description && (
-                                  <Typography
-                                    variant="caption"
-                                    sx={{ 
-                                      color: 'text.secondary',
-                                      display: '-webkit-box',
-                                      WebkitLineClamp: 1,
-                                      WebkitBoxOrient: 'vertical',
-                                      overflow: 'hidden',
-                                    }}
-                                  >
-                                    {(item as TrafficFolder).description}
-                                  </Typography>
-                                )}
-                              </Box>
-                            </TableCell>
-                            
-                            <TableCell>
-                              <Chip
-                                size="small"
-                                label={item.itemType === 'folder' ? 'Carpeta' : 'Archivo'}
-                                sx={{
-                                  bgcolor: alpha(
-                                    item.itemType === 'folder' ? '#2563eb' : '#501b36',
-                                    0.1
-                                  ),
-                                  color: item.itemType === 'folder' ? '#2563eb' : '#501b36',
-                                  fontWeight: 600,
-                                  fontSize: '0.75rem',
-                                  border: 'none',
-                                }}
-                              />
-                            </TableCell>
-                            
-                            <TableCell>
-                              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                {item.itemType === 'folder' 
-                                  ? (item as TrafficFolder).createdDate
-                                  : (item as TrafficFile).uploadDate
-                                }
-                              </Typography>
-                            </TableCell>
-                            
-                            <TableCell>
-                              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                                {item.itemType === 'file' 
-                                  ? `${((item as TrafficFile).size / 1024).toFixed(1)} KB`
-                                  : '-'
-                                }
-                              </Typography>
-                            </TableCell>
-                            
-                            <TableCell align="right" sx={{ pr: 3 }}>
-                              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-                                <IconButton
-                                  size="small"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    item.itemType === 'folder' 
-                                      ? handleFolderClick(item.id)
-                                      : handleOpenFile(item as TrafficFile);
-                                  }}
-                                  sx={{
-                                    color: '#501b36',
-                                    '&:hover': { bgcolor: alpha('#501b36', 0.1) }
-                                  }}
-                                >
-                                  <Visibility fontSize="small" />
-                                </IconButton>
-                                
-                                {item.itemType === 'file' && (
-                                  <IconButton
-                                    size="small"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      // Lógica de descarga
-                                    }}
-                                    sx={{
-                                      color: '#501b36',
-                                      '&:hover': { bgcolor: alpha('#501b36', 0.1) }
-                                    }}
-                                  >
-                                    <Download fontSize="small" />
-                                  </IconButton>
-                                )}
-                                
-                                {item.itemType === 'folder' && canManageTraffic && (
-                                  <>
-                                    <IconButton
-                                      size="small"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleFolderClick(item.id);
-                                        setCreateFolderModal(true);
-                                      }}
-                                      sx={{
-                                        color: '#501b36',
-                                        '&:hover': { bgcolor: alpha('#501b36', 0.1) }
-                                      }}
-                                    >
-                                      <CreateNewFolder fontSize="small" />
-                                    </IconButton>
-                                    
-                                    <IconButton
-                                      size="small"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleFolderClick(item.id);
-                                        setUploadModal(true);
-                                      }}
-                                      sx={{
-                                        color: '#501b36',
-                                        '&:hover': { bgcolor: alpha('#501b36', 0.1) }
-                                      }}
-                                    >
-                                      <Upload fontSize="small" />
-                                    </IconButton>
-                                  </>
-                                )}
-                              </Box>
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                    
-                    {filteredUnifiedItems.length > rowsPerPage && (
-                      <TablePagination
-                        rowsPerPageOptions={[5, 10, 25, 50]}
-                        component="div"
-                        count={filteredUnifiedItems.length}
-                        rowsPerPage={rowsPerPage}
-                        page={page}
-                        onPageChange={handleChangePage}
-                        onRowsPerPageChange={handleChangeRowsPerPage}
-                        labelRowsPerPage="Filas por página:"
-                        labelDisplayedRows={({ from, to, count }) =>
-                          `${from}-${to} de ${count !== -1 ? count : `más de ${to}`}`
-                        }
-                        sx={{
-                          borderTop: '1px solid #e2e8f0',
-                          bgcolor: '#f8fafc',
-                          '& .MuiTablePagination-toolbar': {
-                            px: 3,
-                          },
-                        }}
-                      />
-                    )}
-                  </TableContainer>
-                )
               )}
             </Box>
           </Paper>
