@@ -5,7 +5,6 @@ import { ForcePasswordModal } from './ForcePasswordModal';
 import { useAuth } from '../hooks/useAuth';
 
 const drawerWidth = 280;
-const collapsedWidth = 80;
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -14,17 +13,17 @@ interface LayoutProps {
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const [isCollapsed, setIsCollapsed] = useState(isMobile);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const { mustChangePassword } = useAuth() as any;
   
-  const currentWidth = isCollapsed ? collapsedWidth : drawerWidth;
+  // En desktop, el sidebar siempre está expandido (no colapsado)
+  const isCollapsed = false; // Siempre expandido en desktop
+  const currentWidth = isMobile ? 0 : drawerWidth; // En móvil no ocupa espacio, en desktop sí
 
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh', width: '100%' }}>
       <Sidebar 
         isCollapsed={isCollapsed} 
-        setIsCollapsed={setIsCollapsed}
         isMobile={isMobile}
         mobileMenuOpen={mobileMenuOpen}
         setMobileMenuOpen={setMobileMenuOpen}

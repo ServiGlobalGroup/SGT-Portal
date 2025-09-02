@@ -24,8 +24,6 @@ import {
   Description,
   LocalShipping,
   RestaurantMenu,
-  MenuOpen,
-  Close,
   Settings,
   Logout,
   Menu as MenuIcon,
@@ -72,7 +70,6 @@ const menuItems: MenuItem[] = [
 
 interface SidebarProps {
   isCollapsed: boolean;
-  setIsCollapsed: (collapsed: boolean) => void;
   isMobile?: boolean;
   mobileMenuOpen?: boolean;
   setMobileMenuOpen?: (open: boolean) => void;
@@ -80,7 +77,6 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({ 
   isCollapsed, 
-  setIsCollapsed,
   isMobile = false,
   mobileMenuOpen = false,
   setMobileMenuOpen = () => {}
@@ -117,14 +113,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     
     return filterMenuItems(menuItems);
   }, [user]);
-
-  const handleToggle = () => {
-    if (isMobile) {
-      setMobileMenuOpen(!mobileMenuOpen);
-    } else {
-      setIsCollapsed(!isCollapsed);
-    }
-  };
 
   const handleProfileClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);
@@ -235,35 +223,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
         minHeight: { xs: '90px !important', sm: '100px !important' }, 
         flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'flex-start',
+        justifyContent: 'center',
         gap: 1.2,
         pt: 1.5,
         pb: 1,
       }}>
-        {!isMobile && (
-          <IconButton
-            onClick={handleToggle}
-            disableRipple
-            aria-label={isCollapsed ? 'Expandir menú' : 'Colapsar menú'}
-            sx={{
-              bgcolor: 'rgba(255,255,255,0.12)',
-              color: '#fff',
-              width: 42,
-              height: 42,
-              borderRadius: '14px',
-              boxShadow: '0 3px 10px rgba(0,0,0,0.25)',
-              backdropFilter: 'blur(6px)',
-              border: '1px solid rgba(255,255,255,0.25)',
-              '&:hover': { bgcolor: 'rgba(255,255,255,0.2)' },
-              transition: 'all .25s',
-              flexShrink: 0,
-            }}
-          >
-            {isCollapsed ? <MenuOpen /> : <Close />}
-          </IconButton>
-        )}
-        {/* Logo debajo del botón sin superposición */}
-        <Box sx={{ mt: 0.5, width: '100%', display:'flex', justifyContent:'center' }}>
+        {/* Logo centrado sin botón de toggle en desktop */}
+        <Box sx={{ width: '100%', display:'flex', justifyContent:'center' }}>
           {(!isCollapsed || isMobile) && (
             <Box sx={{ p:0.5 }}>
               <Box
