@@ -62,6 +62,7 @@ import {
   Delete,
 } from '@mui/icons-material';
 import { trafficFilesAPI, API_BASE_URL } from '../services/api';
+import { PdfPreview } from '../components/PdfPreview';
 
 interface TrafficFolder {
   id: number;
@@ -117,6 +118,11 @@ export const Traffic: React.FC = () => {
   // Estados de modales
   const [createFolderModal, setCreateFolderModal] = useState(false);
   const [uploadModal, setUploadModal] = useState(false);
+
+  // Estados para preview
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewFileUrl, setPreviewFileUrl] = useState('');
+  const [previewFileName, setPreviewFileName] = useState('');
   
   // Snackbar
   const [snackbar, setSnackbar] = useState<{
@@ -413,8 +419,12 @@ export const Traffic: React.FC = () => {
         ? file.name 
         : `${currentPath.substring(1)}/${file.name}`;
       
-      const fileUrl = `${API_BASE_URL}/api/traffic/download/${encodeURIComponent(relativePath)}`;
-      window.open(fileUrl, '_blank');
+      const fileUrl = `${API_BASE_URL}/api/traffic/preview/${encodeURIComponent(relativePath)}`;
+      
+      // Usar el componente PdfPreview para mostrar el archivo
+      setPreviewFileUrl(fileUrl);
+      setPreviewFileName(file.name);
+      setPreviewOpen(true);
     } else {
       showSnackbar('Vista previa no disponible para este tipo de archivo', 'warning');
     }
@@ -1684,6 +1694,15 @@ export const Traffic: React.FC = () => {
           open={uploadModal}
           onClose={() => setUploadModal(false)}
           onConfirm={handleUploadFiles}
+        />
+
+        {/* Modal de preview de archivos */}
+        <PdfPreview
+          open={previewOpen}
+          onClose={() => setPreviewOpen(false)}
+          fileUrl={previewFileUrl}
+          fileName={previewFileName}
+          title="Vista previa - Tráfico"
         />
       </Box>
     </>
