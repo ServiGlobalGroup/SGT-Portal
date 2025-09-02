@@ -57,8 +57,11 @@ import {
   GridView,
   ViewList,
   Warning,
+  PictureAsPdf,
+  Image,
+  Delete,
 } from '@mui/icons-material';
-import { trafficFilesAPI } from '../services/api';
+import { trafficFilesAPI, API_BASE_URL } from '../services/api';
 
 interface TrafficFolder {
   id: number;
@@ -136,29 +139,25 @@ export const Traffic: React.FC = () => {
       console.log('🔄 Loading folders for path:', path || 'root');
       setLoading(true);
       
-      // Por ahora, para evitar el bucle infinito, si no estamos en root,
-      // no cargar carpetas hasta que el backend esté implementado correctamente
-      if (path && path !== '/') {
-        console.log('⚠️ Not loading subfolders yet - API may not be ready');
-        setFolders([]);
-        return;
-      }
-      
       const foldersData = await trafficFilesAPI.getFolders(path);
       console.log('📁 Folders loaded:', foldersData);
       
       // Filtrar para evitar bucles: no mostrar la carpeta actual dentro de sí misma
-      const filteredFolders = Array.isArray(foldersData) 
-        ? foldersData.filter(folder => {
-            // Si estamos en un path específico, no mostrar carpetas que tengan el mismo nombre
-            if (path && path !== '/') {
-              const currentFolderName = path.split('/').pop();
-              return folder.name !== currentFolderName;
-            }
-            return true;
-          })
-        : [];
-        
+      let filteredFolders = Array.isArray(foldersData) ? foldersData : [];
+      
+      if (path && path !== '/') {
+        const currentFolderName = path.split('/').pop();
+        console.log('🔍 Filtering out current folder:', currentFolderName);
+        filteredFolders = filteredFolders.filter(folder => {
+          const shouldKeep = folder.name !== currentFolderName;
+          if (!shouldKeep) {
+            console.log('🚫 Filtered out self-reference:', folder.name);
+          }
+          return shouldKeep;
+        });
+      }
+      
+      console.log('✅ Final filtered folders:', filteredFolders);
       setFolders(filteredFolders);
     } catch (error) {
       console.error('Error loading folders:', error);
@@ -173,14 +172,6 @@ export const Traffic: React.FC = () => {
   const loadFiles = async (path?: string) => {
     try {
       console.log('🔄 Loading files for path:', path || 'root');
-      
-      // Por ahora, para evitar problemas, si no estamos en root,
-      // no cargar archivos hasta que el backend esté implementado correctamente
-      if (path && path !== '/') {
-        console.log('⚠️ Not loading files from subfolders yet - API may not be ready');
-        setFiles([]);
-        return;
-      }
       
       const filesData = await trafficFilesAPI.getFiles(path);
       console.log('📄 Files loaded:', filesData);
@@ -350,15 +341,20 @@ export const Traffic: React.FC = () => {
     
     try {
       setLoading(true);
+      console.log('🔼 Uploading files to path:', currentPath);
+      console.log('📎 Files to upload:', selectedFiles.map(f => f.name));
       
-      await trafficFilesAPI.uploadFiles(selectedFiles, currentPath === '/' ? undefined : currentPath);
+      const uploadResult = await trafficFilesAPI.uploadFiles(selectedFiles, currentPath === '/' ? undefined : currentPath);
+      console.log('✅ Upload result:', uploadResult);
       
       // Recargar archivos
+      console.log('🔄 Reloading files after upload...');
       await loadFiles(currentPath === '/' ? undefined : currentPath);
+      
       showSnackbar(`${selectedFiles.length} archivo(s) subido(s) exitosamente`, 'success');
       setUploadModal(false);
     } catch (error) {
-      console.error('Error uploading files:', error);
+      console.error('❌ Error uploading files:', error);
       showSnackbar('Error al subir los archivos', 'error');
     } finally {
       setLoading(false);
@@ -403,6 +399,91 @@ export const Traffic: React.FC = () => {
   const handleOpenFile = (file: TrafficFile) => {
     // Por ahora, solo mostrar en consola
     console.log('Abrir archivo:', file);
+  };
+
+  // Funciones para manejo de archivos
+  const handlePreviewFile = (file: TrafficFile) => {
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(fileExtension || '');
+    const isPDF = fileExtension === 'pdf';
+    
+    if (isImage || isPDF) {
+      // Construir el path relativo del archivo
+      const relativePath = currentPath === '/' 
+        ? file.name 
+        : `${currentPath.substring(1)}/${file.name}`;
+      
+      const fileUrl = `${API_BASE_URL}/api/traffic/download/${encodeURIComponent(relativePath)}`;
+      window.open(fileUrl, '_blank');
+    } else {
+      showSnackbar('Vista previa no disponible para este tipo de archivo', 'warning');
+    }
+  };
+
+  const handleDownloadFile = (file: TrafficFile) => {
+    try {
+      // Construir el path relativo del archivo
+      const relativePath = currentPath === '/' 
+        ? file.name 
+        : `${currentPath.substring(1)}/${file.name}`;
+      
+      const fileUrl = `${API_BASE_URL}/api/traffic/download/${encodeURIComponent(relativePath)}`;
+      
+      // Crear elemento a temporal para descargar
+      const link = document.createElement('a');
+      link.href = fileUrl;
+      link.download = file.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      showSnackbar('Descarga iniciada', 'success');
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      showSnackbar('Error al descargar el archivo', 'error');
+    }
+  };
+
+  const handleDeleteFile = async (file: TrafficFile) => {
+    if (window.confirm(`¿Estás seguro de que quieres eliminar "${file.name}"?`)) {
+      try {
+        setLoading(true);
+        
+        // Construir el path relativo del archivo
+        const relativePath = currentPath === '/' 
+          ? file.name 
+          : `${currentPath.substring(1)}/${file.name}`;
+          
+        await trafficFilesAPI.deleteFile(relativePath);
+        showSnackbar('Archivo eliminado correctamente', 'success');
+        
+        // Recargar archivos
+        await loadFiles(currentPath === '/' ? undefined : currentPath);
+      } catch (error) {
+        console.error('Error deleting file:', error);
+        showSnackbar('Error al eliminar el archivo', 'error');
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  // Función para obtener el icono según el tipo de archivo
+  const getFileIcon = (fileName: string) => {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    switch (extension) {
+      case 'pdf':
+        return <PictureAsPdf sx={{ fontSize: 28, color: '#d32f2f' }} />;
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+      case 'webp':
+      case 'svg':
+        return <Image sx={{ fontSize: 28, color: '#2e7d32' }} />;
+      default:
+        return <InsertDriveFile sx={{ fontSize: 28, color: '#757575' }} />;
+    }
   };
 
   return (
@@ -1012,20 +1093,17 @@ export const Traffic: React.FC = () => {
                         },
                       }}
                     >
-                      <CardContent sx={{ p: 3 }}>
+                      <CardContent sx={{ p: 3, position: 'relative' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
                           <Box
                             sx={{
                               p: 2,
                               borderRadius: 2,
-                              bgcolor: file.type === 'application/pdf' ? alpha('#d32f2f', 0.1) : alpha('#501b36', 0.1),
-                              border: `1px solid ${file.type === 'application/pdf' ? alpha('#d32f2f', 0.2) : alpha('#501b36', 0.2)}`,
+                              bgcolor: file.type === 'application/pdf' ? alpha('#d32f2f', 0.1) : alpha('#2e7d32', 0.1),
+                              border: `1px solid ${file.type === 'application/pdf' ? alpha('#d32f2f', 0.2) : alpha('#2e7d32', 0.2)}`,
                             }}
                           >
-                            {file.type === 'application/pdf' ? 
-                              <Description sx={{ fontSize: 28, color: '#d32f2f' }} /> :
-                              <InsertDriveFile sx={{ fontSize: 28, color: '#501b36' }} />
-                            }
+                            {getFileIcon(file.name)}
                           </Box>
                           <Box sx={{ flex: 1, minWidth: 0 }}>
                             <Typography variant="subtitle1" sx={{ 
@@ -1044,49 +1122,99 @@ export const Traffic: React.FC = () => {
                           </Box>
                         </Box>
                         
-                        <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
-                          {file.type === 'application/pdf' && (
-                            <Button
+                        {/* Iconos de acción en la esquina inferior derecha */}
+                        <Box sx={{ 
+                          position: 'absolute',
+                          bottom: 12,
+                          right: 12,
+                          display: 'flex',
+                          gap: 0.5,
+                          opacity: 0.7,
+                          transition: 'opacity 0.2s ease',
+                          '&:hover': { opacity: 1 }
+                        }}>
+                          <Tooltip title="Vista previa" arrow>
+                            <IconButton
                               size="small"
-                              variant="outlined"
-                              startIcon={<Visibility />}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePreviewFile(file);
+                              }}
                               sx={{
-                                flex: 1,
-                                borderRadius: 2,
-                                textTransform: 'none',
-                                fontSize: '0.75rem',
-                                fontWeight: 600,
-                                borderColor: '#501b36',
-                                color: '#501b36',
+                                width: 28,
+                                height: 28,
+                                bgcolor: 'rgba(255,255,255,0.9)',
+                                color: '#2563eb',
+                                border: '1px solid rgba(37, 99, 235, 0.2)',
+                                backdropFilter: 'blur(4px)',
+                                transition: 'all 0.2s ease',
                                 '&:hover': {
-                                  borderColor: '#3d1429',
-                                  bgcolor: alpha('#501b36', 0.04),
-                                },
+                                  bgcolor: '#2563eb',
+                                  color: 'white',
+                                  transform: 'scale(1.1)',
+                                  boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)'
+                                }
                               }}
                             >
-                              Ver
-                            </Button>
+                              <Visibility sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </Tooltip>
+                          
+                          <Tooltip title="Descargar" arrow>
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDownloadFile(file);
+                              }}
+                              sx={{
+                                width: 28,
+                                height: 28,
+                                bgcolor: 'rgba(255,255,255,0.9)',
+                                color: '#16a34a',
+                                border: '1px solid rgba(22, 163, 74, 0.2)',
+                                backdropFilter: 'blur(4px)',
+                                transition: 'all 0.2s ease',
+                                '&:hover': {
+                                  bgcolor: '#16a34a',
+                                  color: 'white',
+                                  transform: 'scale(1.1)',
+                                  boxShadow: '0 4px 12px rgba(22, 163, 74, 0.3)'
+                                }
+                              }}
+                            >
+                              <Download sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </Tooltip>
+                          
+                          {canManageTraffic && (
+                            <Tooltip title="Eliminar" arrow>
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteFile(file);
+                                }}
+                                sx={{
+                                  width: 28,
+                                  height: 28,
+                                  bgcolor: 'rgba(255,255,255,0.9)',
+                                  color: '#dc2626',
+                                  border: '1px solid rgba(220, 38, 38, 0.2)',
+                                  backdropFilter: 'blur(4px)',
+                                  transition: 'all 0.2s ease',
+                                  '&:hover': {
+                                    bgcolor: '#dc2626',
+                                    color: 'white',
+                                    transform: 'scale(1.1)',
+                                    boxShadow: '0 4px 12px rgba(220, 38, 38, 0.3)'
+                                  }
+                                }}
+                              >
+                                <Delete sx={{ fontSize: 16 }} />
+                              </IconButton>
+                            </Tooltip>
                           )}
-                          <Button
-                            size="small"
-                            variant="outlined"
-                            startIcon={<Download />}
-                            sx={{
-                              flex: 1,
-                              borderRadius: 2,
-                              textTransform: 'none',
-                              fontSize: '0.75rem',
-                              fontWeight: 600,
-                              borderColor: '#501b36',
-                              color: '#501b36',
-                              '&:hover': {
-                                borderColor: '#3d1429',
-                                bgcolor: alpha('#501b36', 0.04),
-                              },
-                            }}
-                          >
-                            Descargar
-                          </Button>
                         </Box>
                       </CardContent>
                     </Card>
@@ -1191,7 +1319,7 @@ export const Traffic: React.FC = () => {
                               >
                                 {item.itemType === 'folder' 
                                   ? getTypeIcon((item as TrafficFolder).type)
-                                  : <InsertDriveFile fontSize="small" />
+                                  : <Box sx={{ transform: 'scale(0.8)' }}>{getFileIcon(item.name)}</Box>
                                 }
                               </Box>
                             </TableCell>
@@ -1261,37 +1389,125 @@ export const Traffic: React.FC = () => {
                             </TableCell>
                             
                             <TableCell align="right" sx={{ pr: 3 }}>
-                              <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
-                                <IconButton
-                                  size="small"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    item.itemType === 'folder' 
-                                      ? handleFolderClick(item.name)
-                                      : handleOpenFile(item as TrafficFile);
-                                  }}
-                                  sx={{
-                                    color: '#501b36',
-                                    '&:hover': { bgcolor: alpha('#501b36', 0.1) }
-                                  }}
-                                >
-                                  <Visibility fontSize="small" />
-                                </IconButton>
-                                
-                                {item.itemType === 'file' && (
-                                  <IconButton
-                                    size="small"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      // Lógica de descarga
-                                    }}
-                                    sx={{
-                                      color: '#501b36',
-                                      '&:hover': { bgcolor: alpha('#501b36', 0.1) }
-                                    }}
-                                  >
-                                    <Download fontSize="small" />
-                                  </IconButton>
+                              <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
+                                {item.itemType === 'folder' ? (
+                                  // Acciones para carpetas
+                                  <Tooltip title="Entrar a la carpeta" arrow>
+                                    <IconButton
+                                      size="small"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleFolderClick(item.name);
+                                      }}
+                                      sx={{
+                                        width: 32,
+                                        height: 32,
+                                        color: '#501b36',
+                                        bgcolor: alpha('#501b36', 0.04),
+                                        border: '1px solid',
+                                        borderColor: alpha('#501b36', 0.2),
+                                        borderRadius: 2,
+                                        transition: 'all 0.2s ease',
+                                        '&:hover': { 
+                                          bgcolor: alpha('#501b36', 0.1),
+                                          borderColor: '#501b36',
+                                          transform: 'translateY(-1px)',
+                                          boxShadow: '0 2px 8px rgba(80, 27, 54, 0.2)'
+                                        }
+                                      }}
+                                    >
+                                      <FolderOpen fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                ) : (
+                                  // Acciones para archivos
+                                  <>
+                                    <Tooltip title="Vista previa" arrow>
+                                      <IconButton
+                                        size="small"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handlePreviewFile(item as TrafficFile);
+                                        }}
+                                        sx={{
+                                          width: 32,
+                                          height: 32,
+                                          color: '#2563eb',
+                                          bgcolor: alpha('#2563eb', 0.04),
+                                          border: '1px solid',
+                                          borderColor: alpha('#2563eb', 0.2),
+                                          borderRadius: 2,
+                                          transition: 'all 0.2s ease',
+                                          '&:hover': { 
+                                            bgcolor: alpha('#2563eb', 0.1),
+                                            borderColor: '#2563eb',
+                                            transform: 'translateY(-1px)',
+                                            boxShadow: '0 2px 8px rgba(37, 99, 235, 0.2)'
+                                          }
+                                        }}
+                                      >
+                                        <Visibility fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                    
+                                    <Tooltip title="Descargar" arrow>
+                                      <IconButton
+                                        size="small"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDownloadFile(item as TrafficFile);
+                                        }}
+                                        sx={{
+                                          width: 32,
+                                          height: 32,
+                                          color: '#16a34a',
+                                          bgcolor: alpha('#16a34a', 0.04),
+                                          border: '1px solid',
+                                          borderColor: alpha('#16a34a', 0.2),
+                                          borderRadius: 2,
+                                          transition: 'all 0.2s ease',
+                                          '&:hover': { 
+                                            bgcolor: alpha('#16a34a', 0.1),
+                                            borderColor: '#16a34a',
+                                            transform: 'translateY(-1px)',
+                                            boxShadow: '0 2px 8px rgba(22, 163, 74, 0.2)'
+                                          }
+                                        }}
+                                      >
+                                        <Download fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                    
+                                    {canManageTraffic && (
+                                      <Tooltip title="Eliminar archivo" arrow>
+                                        <IconButton
+                                          size="small"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeleteFile(item as TrafficFile);
+                                          }}
+                                          sx={{
+                                            width: 32,
+                                            height: 32,
+                                            color: '#dc2626',
+                                            bgcolor: alpha('#dc2626', 0.04),
+                                            border: '1px solid',
+                                            borderColor: alpha('#dc2626', 0.2),
+                                            borderRadius: 2,
+                                            transition: 'all 0.2s ease',
+                                            '&:hover': { 
+                                              bgcolor: alpha('#dc2626', 0.1),
+                                              borderColor: '#dc2626',
+                                              transform: 'translateY(-1px)',
+                                              boxShadow: '0 2px 8px rgba(220, 38, 38, 0.2)'
+                                            }
+                                          }}
+                                        >
+                                          <Delete fontSize="small" />
+                                        </IconButton>
+                                      </Tooltip>
+                                    )}
+                                  </>
                                 )}
                                 
                                 {item.itemType === 'folder' && canManageTraffic && (
@@ -1423,7 +1639,7 @@ export const Traffic: React.FC = () => {
                           {searchTerm 
                             ? `No hay carpetas ni archivos que coincidan con "${searchTerm}"`
                             : currentPath !== '/'
-                              ? 'Esta carpeta está vacía. El contenido de subcarpetas se mostrará cuando el backend esté completamente implementado.'
+                              ? 'Esta carpeta está vacía. Puedes subir archivos o crear subcarpetas.'
                               : 'Esta ubicación está vacía. Puedes crear carpetas o subir archivos.'
                           }
                         </Typography>
