@@ -166,7 +166,7 @@ export const trafficFilesAPI = {
   
   // Eliminar archivo
   deleteFile: (relativePath: string) => {
-    return api.delete(`/api/traffic/delete/${encodeURIComponent(relativePath)}`).then(res => res.data);
+    return api.delete(`/api/traffic/files?path=${encodeURIComponent(relativePath)}`).then(res => res.data);
   },
   
   // Eliminar carpeta

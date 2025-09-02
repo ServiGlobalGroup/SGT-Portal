@@ -414,12 +414,18 @@ export const Traffic: React.FC = () => {
     const isPDF = fileExtension === 'pdf';
     
     if (isImage || isPDF) {
-      // Construir el path relativo del archivo
-      const relativePath = currentPath === '/' 
-        ? file.name 
-        : `${currentPath.substring(1)}/${file.name}`;
+      let fileUrl: string;
       
-      const fileUrl = `${API_BASE_URL}/api/traffic/preview/${encodeURIComponent(relativePath)}`;
+      if (file.url) {
+        // Usar la URL que viene del backend - reemplazar download por preview
+        fileUrl = file.url.replace('/download/', '/preview/');
+      } else {
+        // Fallback: construir la URL manualmente
+        const relativePath = currentPath === '/' 
+          ? file.name 
+          : `${currentPath.substring(1)}/${file.name}`;
+        fileUrl = `${API_BASE_URL}/api/traffic/preview/${encodeURIComponent(relativePath)}`;
+      }
       
       // Usar el componente PdfPreview para mostrar el archivo
       setPreviewFileUrl(fileUrl);
@@ -432,12 +438,18 @@ export const Traffic: React.FC = () => {
 
   const handleDownloadFile = (file: TrafficFile) => {
     try {
-      // Construir el path relativo del archivo
-      const relativePath = currentPath === '/' 
-        ? file.name 
-        : `${currentPath.substring(1)}/${file.name}`;
+      let fileUrl: string;
       
-      const fileUrl = `${API_BASE_URL}/api/traffic/download/${encodeURIComponent(relativePath)}`;
+      if (file.url) {
+        // Usar directamente la URL que viene del backend
+        fileUrl = file.url;
+      } else {
+        // Fallback: construir la URL manualmente
+        const relativePath = currentPath === '/' 
+          ? file.name 
+          : `${currentPath.substring(1)}/${file.name}`;
+        fileUrl = `${API_BASE_URL}/api/traffic/download/${encodeURIComponent(relativePath)}`;
+      }
       
       // Crear elemento a temporal para descargar
       const link = document.createElement('a');
@@ -455,14 +467,25 @@ export const Traffic: React.FC = () => {
   };
 
   const handleDeleteFile = async (file: TrafficFile) => {
+    console.log('File object:', file); // Debug log
+    
     if (window.confirm(`¿Estás seguro de que quieres eliminar "${file.name}"?`)) {
       try {
         setLoading(true);
         
-        // Construir el path relativo del archivo
-        const relativePath = currentPath === '/' 
-          ? file.name 
-          : `${currentPath.substring(1)}/${file.name}`;
+        // Verificar si file.url existe, sino construir la ruta manualmente
+        let relativePath: string;
+        
+        if (file.url) {
+          // Extraer el path relativo desde la URL del archivo
+          relativePath = file.url.replace(`${API_BASE_URL}/api/traffic/download/`, '');
+          relativePath = decodeURIComponent(relativePath);
+        } else {
+          // Fallback: construir el path relativo manualmente
+          relativePath = currentPath === '/' 
+            ? file.name 
+            : `${currentPath.substring(1)}/${file.name}`;
+        }
           
         await trafficFilesAPI.deleteFile(relativePath);
         showSnackbar('Archivo eliminado correctamente', 'success');
