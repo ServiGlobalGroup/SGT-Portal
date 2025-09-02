@@ -12,7 +12,9 @@ sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 # Importar modelos y configuración
 from app.database.connection import Base
-from app.models.user import User  # Importar todos los modelos
+from app.models.user import User  # Importar modelo usuario
+from app.models.dieta import DietaRecord  # Asegurar import del modelo dietas
+from app.models.distanciero import Distanciero  # Importar distancieros para migraciones
 from app.config import settings
 
 # this is the Alembic Config object, which provides

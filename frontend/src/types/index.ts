@@ -1,10 +1,3 @@
-export interface DashboardStats {
-  total_users: number;
-  active_sessions: number;
-  total_documents: number;
-  pending_requests: number;
-}
-
 export interface TrafficData {
   id: number;
   timestamp: string;
@@ -80,9 +73,11 @@ export interface User {
   last_name: string;
   email: string;
   phone?: string;
-  role: 'ADMIN' | 'MANAGER' | 'EMPLOYEE';
+  role: 'MASTER_ADMIN' | 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR';
   department: string;
   position?: string;
+  // Tipo de trabajador (dietas): antiguo / nuevo
+  worker_type?: 'antiguo' | 'nuevo';
   hire_date?: string;
   birth_date?: string;
   address?: string;
@@ -101,28 +96,6 @@ export interface User {
   initials: string;
 }
 
-export interface UserProfile {
-  id: number;
-  dni_nie: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  phone: string;
-  role: 'admin' | 'manager' | 'employee';
-  department: string;
-  position: string;
-  hire_date: string;
-  birth_date: string;
-  address: string;
-  city: string;
-  postal_code: string;
-  emergency_contact_name: string;
-  emergency_contact_phone: string;
-  avatar?: string;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
 
 export interface PayrollStats {
   total_documents: number;
@@ -155,4 +128,26 @@ export interface OrderDocument {
   file_type: string;
   uploaded_date: string;
   email_attachment_name: string;
+}
+
+// ---- Dietas ----
+export interface DietaConcept {
+  code: string;
+  label: string;
+  quantity: number;
+  rate: number;
+  subtotal: number;
+}
+
+export interface DietaRecord {
+  id: number;
+  user_id: number;
+  worker_type: string;
+  order_number?: string;
+  month: string;
+  total_amount: number;
+  concepts: DietaConcept[];
+  notes?: string;
+  created_at: string;
+  user_name?: string;
 }

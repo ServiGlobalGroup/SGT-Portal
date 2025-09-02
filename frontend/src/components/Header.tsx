@@ -10,15 +10,19 @@ import {
   MenuItem, 
   ListItemIcon, 
   ListItemText,
-  Divider
+  Divider,
+  Chip
 } from '@mui/material';
 import { 
-  AccountCircle, 
   Settings, 
   Logout, 
-  Person 
+  Person,
+  AdminPanelSettings,
+  Work
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
+import { hasPermission, Permission } from '../utils/permissions';
 
 const drawerWidth = 240;
 const collapsedWidth = 80;
@@ -30,6 +34,7 @@ interface HeaderProps {
 export const Header: React.FC<HeaderProps> = ({ isCollapsed }) => {
   const currentWidth = isCollapsed ? collapsedWidth : drawerWidth;
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
 
@@ -41,22 +46,65 @@ export const Header: React.FC<HeaderProps> = ({ isCollapsed }) => {
     setAnchorEl(null);
   };
 
-  const handleMenuAction = (action: string) => {
+  const handleMenuAction = async (action: string) => {
     switch (action) {
-      case 'perfil':
-        navigate('/profile');
-        break;
       case 'configuracion':
         navigate('/settings');
         break;
       case 'cerrar-sesion':
-        // Aquí se manejaría el cierre de sesión
-        console.log('Cerrando sesión...');
+        try {
+          await logout();
+          navigate('/login');
+        } catch (error) {
+          console.error('Error al cerrar sesión:', error);
+        }
         break;
       default:
         console.log(`Acción seleccionada: ${action}`);
     }
     handleClose();
+  };
+
+  const getRoleIcon = (role: string) => {
+    switch (role) {
+      case 'ADMIN':
+        return <AdminPanelSettings sx={{ fontSize: 16 }} />;
+      case 'MANAGER':
+        return <Work sx={{ fontSize: 16 }} />;
+      default:
+        return <Person sx={{ fontSize: 16 }} />;
+    }
+  };
+
+  const getRoleColor = (role: string) => {
+    switch (role) {
+      case 'ADMIN':
+        return 'error';
+      case 'MANAGER':
+        return 'warning';
+      default:
+        return 'primary';
+    }
+  };
+
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case 'MASTER_ADMIN':
+        return 'Admin Master';
+      case 'ADMINISTRADOR':
+        return 'Administrador';
+      case 'TRAFICO':
+        return 'Tráfico';
+      case 'TRABAJADOR':
+        return 'Trabajador';
+      default:
+        return 'Usuario';
+    }
+  };
+
+  // Función para obtener las iniciales del nombre
+  const getInitials = (firstName: string, lastName: string) => {
+    return `${firstName.charAt(0)}${lastName.charAt(0)}`.toUpperCase();
   };
   
   return (
@@ -78,18 +126,47 @@ export const Header: React.FC<HeaderProps> = ({ isCollapsed }) => {
       <Toolbar sx={{ minHeight: '80px !important' }}>
         
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, ml: 'auto' }}>
-          <Typography 
-            variant="h6" 
-            sx={{ 
-              color: '#212121',
-              fontWeight: 700,
-              fontSize: '1rem',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px',
-            }}
-          >
-            PÉREZ, JUAN
-          </Typography>
+          {/* Información del usuario */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+            <Typography 
+              variant="h6" 
+              sx={{ 
+                color: '#212121',
+                fontWeight: 700,
+                fontSize: '1rem',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+                lineHeight: 1.2
+              }}
+            >
+              {user ? `${user.last_name}, ${user.first_name}` : 'USUARIO'}
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.5 }}>
+              <Chip
+                icon={getRoleIcon(user?.role || 'EMPLOYEE')}
+                label={getRoleLabel(user?.role || 'EMPLOYEE')}
+                size="small"
+                color={getRoleColor(user?.role || 'EMPLOYEE') as 'primary' | 'secondary' | 'error' | 'warning' | 'info' | 'success'}
+                variant="outlined"
+                sx={{ 
+                  fontSize: '0.75rem',
+                  height: '24px',
+                  '& .MuiChip-label': { px: 1 },
+                  '& .MuiChip-icon': { fontSize: '14px !important' }
+                }}
+              />
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  color: '#666',
+                  fontSize: '0.75rem',
+                  fontWeight: 500,
+                }}
+              >
+                {user?.department || 'Departamento'}
+              </Typography>
+            </Box>
+          </Box>
           
           <IconButton
             onClick={handleClick}
@@ -102,23 +179,23 @@ export const Header: React.FC<HeaderProps> = ({ isCollapsed }) => {
           >
             <Avatar
               sx={{
-                width: 44,
-                height: 44,
-                background: '#1565C0',
-                color: '#ffffff',
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                border: '2px solid rgba(0, 0, 0, 0.1)',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.1)',
+                bgcolor: user?.role === 'ADMINISTRADOR' ? '#d32f2f' : 
+                        user?.role === 'TRAFICO' ? '#ed6c02' : 
+                        user?.role === 'MASTER_ADMIN' ? '#9c27b0' : '#501b36',
+                width: 45,
+                height: 45,
+                fontWeight: 700,
+                fontSize: '1rem',
+                border: '2px solid #fff',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                transition: 'all 0.3s ease',
                 '&:hover': {
                   transform: 'scale(1.05)',
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-                  border: '2px solid rgba(0, 0, 0, 0.2)',
-                },
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.2)',
+                }
               }}
             >
-              <Person />
+              {user ? getInitials(user.first_name, user.last_name) : 'U'}
             </Avatar>
           </IconButton>
 
@@ -132,53 +209,37 @@ export const Header: React.FC<HeaderProps> = ({ isCollapsed }) => {
               '& .MuiPaper-root': {
                 borderRadius: '12px',
                 minWidth: 200,
-                boxShadow: '0 8px 32px rgba(114, 47, 55, 0.2)',
-                border: '1px solid rgba(114, 47, 55, 0.1)',
+                boxShadow: '0 8px 32px rgba(80, 27, 54, 0.2)',
+                border: '1px solid rgba(80, 27, 54, 0.1)',
                 mt: 1,
               },
             }}
           >
-            <MenuItem 
-              onClick={() => handleMenuAction('perfil')}
-              sx={{
-                py: 1.5,
-                '&:hover': {
-                  backgroundColor: 'rgba(114, 47, 55, 0.05)',
-                },
-              }}
-            >
-              <ListItemIcon>
-                <AccountCircle sx={{ color: '#722F37' }} />
-              </ListItemIcon>
-              <ListItemText 
-                primary="Mi Perfil" 
-                primaryTypographyProps={{
-                  fontSize: '0.95rem',
-                  fontWeight: 500,
-                }}
-              />
-            </MenuItem>
+  // case 'perfil': eliminado: ya no hay página de perfil
             
-            <MenuItem 
-              onClick={() => handleMenuAction('configuracion')}
-              sx={{
-                py: 1.5,
-                '&:hover': {
-                  backgroundColor: 'rgba(114, 47, 55, 0.05)',
-                },
-              }}
-            >
-              <ListItemIcon>
-                <Settings sx={{ color: '#722F37' }} />
-              </ListItemIcon>
-              <ListItemText 
-                primary="Configuración" 
-                primaryTypographyProps={{
-                  fontSize: '0.95rem',
-                  fontWeight: 500,
+            {/* Solo mostrar Configuración si el usuario tiene permisos */}
+            {hasPermission(user, Permission.VIEW_SETTINGS) && (
+              <MenuItem 
+                onClick={() => handleMenuAction('configuracion')}
+                sx={{
+                  py: 1.5,
+                  '&:hover': {
+                    backgroundColor: 'rgba(80, 27, 54, 0.05)',
+                  },
                 }}
-              />
-            </MenuItem>
+              >
+                <ListItemIcon>
+                  <Settings sx={{ color: '#501b36' }} />
+                </ListItemIcon>
+                <ListItemText 
+                  primary="Configuración" 
+                  primaryTypographyProps={{
+                    fontSize: '0.95rem',
+                    fontWeight: 500,
+                  }}
+                />
+              </MenuItem>
+            )}
             
             <Divider sx={{ my: 1 }} />
             

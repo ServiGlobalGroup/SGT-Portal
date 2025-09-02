@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useContext, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -6,39 +6,63 @@ import {
   CardContent,
   Button,
   Paper,
+  TextField,
+  Breadcrumbs,
+  Link,
+  Chip,
+  Alert,
+  CircularProgress,
+  Stack,
+  Fade,
+  GlobalStyles,
+  IconButton,
+  Tooltip,
+  Snackbar,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  TextField,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Breadcrumbs,
-  Link,
-  Chip,
-  Menu,
-  MenuItem as MenuItemComponent,
-  Alert,
-  CircularProgress,
-  Divider,
   LinearProgress,
+  Pagination,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TablePagination,
+  MenuItem,
 } from '@mui/material';
+import { AuthContext } from '../contexts/AuthContext';
+import { alpha } from '@mui/material/styles';
 import {
   Folder,
   FolderOpen,
   Upload,
   ArrowBack,
-  Delete,
-  Edit,
   Download,
   CreateNewFolder,
   Description,
   Home,
   NavigateNext,
   Visibility,
+  LocalShipping,
+  Business,
+  DirectionsCar,
+  Refresh,
+  Search,
+  InsertDriveFile,
+  MoreVert,
+  DriveEta,
+  AccountTree,
+  GridView,
+  ViewList,
+  Warning,
+  PictureAsPdf,
+  Image,
+  Delete,
 } from '@mui/icons-material';
+import { trafficFilesAPI, API_BASE_URL } from '../services/api';
 import { PdfPreview } from '../components/PdfPreview';
 
 interface TrafficFolder {
@@ -47,6 +71,7 @@ interface TrafficFolder {
   parentId: number | null;
   createdDate: string;
   type: 'folder' | 'company' | 'vehicle_type' | 'vehicle';
+  description?: string;
 }
 
 interface TrafficFile {
@@ -59,58 +84,176 @@ interface TrafficFile {
   url: string;
 }
 
+type UnifiedItem = 
+  | (TrafficFolder & { itemType: 'folder' })
+  | (TrafficFile & { itemType: 'file' });
+
 export const Traffic: React.FC = () => {
+  // Contexto de autenticación
+  const authContext = useContext(AuthContext);
+  if (!authContext) {
+    throw new Error('Traffic must be used within an AuthProvider');
+  }
+  const { user: currentUser } = authContext;
+
+  // Helper para verificar permisos
+  const canManageTraffic = currentUser?.role === 'ADMINISTRADOR' || 
+                          currentUser?.role === 'TRAFICO' || 
+                          currentUser?.role === 'MASTER_ADMIN';
+
   // Estados principales
-  const [currentFolderId, setCurrentFolderId] = useState<number | null>(null);
+  const [currentPath, setCurrentPath] = useState<string>('/');
   const [folders, setFolders] = useState<TrafficFolder[]>([]);
-  
   const [files, setFiles] = useState<TrafficFile[]>([]);
 
   // Estados de UI
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; type: 'folder' | 'file'; id: number } | null>(null);
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [alert, setAlert] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  
+  // Estados para paginación
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [unifiedItems, setUnifiedItems] = useState<UnifiedItem[]>([]);
 
-  // Estados de diálogos
-  const [createFolderDialog, setCreateFolderDialog] = useState(false);
-  const [uploadDialog, setUploadDialog] = useState(false);
-  const [renameDialog, setRenameDialog] = useState<{ open: boolean; type: 'folder' | 'file'; id: number; currentName: string }>({
-    open: false, type: 'folder', id: 0, currentName: ''
-  });
-  const [pdfPreview, setPdfPreview] = useState<{ open: boolean; fileUrl: string; fileName: string }>({
-    open: false, fileUrl: '', fileName: ''
+  // Estados de modales
+  const [createFolderModal, setCreateFolderModal] = useState(false);
+  const [uploadModal, setUploadModal] = useState(false);
+
+  // Estados para preview
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewFileUrl, setPreviewFileUrl] = useState('');
+  const [previewFileName, setPreviewFileName] = useState('');
+  
+  // Snackbar
+  const [snackbar, setSnackbar] = useState<{
+    open: boolean;
+    message: string;
+    severity: 'success' | 'error' | 'warning' | 'info';
+  }>({
+    open: false,
+    message: '',
+    severity: 'info'
   });
 
-  // Estados de formularios
-  const [newFolderName, setNewFolderName] = useState('');
-  const [newFolderType, setNewFolderType] = useState<'folder' | 'company' | 'vehicle_type' | 'vehicle'>('folder');
-  const [uploadFiles, setUploadFiles] = useState<FileList | null>(null);
+  const showSnackbar = (message: string, severity: 'success' | 'error' | 'warning' | 'info' = 'info') => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  // Función para cargar carpetas desde la API
+  const loadFolders = async (path?: string) => {
+    try {
+      console.log('🔄 Loading folders for path:', path || 'root');
+      setLoading(true);
+      
+      const foldersData = await trafficFilesAPI.getFolders(path);
+      console.log('📁 Folders loaded:', foldersData);
+      
+      // Filtrar para evitar bucles: no mostrar la carpeta actual dentro de sí misma
+      let filteredFolders = Array.isArray(foldersData) ? foldersData : [];
+      
+      if (path && path !== '/') {
+        const currentFolderName = path.split('/').pop();
+        console.log('🔍 Filtering out current folder:', currentFolderName);
+        filteredFolders = filteredFolders.filter(folder => {
+          const shouldKeep = folder.name !== currentFolderName;
+          if (!shouldKeep) {
+            console.log('🚫 Filtered out self-reference:', folder.name);
+          }
+          return shouldKeep;
+        });
+      }
+      
+      console.log('✅ Final filtered folders:', filteredFolders);
+      setFolders(filteredFolders);
+    } catch (error) {
+      console.error('Error loading folders:', error);
+      showSnackbar('Error al cargar las carpetas', 'error');
+      setFolders([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Función para cargar archivos desde la API
+  const loadFiles = async (path?: string) => {
+    try {
+      console.log('🔄 Loading files for path:', path || 'root');
+      
+      const filesData = await trafficFilesAPI.getFiles(path);
+      console.log('📄 Files loaded:', filesData);
+      setFiles(Array.isArray(filesData) ? filesData : []);
+    } catch (error) {
+      console.error('Error loading files:', error);
+      showSnackbar('Error al cargar los archivos', 'error');
+      setFiles([]);
+    }
+  };
+
+  // Cargar datos iniciales
+  useEffect(() => {
+    loadFolders();
+    loadFiles();
+  }, []);
+
+  // Cargar datos iniciales
+  useEffect(() => {
+    loadFolders(currentPath === '/' ? undefined : currentPath);
+    loadFiles(currentPath === '/' ? undefined : currentPath);
+  }, []);
+
+  // Recargar datos cuando cambie la carpeta actual
+  useEffect(() => {
+    loadFolders(currentPath === '/' ? undefined : currentPath);
+    loadFiles(currentPath === '/' ? undefined : currentPath);
+  }, [currentPath]);
+
+  // Crear elementos unificados para vista lista
+  useEffect(() => {
+    const currentFolders = getCurrentFolders();
+    const currentFiles = getCurrentFiles();
+    
+    const folderItems: UnifiedItem[] = currentFolders.map((folder: TrafficFolder) => ({
+      ...folder,
+      itemType: 'folder' as const
+    }));
+    
+    const fileItems: UnifiedItem[] = currentFiles.map((file: TrafficFile) => ({
+      ...file,
+      itemType: 'file' as const
+    }));
+    
+    setUnifiedItems([...folderItems, ...fileItems]);
+  }, [currentPath, searchTerm, folders, files]);
 
   // Funciones auxiliares
   const getCurrentFolders = () => {
-    return folders.filter(folder => folder.parentId === currentFolderId);
+    // Como la API ya devuelve las carpetas del path actual,
+    // solo necesitamos filtrar por término de búsqueda si existe
+    const filteredFolders = searchTerm 
+      ? folders.filter(folder => 
+          folder.name.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      : folders;
+    
+    return filteredFolders;
   };
 
   const getCurrentFiles = () => {
-    return files.filter(file => file.folderId === (currentFolderId || 0));
+    // Como la API ya devuelve los archivos del path actual,
+    // solo necesitamos filtrar por término de búsqueda si existe
+    const filteredFiles = searchTerm 
+      ? files.filter(file => 
+          file.name.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      : files;
+    
+    return filteredFiles;
   };
 
-  const getBreadcrumbs = (): TrafficFolder[] => {
-    const breadcrumbs: TrafficFolder[] = [];
-    let currentId = currentFolderId;
-    
-    while (currentId) {
-      const folder = folders.find(f => f.id === currentId);
-      if (folder) {
-        breadcrumbs.unshift(folder);
-        currentId = folder.parentId;
-      } else {
-        break;
-      }
-    }
-    
-    return breadcrumbs;
+  const getBreadcrumbs = (): string[] => {
+    if (currentPath === '/') return [];
+    return currentPath.split('/').filter(p => p);
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -122,144 +265,108 @@ export const Traffic: React.FC = () => {
 
   const getTypeIcon = (type: 'folder' | 'company' | 'vehicle_type' | 'vehicle') => {
     switch (type) {
-      case 'company': return <FolderOpen sx={{ color: '#1565C0' }} />;
-      case 'vehicle_type': return <Folder sx={{ color: '#43A047' }} />;
-      case 'vehicle': return <Folder sx={{ color: '#FF9800' }} />;
-      default: return <Folder sx={{ color: '#757575' }} />;
+      case 'company': return <Business sx={{ fontSize: 28, color: '#501b36' }} />;
+      case 'vehicle_type': return <LocalShipping sx={{ fontSize: 28, color: '#43A047' }} />;
+      case 'vehicle': return <DirectionsCar sx={{ fontSize: 28, color: '#FF9800' }} />;
+      default: return <Folder sx={{ fontSize: 28, color: '#757575' }} />;
+    }
+  };
+
+  const getFolderTypeColor = (type: 'folder' | 'company' | 'vehicle_type' | 'vehicle') => {
+    switch (type) {
+      case 'company': return '#501b36';
+      case 'vehicle_type': return '#43A047';
+      case 'vehicle': return '#FF9800';
+      default: return '#757575';
+    }
+  };
+
+  const getFolderTypeText = (type: 'folder' | 'company' | 'vehicle_type' | 'vehicle') => {
+    switch (type) {
+      case 'company': return 'Empresa';
+      case 'vehicle_type': return 'Tipo de Vehículo';
+      case 'vehicle': return 'Vehículo';
+      default: return 'Carpeta';
     }
   };
 
   // Handlers
-  const handleFolderClick = (folderId: number) => {
-    setCurrentFolderId(folderId);
+  const handleFolderClick = (folderName: string) => {
+    const newPath = currentPath === '/' 
+      ? `/${folderName}`
+      : `${currentPath}/${folderName}`;
+    console.log('📂 Navigating from', currentPath, 'to', newPath);
+    setCurrentPath(newPath);
   };
 
   const handleBackClick = () => {
-    const currentFolder = folders.find(f => f.id === currentFolderId);
-    setCurrentFolderId(currentFolder?.parentId || null);
-  };
-
-  const handleContextMenu = (event: React.MouseEvent, type: 'folder' | 'file', id: number) => {
-    event.preventDefault();
-    setContextMenu({ x: event.clientX, y: event.clientY, type, id });
-  };
-
-  const handleCreateFolder = async () => {
-    if (!newFolderName.trim()) return;
-
-    const newFolder: TrafficFolder = {
-      id: Date.now(),
-      name: newFolderName,
-      parentId: currentFolderId,
-      createdDate: new Date().toISOString().split('T')[0],
-      type: newFolderType,
-    };
-
-    setFolders([...folders, newFolder]);
-    setCreateFolderDialog(false);
-    setNewFolderName('');
-    setNewFolderType('folder');
-    setAlert({ type: 'success', message: 'Carpeta creada exitosamente' });
-  };
-
-  const handleFileUpload = async () => {
-    if (!uploadFiles || uploadFiles.length === 0) return;
-
-    setIsUploading(true);
-    setUploadProgress(0);
-
-    for (let i = 0; i < uploadFiles.length; i++) {
-      const file = uploadFiles[i];
-      
-      // Simular progreso de subida
-      for (let progress = 0; progress <= 100; progress += 10) {
-        setUploadProgress(progress);
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-
-      const newFile: TrafficFile = {
-        id: Date.now() + i,
-        name: file.name,
-        size: file.size,
-        type: file.type,
-        folderId: currentFolderId || 0,
-        uploadDate: new Date().toISOString().split('T')[0],
-        url: URL.createObjectURL(file),
-      };
-
-      setFiles(prev => [...prev, newFile]);
+    if (currentPath !== '/') {
+      const pathParts = currentPath.split('/').filter(p => p);
+      pathParts.pop();
+      const newPath = pathParts.length > 0 ? `/${pathParts.join('/')}` : '/';
+      setCurrentPath(newPath);
     }
-
-    setIsUploading(false);
-    setUploadProgress(0);
-    setUploadDialog(false);
-    setUploadFiles(null);
-    setAlert({ type: 'success', message: `${uploadFiles.length} archivo(s) subido(s) exitosamente` });
   };
 
-  const handleDelete = (type: 'folder' | 'file', id: number) => {
-    if (type === 'folder') {
-      // Eliminar carpeta y todo su contenido recursivamente
-      const deleteRecursively = (folderId: number) => {
-        const subfolders = folders.filter(f => f.parentId === folderId);
-        subfolders.forEach(subfolder => deleteRecursively(subfolder.id));
-        
-        setFolders(prev => prev.filter(f => f.id !== folderId));
-        setFiles(prev => prev.filter(f => f.folderId !== folderId));
-      };
-      
-      deleteRecursively(id);
-    } else {
-      setFiles(prev => prev.filter(f => f.id !== id));
+  const handleRefresh = async () => {
+    setLoading(true);
+    try {
+      await loadFolders(currentPath === '/' ? undefined : currentPath);
+      await loadFiles(currentPath === '/' ? undefined : currentPath);
+      showSnackbar('Datos actualizados correctamente', 'success');
+    } catch (error) {
+      showSnackbar('Error al actualizar los datos', 'error');
+    } finally {
+      setLoading(false);
     }
+  };
+
+  // Handler para crear carpeta
+  const handleCreateFolder = async (folderName: string) => {
+    if (!folderName.trim()) return;
     
-    setContextMenu(null);
-    setAlert({ type: 'success', message: `${type === 'folder' ? 'Carpeta' : 'Archivo'} eliminado exitosamente` });
-  };
-
-  const handleRename = () => {
-    const { type, id, currentName } = renameDialog;
-    if (!currentName.trim()) return;
-
-    if (type === 'folder') {
-      setFolders(prev => prev.map(f => f.id === id ? { ...f, name: currentName } : f));
-    } else {
-      setFiles(prev => prev.map(f => f.id === id ? { ...f, name: currentName } : f));
+    try {
+      setLoading(true);
+      
+      await trafficFilesAPI.createFolder(folderName, currentPath === '/' ? undefined : currentPath);
+      
+      // Recargar carpetas
+      await loadFolders(currentPath === '/' ? undefined : currentPath);
+      showSnackbar('Carpeta creada exitosamente', 'success');
+      setCreateFolderModal(false);
+    } catch (error) {
+      console.error('Error creating folder:', error);
+      showSnackbar('Error al crear la carpeta', 'error');
+    } finally {
+      setLoading(false);
     }
-
-    setRenameDialog({ open: false, type: 'folder', id: 0, currentName: '' });
-    setAlert({ type: 'success', message: `${type === 'folder' ? 'Carpeta' : 'Archivo'} renombrado exitosamente` });
   };
 
-  const handleDownload = (file: TrafficFile) => {
-    const link = document.createElement('a');
-    link.href = file.url;
-    link.download = file.name;
-    link.click();
-    setContextMenu(null);
-  };
-
-  const handlePreview = (file: TrafficFile) => {
-    if (file.type === 'pdf' || file.name.toLowerCase().endsWith('.pdf')) {
-      setPdfPreview({
-        open: true,
-        fileUrl: file.url,
-        fileName: file.name
-      });
+  // Handler para subir archivos
+  const handleUploadFiles = async (selectedFiles: File[]) => {
+    if (selectedFiles.length === 0) return;
+    
+    try {
+      setLoading(true);
+      console.log('🔼 Uploading files to path:', currentPath);
+      console.log('📎 Files to upload:', selectedFiles.map(f => f.name));
+      
+      const uploadResult = await trafficFilesAPI.uploadFiles(selectedFiles, currentPath === '/' ? undefined : currentPath);
+      console.log('✅ Upload result:', uploadResult);
+      
+      // Recargar archivos
+      console.log('🔄 Reloading files after upload...');
+      await loadFiles(currentPath === '/' ? undefined : currentPath);
+      
+      showSnackbar(`${selectedFiles.length} archivo(s) subido(s) exitosamente`, 'success');
+      setUploadModal(false);
+    } catch (error) {
+      console.error('❌ Error uploading files:', error);
+      showSnackbar('Error al subir los archivos', 'error');
+    } finally {
+      setLoading(false);
     }
-    setContextMenu(null);
   };
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-  }, []);
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    const droppedFiles = e.dataTransfer.files;
-    setUploadFiles(droppedFiles);
-    setUploadDialog(true);
-  }, []);
 
   // Estadísticas
   const stats = {
@@ -270,470 +377,1694 @@ export const Traffic: React.FC = () => {
     totalSize: files.reduce((acc, file) => acc + file.size, 0),
   };
 
+  // Filtrar archivos por búsqueda
+  const filteredFiles = getCurrentFiles().filter(file => 
+    file.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Filtrar elementos unificados por búsqueda para vista lista
+  const filteredUnifiedItems = unifiedItems.filter(item =>
+    item.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  // Paginación para vista lista
+  const paginatedItems = filteredUnifiedItems.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
+
+  const handleChangePage = (event: unknown, newPage: number) => {
+    setPage(newPage);
+  };
+
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+
+  // Función para manejar la apertura de archivos
+  const handleOpenFile = (file: TrafficFile) => {
+    // Por ahora, solo mostrar en consola
+    console.log('Abrir archivo:', file);
+  };
+
+  // Funciones para manejo de archivos
+  const handlePreviewFile = (file: TrafficFile) => {
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg'].includes(fileExtension || '');
+    const isPDF = fileExtension === 'pdf';
+    
+    if (isImage || isPDF) {
+      let fileUrl: string;
+      
+      if (file.url) {
+        // Usar la URL que viene del backend - reemplazar download por preview
+        fileUrl = file.url.replace('/download/', '/preview/');
+      } else {
+        // Fallback: construir la URL manualmente
+        const relativePath = currentPath === '/' 
+          ? file.name 
+          : `${currentPath.substring(1)}/${file.name}`;
+        fileUrl = `${API_BASE_URL}/api/traffic/preview/${encodeURIComponent(relativePath)}`;
+      }
+      
+      // Usar el componente PdfPreview para mostrar el archivo
+      setPreviewFileUrl(fileUrl);
+      setPreviewFileName(file.name);
+      setPreviewOpen(true);
+    } else {
+      showSnackbar('Vista previa no disponible para este tipo de archivo', 'warning');
+    }
+  };
+
+  const handleDownloadFile = (file: TrafficFile) => {
+    try {
+      let fileUrl: string;
+      
+      if (file.url) {
+        // Usar directamente la URL que viene del backend
+        fileUrl = file.url;
+      } else {
+        // Fallback: construir la URL manualmente
+        const relativePath = currentPath === '/' 
+          ? file.name 
+          : `${currentPath.substring(1)}/${file.name}`;
+        fileUrl = `${API_BASE_URL}/api/traffic/download/${encodeURIComponent(relativePath)}`;
+      }
+      
+      // Crear elemento a temporal para descargar
+      const link = document.createElement('a');
+      link.href = fileUrl;
+      link.download = file.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      showSnackbar('Descarga iniciada', 'success');
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      showSnackbar('Error al descargar el archivo', 'error');
+    }
+  };
+
+  const handleDeleteFile = async (file: TrafficFile) => {
+    console.log('File object:', file); // Debug log
+    
+    if (window.confirm(`¿Estás seguro de que quieres eliminar "${file.name}"?`)) {
+      try {
+        setLoading(true);
+        
+        // Verificar si file.url existe, sino construir la ruta manualmente
+        let relativePath: string;
+        
+        if (file.url) {
+          // Extraer el path relativo desde la URL del archivo
+          relativePath = file.url.replace(`${API_BASE_URL}/api/traffic/download/`, '');
+          relativePath = decodeURIComponent(relativePath);
+        } else {
+          // Fallback: construir el path relativo manualmente
+          relativePath = currentPath === '/' 
+            ? file.name 
+            : `${currentPath.substring(1)}/${file.name}`;
+        }
+          
+        await trafficFilesAPI.deleteFile(relativePath);
+        showSnackbar('Archivo eliminado correctamente', 'success');
+        
+        // Recargar archivos
+        await loadFiles(currentPath === '/' ? undefined : currentPath);
+      } catch (error) {
+        console.error('Error deleting file:', error);
+        showSnackbar('Error al eliminar el archivo', 'error');
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
+
+  // Función para obtener el icono según el tipo de archivo
+  const getFileIcon = (fileName: string) => {
+    const extension = fileName.split('.').pop()?.toLowerCase();
+    switch (extension) {
+      case 'pdf':
+        return <PictureAsPdf sx={{ fontSize: 28, color: '#d32f2f' }} />;
+      case 'jpg':
+      case 'jpeg':
+      case 'png':
+      case 'gif':
+      case 'webp':
+      case 'svg':
+        return <Image sx={{ fontSize: 28, color: '#2e7d32' }} />;
+      default:
+        return <InsertDriveFile sx={{ fontSize: 28, color: '#757575' }} />;
+    }
+  };
+
   return (
-    <Box sx={{ 
-      width: '100%', 
-      maxWidth: { xs: '100%', sm: '100%', md: '1200px', lg: '1400px' },
-      mx: 'auto',
-      px: { xs: 0, sm: 1, md: 2 }
-    }}>
-      {/* Alerta */}
-      {alert && (
-        <Alert 
-          severity={alert.type} 
-          sx={{ mb: 2 }} 
-          onClose={() => setAlert(null)}
-        >
-          {alert.message}
-        </Alert>
-      )}
+    <>
+      <GlobalStyles
+        styles={{
+          body: {
+            paddingRight: '0px !important',
+            overflow: 'auto !important',
+            overflowX: 'hidden !important',
+          },
+        }}
+      />
+      <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: '100%', bgcolor: '#f5f5f5', minHeight: '100vh' }}>
+        {/* Header */}
+        <Box sx={{ mb: 4 }}>
+          <Fade in timeout={700}>
+            <Paper
+              elevation={0}
+              sx={{
+                p: { xs: 3, sm: 4 },
+                background: 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 55%, #d4a574 100%)',
+                color: 'white',
+                borderRadius: 3,
+                position: 'relative',
+                overflow: 'hidden',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  inset: 0,
+                  backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\\"60\\" height=\\"60\\" viewBox=\\"0 0 60 60\\" xmlns=\\"http://www.w3.org/2000/svg\\"%3E%3Cg fill=\\"none\\" fill-rule=\\"evenodd\\"%3E%3Cg fill=\\"%23ffffff\\" fill-opacity=\\"0.08\\"%3E%3Cpath d=\\"m36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\\"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
+                },
+              }}
+            >
+              <Box sx={{ position: 'relative', zIndex: 1 }}>
+                <Box sx={{ display:'flex', alignItems:'center', gap:2 }}>
+                  <Box
+                    sx={{
+                      p:2,
+                      bgcolor:'rgba(255,255,255,0.18)',
+                      borderRadius:2,
+                      backdropFilter:'blur(8px)',
+                      display:'flex',
+                      alignItems:'center',
+                      justifyContent:'center'
+                    }}
+                  >
+                    <LocalShipping sx={{ fontSize:32, color:'#ffffff' }} />
+                  </Box>
+                  <Box>
+                    <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
+                      Gestión de Tráfico
+                    </Typography>
 
-      {/* Header */}
-      <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3 }}>
-        <Box sx={{ 
-          display: 'flex', 
-          alignItems: { xs: 'flex-start', sm: 'center' }, 
-          gap: 2, 
-          mb: 3,
-          flexDirection: { xs: 'column', sm: 'row' }
-        }}>
-          <FolderOpen sx={{ fontSize: { xs: 30, sm: 40 }, color: '#1565C0' }} />
-          <Box>
-            <Typography variant="h4" sx={{ 
-              fontWeight: 'bold', 
-              color: '#1565C0',
-              fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' }
-            }}>
-              Gestor de Archivos de Tráfico
-            </Typography>
-            <Typography variant="body2" color="textSecondary">
-              Organiza documentos por empresas, tipos de vehículos y vehículos específicos
-            </Typography>
+                    <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400, fontSize: { xs: '1rem', sm: '1.1rem' } }}>
+                      Gestión integral de documentos y archivos del departamento de tráfico
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </Paper>
+          </Fade>
+        </Box>
+
+        {/* Estadísticas Principales - Más Compactas */}
+        <Fade in timeout={1000}>
+          <Box sx={{ 
+            display: 'grid', 
+            gridTemplateColumns: { 
+              xs: 'repeat(1, 1fr)', 
+              sm: 'repeat(2, 1fr)', 
+              md: 'repeat(3, 1fr)' 
+            }, 
+            gap: 2, 
+            mb: 3 
+          }}>
+            <StatsCard
+              title="Total Carpetas"
+              value={stats.totalFolders}
+              icon={<FolderOpen />}
+              color="#2196f3"
+              loading={loading}
+            />
+            <StatsCard
+              title="Total Archivos"
+              value={stats.totalFiles}
+              icon={<Description />}
+              color="#ff9800"
+              loading={loading}
+            />
+            <StatsCard
+              title="Tamaño Total"
+              value={formatFileSize(stats.totalSize)}
+              icon={<DriveEta />}
+              color="#9c27b0"
+              loading={loading}
+              isSize
+            />
           </Box>
-        </Box>
+        </Fade>
 
-        {/* Estadísticas */}
-        <Box sx={{ 
-          display: 'grid', 
-          gridTemplateColumns: { 
-            xs: 'repeat(2, 1fr)', 
-            sm: 'repeat(3, 1fr)', 
-            md: 'repeat(auto-fit, minmax(150px, 1fr))' 
-          }, 
-          gap: 2 
-        }}>
-          <Card>
-            <CardContent sx={{ textAlign: 'center', py: 2 }}>
-              <Typography variant="h4" color="primary.main" sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}>
-                {stats.totalFolders}
-              </Typography>
-              <Typography variant="body2">Carpetas Totales</Typography>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent sx={{ textAlign: 'center', py: 2 }}>
-              <Typography variant="h4" color="success.main" sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}>
-                {stats.totalFiles}
-              </Typography>
-              <Typography variant="body2">Archivos Totales</Typography>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent sx={{ textAlign: 'center', py: 2 }}>
-              <Typography variant="h4" color="info.main" sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}>
-                {stats.currentFolders}
-              </Typography>
-              <Typography variant="body2">Carpetas Actuales</Typography>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent sx={{ textAlign: 'center', py: 2 }}>
-              <Typography variant="h4" color="warning.main" sx={{ fontSize: { xs: '1.5rem', sm: '2rem' } }}>
-                {stats.currentFiles}
-              </Typography>
-              <Typography variant="body2">Archivos Actuales</Typography>
-            </CardContent>
-          </Card>
-          <Card sx={{ gridColumn: { xs: 'span 2', sm: 'span 1' } }}>
-            <CardContent sx={{ textAlign: 'center', py: 2 }}>
-              <Typography variant="h6" color="error.main" sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }}>
-                {formatFileSize(stats.totalSize)}
-              </Typography>
-              <Typography variant="body2">Tamaño Total</Typography>
-            </CardContent>
-          </Card>
-        </Box>
-      </Paper>
+        {/* Panel de Control */}
+        <Fade in timeout={1200}>
+          <Paper
+            elevation={0}
+            sx={{
+              p: { xs: 2, sm: 2.5 },
+              mb: 2,
+              borderRadius: 3,
+              border: '1px solid #e2e8f0',
+              background: '#ffffff',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            }}
+          >
+            {/* Navegación breadcrumbs moderna - Simplificada */}
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              mb: 2,
+              p: 2,
+              borderRadius: 2,
+              bgcolor: 'rgba(248, 250, 252, 0.8)',
+              border: '1px solid #e2e8f0',
+            }}>
+              {/* Breadcrumb Navigation */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
+                {currentPath !== '/' && (
+                  <Button
+                    startIcon={<ArrowBack />}
+                    onClick={handleBackClick}
+                    variant="outlined"
+                    size="small"
+                    sx={{
+                      borderRadius: 2,
+                      borderColor: 'transparent',
+                      bgcolor: 'rgba(80, 27, 54, 0.08)',
+                      color: '#501b36',
+                      textTransform: 'none',
+                      fontWeight: 500,
+                      px: 2,
+                      py: 0.5,
+                      fontSize: '0.875rem',
+                      '&:hover': {
+                        bgcolor: 'rgba(80, 27, 54, 0.15)',
+                      },
+                    }}
+                  >
+                    Volver
+                  </Button>
+                )}
+                
+                {/* Breadcrumb Trail */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.875rem', color: '#64748b' }}>
+                  {/* Home */}
+                  <Button
+                    onClick={() => setCurrentPath('/')}
+                    sx={{
+                      minWidth: 'auto',
+                      p: 0.5,
+                      borderRadius: 1,
+                      color: currentPath === '/' ? '#501b36' : '#64748b',
+                      fontWeight: currentPath === '/' ? 600 : 400,
+                      '&:hover': { bgcolor: 'rgba(80, 27, 54, 0.08)' },
+                    }}
+                  >
+                    <Home sx={{ fontSize: 16 }} />
+                  </Button>
 
-      {/* Navegación y acciones */}
-      <Paper sx={{ p: 2, mb: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          {/* Breadcrumbs */}
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {currentFolderId && (
-              <Button
-                startIcon={<ArrowBack />}
-                onClick={handleBackClick}
-                variant="outlined"
-                size="small"
-              >
-                Volver
-              </Button>
-            )}
-            
-            <Breadcrumbs separator={<NavigateNext fontSize="small" />}>
-              <Link
-                component="button"
-                variant="body1"
-                onClick={() => setCurrentFolderId(null)}
-                sx={{ 
-                  display: 'flex', 
+                  {/* Breadcrumb Items */}
+                  {getBreadcrumbs().map((folderName, index) => {
+                    const pathToFolder = '/' + getBreadcrumbs().slice(0, index + 1).join('/');
+                    return (
+                      <React.Fragment key={folderName}>
+                        <Typography sx={{ color: '#cbd5e1', mx: 0.5, fontSize: '0.75rem' }}>
+                          /
+                        </Typography>
+                        <Button
+                          onClick={() => setCurrentPath(pathToFolder)}
+                          sx={{
+                            textTransform: 'none',
+                            fontWeight: index === getBreadcrumbs().length - 1 ? 600 : 400,
+                            fontSize: '0.875rem',
+                            color: index === getBreadcrumbs().length - 1 ? '#501b36' : '#64748b',
+                            px: 1,
+                            py: 0.5,
+                            borderRadius: 1,
+                            minWidth: 'auto',
+                            maxWidth: '150px',
+                            '&:hover': { bgcolor: 'rgba(80, 27, 54, 0.08)' },
+                          }}
+                        >
+                          <Typography
+                            sx={{
+                              textOverflow: 'ellipsis',
+                              overflow: 'hidden',
+                              whiteSpace: 'nowrap',
+                              fontSize: 'inherit',
+                            }}
+                          >
+                            {folderName}
+                          </Typography>
+                        </Button>
+                      </React.Fragment>
+                    );
+                  })}
+                </Box>
+              </Box>
+
+              {/* Level Indicator */}
+              <Box
+                sx={{
+                  display: 'flex',
                   alignItems: 'center',
-                  textDecoration: 'none',
-                  '&:hover': { textDecoration: 'underline' }
+                  gap: 1,
+                  px: 2,
+                  py: 1,
+                  borderRadius: 2,
+                  bgcolor: 'rgba(80, 27, 54, 0.08)',
+                  border: '1px solid rgba(80, 27, 54, 0.15)',
                 }}
               >
-                <Home sx={{ mr: 0.5, fontSize: 18 }} />
-                Inicio
-              </Link>
-              {getBreadcrumbs().map((folder) => (
-                <Link
-                  key={folder.id}
-                  component="button"
-                  variant="body1"
-                  onClick={() => setCurrentFolderId(folder.id)}
+                <AccountTree sx={{ color: '#501b36', fontSize: 16 }} />
+                <Typography
+                  variant="caption"
                   sx={{ 
-                    textDecoration: 'none',
-                    '&:hover': { textDecoration: 'underline' }
+                    color: '#501b36',
+                    fontWeight: 600,
+                    fontSize: '0.8rem',
                   }}
                 >
-                  {folder.name}
-                </Link>
-              ))}
-            </Breadcrumbs>
-          </Box>
+                  Nivel {currentPath !== '/' ? getBreadcrumbs().length : 0}
+                </Typography>
+              </Box>
+            </Box>
 
-          {/* Botones de acción */}
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <Button
-              variant="outlined"
-              startIcon={<CreateNewFolder />}
-              onClick={() => setCreateFolderDialog(true)}
-            >
-              Nueva Carpeta
-            </Button>
-            <Button
-              variant="contained"
-              startIcon={<Upload />}
-              onClick={() => setUploadDialog(true)}
-            >
-              Subir Archivos
-            </Button>
-          </Box>
-        </Box>
-      </Paper>
+            {/* Controles de acción - Más compactos */}
+            <Box sx={{ 
+              display: 'flex', 
+              gap: 1.5, 
+              alignItems: 'center',
+              flexDirection: { xs: 'column', sm: 'row' },
+              justifyContent: 'space-between',
+              mb: 2
+            }}>
+              <TextField
+                size="small"
+                placeholder="Buscar archivos y carpetas..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                InputProps={{
+                  startAdornment: <Search sx={{ mr: 1, color: 'text.secondary', fontSize: 20 }} />
+                }}
+                sx={{ 
+                  flex: 1,
+                  maxWidth: { xs: '100%', sm: 350 },
+                  '& .MuiOutlinedInput-root': {
+                    borderRadius: 2,
+                    bgcolor: '#f8fafc',
+                    '&:hover': {
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#501b36',
+                      },
+                    },
+                    '&.Mui-focused': {
+                      '& .MuiOutlinedInput-notchedOutline': {
+                        borderColor: '#501b36',
+                      },
+                    },
+                  },
+                }}
+              />
+              
+              <Stack direction="row" spacing={1}>
+                <Tooltip title="Cambiar vista">
+                  <IconButton
+                    onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
+                    sx={{
+                      color: '#501b36',
+                      '&:hover': {
+                        bgcolor: alpha('#501b36', 0.08),
+                      },
+                    }}
+                  >
+                    {viewMode === 'grid' ? <ViewList /> : <GridView />}
+                  </IconButton>
+                </Tooltip>
+                
+                <Button
+                  variant="outlined"
+                  startIcon={<Refresh />}
+                  onClick={handleRefresh}
+                  disabled={loading}
+                  sx={{
+                    borderRadius: 2,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    borderColor: '#501b36',
+                    color: '#501b36',
+                    '&:hover': {
+                      borderColor: '#3d1429',
+                      bgcolor: alpha('#501b36', 0.04),
+                    },
+                  }}
+                >
+                  {loading ? <CircularProgress size={16} color="inherit" /> : 'Actualizar'}
+                </Button>
+                
+                {canManageTraffic && (
+                  <>
+                    <Button
+                      variant="outlined"
+                      startIcon={<CreateNewFolder />}
+                      onClick={() => setCreateFolderModal(true)}
+                      sx={{
+                        borderRadius: 2,
+                        textTransform: 'none',
+                        fontWeight: 600,
+                        borderColor: '#501b36',
+                        color: '#501b36',
+                        '&:hover': {
+                          borderColor: '#3d1429',
+                          bgcolor: alpha('#501b36', 0.04),
+                        },
+                      }}
+                    >
+                      Nueva Carpeta
+                    </Button>
+                    <Button
+                      variant="contained"
+                      startIcon={<Upload />}
+                      onClick={() => setUploadModal(true)}
+                      sx={{
+                        borderRadius: 2,
+                        textTransform: 'none',
+                        fontWeight: 600,
+                        bgcolor: '#501b36',
+                        boxShadow: '0 4px 12px rgba(80, 27, 54, 0.3)',
+                        '&:hover': {
+                          bgcolor: '#3d1429',
+                          boxShadow: '0 6px 20px rgba(80, 27, 54, 0.4)',
+                        },
+                      }}
+                    >
+                      Subir Archivos
+                    </Button>
+                  </>
+                )}
+              </Stack>
+            </Box>
+          </Paper>
+        </Fade>
 
-      {/* Área principal con drag & drop */}
-      <Paper 
-        sx={{ p: 3, minHeight: 400 }}
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
-      >
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 2 }}>
-          {/* Carpetas */}
-          {getCurrentFolders().map((folder) => (
-            <Card
-              key={`folder-${folder.id}`}
-              sx={{
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                '&:hover': {
-                  transform: 'translateY(-2px)',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                },
-              }}
-              onClick={() => handleFolderClick(folder.id)}
-              onContextMenu={(e) => handleContextMenu(e, 'folder', folder.id)}
-            >
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                  {getTypeIcon(folder.type)}
-                  <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>
-                    {folder.name}
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <Chip
-                    label={folder.type}
-                    size="small"
-                    color={
-                      folder.type === 'company' ? 'primary' :
-                      folder.type === 'vehicle_type' ? 'success' :
-                      folder.type === 'vehicle' ? 'warning' : 'default'
+        {/* Contenido Principal */}
+        <Fade in timeout={1400}>
+          <Paper 
+            elevation={0}
+            sx={{ 
+              borderRadius: 3,
+              border: '1px solid #e2e8f0',
+              background: '#ffffff',
+              minHeight: 500,
+              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+            }}
+          >
+            {/* Header del contenido */}
+            <Box sx={{ 
+              p: 3, 
+              borderBottom: 1, 
+              borderColor: 'divider',
+              background: alpha('#501b36', 0.02),
+            }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <AccountTree sx={{ color: '#501b36', fontSize: 28 }} />
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36' }}>
+                    {currentPath !== '/' ? 
+                      getBreadcrumbs()[getBreadcrumbs().length - 1] || 'Carpeta Actual' :
+                      'Gestión de Empresas de Transporte'
                     }
-                  />
-                  <Typography variant="caption" color="textSecondary">
-                    {folder.createdDate}
                   </Typography>
-                </Box>
-              </CardContent>
-            </Card>
-          ))}
-
-          {/* Archivos */}
-          {getCurrentFiles().map((file) => (
-            <Card
-              key={`file-${file.id}`}
-              sx={{
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                '&:hover': {
-                  transform: 'translateY(-2px)',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                },
-              }}
-              onContextMenu={(e) => handleContextMenu(e, 'file', file.id)}
-            >
-              <CardContent>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                  <Description sx={{ color: '#f44336' }} />
-                  <Typography variant="subtitle2" sx={{ fontWeight: 600, flex: 1 }}>
-                    {file.name.length > 20 ? `${file.name.substring(0, 20)}...` : file.name}
-                  </Typography>
-                </Box>
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                  <Typography variant="caption" color="textSecondary">
-                    {formatFileSize(file.size)}
-                  </Typography>
-                  <Typography variant="caption" color="textSecondary">
-                    {file.uploadDate}
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    {getCurrentFolders().length} carpeta{getCurrentFolders().length !== 1 ? 's' : ''} • {filteredFiles.length} archivo{filteredFiles.length !== 1 ? 's' : ''}
                   </Typography>
                 </Box>
                 
-                {/* Botones de acción */}
-                <Box sx={{ display: 'flex', gap: 1, mt: 2 }}>
-                  {(file.type === 'pdf' || file.name.toLowerCase().endsWith('.pdf')) && (
-                    <Button
-                      size="small"
-                      variant="outlined"
-                      startIcon={<Visibility />}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handlePreview(file);
-                      }}
-                      sx={{ flex: 1 }}
-                    >
-                      Preview
-                    </Button>
-                  )}
-                  <Button
-                    size="small"
-                    variant="outlined"
-                    startIcon={<Download />}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDownload(file);
-                    }}
-                    sx={{ flex: 1 }}
-                  >
-                    Descargar
-                  </Button>
-                </Box>
-              </CardContent>
-            </Card>
-          ))}
-
-          {/* Mensaje cuando está vacío */}
-          {getCurrentFolders().length === 0 && getCurrentFiles().length === 0 && (
-            <Box sx={{ gridColumn: '1 / -1', textAlign: 'center', py: 8 }}>
-              <FolderOpen sx={{ fontSize: 80, color: '#ccc', mb: 2 }} />
-              <Typography variant="h6" color="textSecondary" gutterBottom>
-                Esta carpeta está vacía
-              </Typography>
-              <Typography variant="body2" color="textSecondary" sx={{ mb: 3 }}>
-                Arrastra archivos aquí o usa los botones para crear carpetas y subir archivos
-              </Typography>
-              <Box sx={{ display: 'flex', gap: 2, justifyContent: 'center' }}>
-                <Button
+                <Chip
+                  label={`${getCurrentFolders().length + filteredFiles.length} elementos`}
                   variant="outlined"
-                  startIcon={<CreateNewFolder />}
-                  onClick={() => setCreateFolderDialog(true)}
-                >
-                  Crear Carpeta
-                </Button>
-                <Button
-                  variant="contained"
-                  startIcon={<Upload />}
-                  onClick={() => setUploadDialog(true)}
-                >
-                  Subir Archivos
-                </Button>
+                  sx={{
+                    borderColor: alpha('#501b36', 0.3),
+                    color: '#501b36',
+                    fontWeight: 600,
+                  }}
+                />
               </Box>
             </Box>
-          )}
-        </Box>
-      </Paper>
 
-      {/* Menú contextual */}
-      <Menu
-        open={Boolean(contextMenu)}
-        onClose={() => setContextMenu(null)}
-        anchorReference="anchorPosition"
-        anchorPosition={
-          contextMenu ? { top: contextMenu.y, left: contextMenu.x } : undefined
-        }
-      >
-        <MenuItemComponent
-          onClick={() => {
-            if (contextMenu) {
-              const item = contextMenu.type === 'folder' 
-                ? folders.find(f => f.id === contextMenu.id)
-                : files.find(f => f.id === contextMenu.id);
-              setRenameDialog({
-                open: true,
-                type: contextMenu.type,
-                id: contextMenu.id,
-                currentName: item?.name || ''
-              });
-            }
-            setContextMenu(null);
-          }}
+            {/* Contenido */}
+            <Box sx={{ p: 4 }}>
+              {(getCurrentFolders().length === 0 && getCurrentFiles().length === 0) ? (
+                // Estado vacío
+                <Box sx={{ 
+                  textAlign: 'center',
+                  py: 8,
+                  border: '2px dashed #e2e8f0',
+                  borderRadius: 3,
+                  bgcolor: alpha('#501b36', 0.01),
+                  transition: 'all 0.3s ease',
+                  '&:hover': {
+                    borderColor: alpha('#501b36', 0.3),
+                    bgcolor: alpha('#501b36', 0.02),
+                  },
+                }}>
+                  <Box
+                    sx={{
+                      p: 2.5,
+                      borderRadius: '50%',
+                      bgcolor: alpha('#501b36', 0.1),
+                      display: 'inline-flex',
+                      mb: 2,
+                    }}
+                  >
+                    <FolderOpen sx={{ fontSize: 40, color: '#501b36' }} />
+                  </Box>
+                  <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary', mb: 1 }}>
+                    Esta área está vacía
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2, maxWidth: 500, mx: 'auto' }}>
+                    {currentPath !== '/' 
+                      ? 'No hay carpetas ni archivos en esta ubicación. Puedes crear carpetas o subir archivos para empezar.' 
+                      : 'Comienza creando carpetas para organizar tus documentos de tráfico por empresas y tipos de vehículos.'
+                    }
+                  </Typography>
+                  {canManageTraffic && (
+                    <Stack direction="row" spacing={2} justifyContent="center">
+                      <Button
+                        variant="outlined"
+                        startIcon={<CreateNewFolder />}
+                        onClick={() => setCreateFolderModal(true)}
+                        sx={{
+                          borderRadius: 2,
+                          textTransform: 'none',
+                          fontWeight: 600,
+                          borderColor: '#501b36',
+                          color: '#501b36',
+                          '&:hover': {
+                            borderColor: '#3d1429',
+                            bgcolor: alpha('#501b36', 0.04),
+                          },
+                        }}
+                      >
+                        Crear Carpeta
+                      </Button>
+                      <Button
+                        variant="contained"
+                        startIcon={<Upload />}
+                        onClick={() => setUploadModal(true)}
+                        sx={{
+                          borderRadius: 2,
+                          textTransform: 'none',
+                          fontWeight: 600,
+                          bgcolor: '#501b36',
+                          boxShadow: '0 4px 12px rgba(80, 27, 54, 0.3)',
+                          '&:hover': {
+                            bgcolor: '#3d1429',
+                            boxShadow: '0 6px 20px rgba(80, 27, 54, 0.4)',
+                          },
+                        }}
+                      >
+                        Subir Archivos
+                      </Button>
+                    </Stack>
+                  )}
+                </Box>
+              ) : (
+                // Contenido dinámico basado en modo de vista
+                viewMode === 'grid' ? (
+                  // Vista de Grid (existente)
+                <Box sx={{ 
+                  display: 'grid',
+                  gridTemplateColumns: {
+                    xs: 'repeat(auto-fill, minmax(280px, 1fr))',
+                    sm: 'repeat(auto-fill, minmax(300px, 1fr))',
+                    md: 'repeat(auto-fill, minmax(320px, 1fr))',
+                    lg: 'repeat(auto-fill, minmax(340px, 1fr))'
+                  },
+                  gap: 3
+                }}>
+                  {/* Carpetas */}
+                  {getCurrentFolders().map((folder) => (
+                    <Card
+                      key={`folder-${folder.id}`}
+                      sx={{
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        borderRadius: 3,
+                        border: '1px solid #e2e8f0',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                        '&:hover': {
+                          transform: 'translateY(-4px)',
+                          boxShadow: `0 8px 25px ${alpha(getFolderTypeColor(folder.type), 0.15)}`,
+                          borderColor: getFolderTypeColor(folder.type),
+                        },
+                      }}
+                      onClick={() => handleFolderClick(folder.name)}
+                    >
+                      <CardContent sx={{ p: 3 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 2 }}>
+                          <Box
+                            sx={{
+                              p: 2,
+                              borderRadius: 2,
+                              bgcolor: alpha(getFolderTypeColor(folder.type), 0.1),
+                              border: `1px solid ${alpha(getFolderTypeColor(folder.type), 0.2)}`,
+                            }}
+                          >
+                            {getTypeIcon(folder.type)}
+                          </Box>
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography variant="h6" sx={{ 
+                              fontWeight: 700, 
+                              mb: 1,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              color: 'text.primary',
+                            }}>
+                              {folder.name}
+                            </Typography>
+                            <Chip
+                              label={getFolderTypeText(folder.type)}
+                              size="small"
+                              sx={{
+                                height: 22,
+                                fontSize: '0.7rem',
+                                fontWeight: 700,
+                                bgcolor: alpha(getFolderTypeColor(folder.type), 0.1),
+                                color: getFolderTypeColor(folder.type),
+                                border: `1px solid ${alpha(getFolderTypeColor(folder.type), 0.3)}`,
+                                mb: 1,
+                              }}
+                            />
+                            {folder.description && (
+                              <Typography variant="caption" sx={{ 
+                                color: 'text.secondary',
+                                display: 'block',
+                                lineHeight: 1.3,
+                              }}>
+                                {folder.description}
+                              </Typography>
+                            )}
+                          </Box>
+                        </Box>
+                        
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 2 }}>
+                          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                            {new Date(folder.createdDate).toLocaleDateString('es-ES')}
+                          </Typography>
+                          {canManageTraffic && (
+                            <IconButton
+                              size="small"
+                              sx={{
+                                bgcolor: alpha('#501b36', 0.08),
+                                color: '#501b36',
+                                '&:hover': {
+                                  bgcolor: alpha('#501b36', 0.15),
+                                },
+                              }}
+                            >
+                              <MoreVert fontSize="small" />
+                            </IconButton>
+                          )}
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  ))}
+
+                  {/* Archivos */}
+                  {filteredFiles.map((file) => (
+                    <Card
+                      key={`file-${file.id}`}
+                      sx={{
+                        cursor: 'pointer',
+                        transition: 'all 0.3s ease',
+                        borderRadius: 3,
+                        border: '1px solid #e2e8f0',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                        '&:hover': {
+                          transform: 'translateY(-4px)',
+                          boxShadow: '0 8px 25px rgba(0,0,0,0.12)',
+                          borderColor: '#501b36',
+                        },
+                      }}
+                    >
+                      <CardContent sx={{ p: 3, position: 'relative' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
+                          <Box
+                            sx={{
+                              p: 2,
+                              borderRadius: 2,
+                              bgcolor: file.type === 'application/pdf' ? alpha('#d32f2f', 0.1) : alpha('#2e7d32', 0.1),
+                              border: `1px solid ${file.type === 'application/pdf' ? alpha('#d32f2f', 0.2) : alpha('#2e7d32', 0.2)}`,
+                            }}
+                          >
+                            {getFileIcon(file.name)}
+                          </Box>
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                            <Typography variant="subtitle1" sx={{ 
+                              fontWeight: 700,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              mb: 0.5,
+                              color: 'text.primary',
+                            }}>
+                              {file.name}
+                            </Typography>
+                            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                              {formatFileSize(file.size)}
+                            </Typography>
+                          </Box>
+                        </Box>
+                        
+                        {/* Iconos de acción en la esquina inferior derecha */}
+                        <Box sx={{ 
+                          position: 'absolute',
+                          bottom: 12,
+                          right: 12,
+                          display: 'flex',
+                          gap: 0.5,
+                          opacity: 0.7,
+                          transition: 'opacity 0.2s ease',
+                          '&:hover': { opacity: 1 }
+                        }}>
+                          <Tooltip title="Vista previa" arrow>
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePreviewFile(file);
+                              }}
+                              sx={{
+                                width: 28,
+                                height: 28,
+                                bgcolor: 'rgba(255,255,255,0.9)',
+                                color: '#2563eb',
+                                border: '1px solid rgba(37, 99, 235, 0.2)',
+                                backdropFilter: 'blur(4px)',
+                                transition: 'all 0.2s ease',
+                                '&:hover': {
+                                  bgcolor: '#2563eb',
+                                  color: 'white',
+                                  transform: 'scale(1.1)',
+                                  boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)'
+                                }
+                              }}
+                            >
+                              <Visibility sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </Tooltip>
+                          
+                          <Tooltip title="Descargar" arrow>
+                            <IconButton
+                              size="small"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDownloadFile(file);
+                              }}
+                              sx={{
+                                width: 28,
+                                height: 28,
+                                bgcolor: 'rgba(255,255,255,0.9)',
+                                color: '#16a34a',
+                                border: '1px solid rgba(22, 163, 74, 0.2)',
+                                backdropFilter: 'blur(4px)',
+                                transition: 'all 0.2s ease',
+                                '&:hover': {
+                                  bgcolor: '#16a34a',
+                                  color: 'white',
+                                  transform: 'scale(1.1)',
+                                  boxShadow: '0 4px 12px rgba(22, 163, 74, 0.3)'
+                                }
+                              }}
+                            >
+                              <Download sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </Tooltip>
+                          
+                          {canManageTraffic && (
+                            <Tooltip title="Eliminar" arrow>
+                              <IconButton
+                                size="small"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteFile(file);
+                                }}
+                                sx={{
+                                  width: 28,
+                                  height: 28,
+                                  bgcolor: 'rgba(255,255,255,0.9)',
+                                  color: '#dc2626',
+                                  border: '1px solid rgba(220, 38, 38, 0.2)',
+                                  backdropFilter: 'blur(4px)',
+                                  transition: 'all 0.2s ease',
+                                  '&:hover': {
+                                    bgcolor: '#dc2626',
+                                    color: 'white',
+                                    transform: 'scale(1.1)',
+                                    boxShadow: '0 4px 12px rgba(220, 38, 38, 0.3)'
+                                  }
+                                }}
+                              >
+                                <Delete sx={{ fontSize: 16 }} />
+                              </IconButton>
+                            </Tooltip>
+                          )}
+                        </Box>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </Box>
+                ) : (
+                  // Vista de Lista Unificada
+                  <Box>
+                    <TableContainer component={Paper} sx={{ 
+                      borderRadius: 3,
+                      border: '1px solid #e2e8f0',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                      overflow: 'hidden'
+                    }}>
+                    <Table stickyHeader>
+                      <TableHead>
+                        <TableRow sx={{ 
+                          '& th': {
+                            bgcolor: '#f8fafc',
+                            fontWeight: 700,
+                            fontSize: '0.875rem',
+                            color: 'text.primary',
+                            borderBottom: '2px solid #e2e8f0'
+                          }
+                        }}>
+                          <TableCell sx={{ width: '40px', pl: 3 }}></TableCell>
+                          <TableCell>Nombre</TableCell>
+                          <TableCell>Tipo</TableCell>
+                          <TableCell>Fecha</TableCell>
+                          <TableCell>Tamaño</TableCell>
+                          <TableCell align="right" sx={{ pr: 3 }}>Acciones</TableCell>
+                        </TableRow>
+                      </TableHead>
+                      <TableBody>
+                        {paginatedItems.map((item) => (
+                          <TableRow
+                            key={`${item.itemType}-${item.id}`}
+                            hover
+                            sx={{
+                              cursor: 'pointer',
+                              transition: 'all 0.2s ease',
+                              '&:hover': {
+                                bgcolor: alpha('#501b36', 0.02),
+                                transform: 'translateX(4px)',
+                              },
+                            }}
+                            onClick={() => item.itemType === 'folder' 
+                              ? handleFolderClick(item.name) 
+                              : handleOpenFile(item as TrafficFile)
+                            }
+                          >
+                            <TableCell sx={{ pl: 3 }}>
+                              <Box
+                                sx={{
+                                  p: 1,
+                                  borderRadius: 2,
+                                  bgcolor: alpha(
+                                    item.itemType === 'folder' 
+                                      ? getFolderTypeColor((item as TrafficFolder).type)
+                                      : '#501b36',
+                                    0.1
+                                  ),
+                                  color: item.itemType === 'folder' 
+                                    ? getFolderTypeColor((item as TrafficFolder).type)
+                                    : '#501b36',
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                }}
+                              >
+                                {item.itemType === 'folder' 
+                                  ? getTypeIcon((item as TrafficFolder).type)
+                                  : <Box sx={{ transform: 'scale(0.8)' }}>{getFileIcon(item.name)}</Box>
+                                }
+                              </Box>
+                            </TableCell>
+                            
+                            <TableCell>
+                              <Box>
+                                <Typography
+                                  variant="subtitle2"
+                                  sx={{ 
+                                    fontWeight: 600, 
+                                    color: 'text.primary',
+                                    mb: 0.5
+                                  }}
+                                >
+                                  {item.name}
+                                </Typography>
+                                {item.itemType === 'folder' && (item as TrafficFolder).description && (
+                                  <Typography
+                                    variant="caption"
+                                    sx={{ 
+                                      color: 'text.secondary',
+                                      display: '-webkit-box',
+                                      WebkitLineClamp: 1,
+                                      WebkitBoxOrient: 'vertical',
+                                      overflow: 'hidden',
+                                    }}
+                                  >
+                                    {(item as TrafficFolder).description}
+                                  </Typography>
+                                )}
+                              </Box>
+                            </TableCell>
+                            
+                            <TableCell>
+                              <Chip
+                                size="small"
+                                label={item.itemType === 'folder' ? 'Carpeta' : 'Archivo'}
+                                sx={{
+                                  bgcolor: alpha(
+                                    item.itemType === 'folder' ? '#2563eb' : '#501b36',
+                                    0.1
+                                  ),
+                                  color: item.itemType === 'folder' ? '#2563eb' : '#501b36',
+                                  fontWeight: 600,
+                                  fontSize: '0.75rem',
+                                  border: 'none',
+                                }}
+                              />
+                            </TableCell>
+                            
+                            <TableCell>
+                              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                {item.itemType === 'folder' 
+                                  ? (item as TrafficFolder).createdDate
+                                  : (item as TrafficFile).uploadDate
+                                }
+                              </Typography>
+                            </TableCell>
+                            
+                            <TableCell>
+                              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                                {item.itemType === 'file' 
+                                  ? `${((item as TrafficFile).size / 1024).toFixed(1)} KB`
+                                  : '-'
+                                }
+                              </Typography>
+                            </TableCell>
+                            
+                            <TableCell align="right" sx={{ pr: 3 }}>
+                              <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
+                                {item.itemType === 'folder' ? (
+                                  // Acciones para carpetas
+                                  <Tooltip title="Entrar a la carpeta" arrow>
+                                    <IconButton
+                                      size="small"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleFolderClick(item.name);
+                                      }}
+                                      sx={{
+                                        width: 32,
+                                        height: 32,
+                                        color: '#501b36',
+                                        bgcolor: alpha('#501b36', 0.04),
+                                        border: '1px solid',
+                                        borderColor: alpha('#501b36', 0.2),
+                                        borderRadius: 2,
+                                        transition: 'all 0.2s ease',
+                                        '&:hover': { 
+                                          bgcolor: alpha('#501b36', 0.1),
+                                          borderColor: '#501b36',
+                                          transform: 'translateY(-1px)',
+                                          boxShadow: '0 2px 8px rgba(80, 27, 54, 0.2)'
+                                        }
+                                      }}
+                                    >
+                                      <FolderOpen fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                ) : (
+                                  // Acciones para archivos
+                                  <>
+                                    <Tooltip title="Vista previa" arrow>
+                                      <IconButton
+                                        size="small"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handlePreviewFile(item as TrafficFile);
+                                        }}
+                                        sx={{
+                                          width: 32,
+                                          height: 32,
+                                          color: '#2563eb',
+                                          bgcolor: alpha('#2563eb', 0.04),
+                                          border: '1px solid',
+                                          borderColor: alpha('#2563eb', 0.2),
+                                          borderRadius: 2,
+                                          transition: 'all 0.2s ease',
+                                          '&:hover': { 
+                                            bgcolor: alpha('#2563eb', 0.1),
+                                            borderColor: '#2563eb',
+                                            transform: 'translateY(-1px)',
+                                            boxShadow: '0 2px 8px rgba(37, 99, 235, 0.2)'
+                                          }
+                                        }}
+                                      >
+                                        <Visibility fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                    
+                                    <Tooltip title="Descargar" arrow>
+                                      <IconButton
+                                        size="small"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          handleDownloadFile(item as TrafficFile);
+                                        }}
+                                        sx={{
+                                          width: 32,
+                                          height: 32,
+                                          color: '#16a34a',
+                                          bgcolor: alpha('#16a34a', 0.04),
+                                          border: '1px solid',
+                                          borderColor: alpha('#16a34a', 0.2),
+                                          borderRadius: 2,
+                                          transition: 'all 0.2s ease',
+                                          '&:hover': { 
+                                            bgcolor: alpha('#16a34a', 0.1),
+                                            borderColor: '#16a34a',
+                                            transform: 'translateY(-1px)',
+                                            boxShadow: '0 2px 8px rgba(22, 163, 74, 0.2)'
+                                          }
+                                        }}
+                                      >
+                                        <Download fontSize="small" />
+                                      </IconButton>
+                                    </Tooltip>
+                                    
+                                    {canManageTraffic && (
+                                      <Tooltip title="Eliminar archivo" arrow>
+                                        <IconButton
+                                          size="small"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleDeleteFile(item as TrafficFile);
+                                          }}
+                                          sx={{
+                                            width: 32,
+                                            height: 32,
+                                            color: '#dc2626',
+                                            bgcolor: alpha('#dc2626', 0.04),
+                                            border: '1px solid',
+                                            borderColor: alpha('#dc2626', 0.2),
+                                            borderRadius: 2,
+                                            transition: 'all 0.2s ease',
+                                            '&:hover': { 
+                                              bgcolor: alpha('#dc2626', 0.1),
+                                              borderColor: '#dc2626',
+                                              transform: 'translateY(-1px)',
+                                              boxShadow: '0 2px 8px rgba(220, 38, 38, 0.2)'
+                                            }
+                                          }}
+                                        >
+                                          <Delete fontSize="small" />
+                                        </IconButton>
+                                      </Tooltip>
+                                    )}
+                                  </>
+                                )}
+                                
+                                {item.itemType === 'folder' && canManageTraffic && (
+                                  <>
+                                    <IconButton
+                                      size="small"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleFolderClick(item.name);
+                                        setCreateFolderModal(true);
+                                      }}
+                                      sx={{
+                                        color: '#501b36',
+                                        '&:hover': { bgcolor: alpha('#501b36', 0.1) }
+                                      }}
+                                    >
+                                      <CreateNewFolder fontSize="small" />
+                                    </IconButton>
+                                    
+                                    <IconButton
+                                      size="small"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleFolderClick(item.name);
+                                        setUploadModal(true);
+                                      }}
+                                      sx={{
+                                        color: '#501b36',
+                                        '&:hover': { bgcolor: alpha('#501b36', 0.1) }
+                                      }}
+                                    >
+                                      <Upload fontSize="small" />
+                                    </IconButton>
+                                  </>
+                                )}
+                              </Box>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    
+                    {/* Paginación moderna y elegante */}
+                    {filteredUnifiedItems.length > 0 && (
+                      <Box sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        p: 3,
+                        borderTop: '1px solid #e2e8f0',
+                        bgcolor: '#ffffff',
+                      }}>
+                        {/* Info de elementos */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                          <Typography variant="body2" sx={{ 
+                            color: '#64748b', 
+                            fontWeight: 500,
+                            fontSize: '0.875rem' 
+                          }}>
+                            Mostrando {Math.min((page * rowsPerPage) + 1, filteredUnifiedItems.length)}-{Math.min((page + 1) * rowsPerPage, filteredUnifiedItems.length)} de {filteredUnifiedItems.length} elementos
+                          </Typography>
+                          
+                          {/* Selector de elementos por página */}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="body2" sx={{ 
+                              color: '#64748b', 
+                              fontWeight: 500,
+                              fontSize: '0.875rem',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              Ver:
+                            </Typography>
+                            <TextField
+                              select
+                              size="small"
+                              value={rowsPerPage}
+                              onChange={(e) => setRowsPerPage(parseInt(e.target.value))}
+                              sx={{
+                                minWidth: '70px',
+                                '& .MuiOutlinedInput-root': {
+                                  borderRadius: 2,
+                                  height: '36px',
+                                  fontSize: '0.875rem',
+                                  fontWeight: 500,
+                                  bgcolor: '#f8fafc',
+                                  border: '1.5px solid #e2e8f0',
+                                  '&:hover': {
+                                    borderColor: '#501b36',
+                                  },
+                                  '&.Mui-focused': {
+                                    borderColor: '#501b36',
+                                    boxShadow: '0 0 0 3px rgba(80, 27, 54, 0.1)',
+                                  },
+                                  '& fieldset': {
+                                    border: 'none',
+                                  },
+                                },
+                                '& .MuiSelect-select': {
+                                  py: 1,
+                                },
+                              }}
+                            >
+                              {[5, 10, 25, 50, 100].map((option) => (
+                                <MenuItem key={option} value={option}>
+                                  {option}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                          </Box>
+                        </Box>
+
+                        {/* Controles de navegación */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                          {/* Páginas */}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {/* Botón primera página */}
+                            <IconButton
+                              onClick={() => setPage(0)}
+                              disabled={page === 0}
+                              sx={{
+                                width: 40,
+                                height: 40,
+                                borderRadius: 2,
+                                border: '1.5px solid #e2e8f0',
+                                bgcolor: '#f8fafc',
+                                color: '#501b36',
+                                transition: 'all 0.2s ease-in-out',
+                                '&:hover:not(:disabled)': {
+                                  bgcolor: 'rgba(80, 27, 54, 0.1)',
+                                  borderColor: '#501b36',
+                                  transform: 'translateY(-1px)',
+                                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                },
+                                '&:disabled': {
+                                  color: '#9ca3af',
+                                  borderColor: '#e5e7eb',
+                                  bgcolor: '#f3f4f6',
+                                },
+                              }}
+                            >
+                              <ArrowBack sx={{ fontSize: '1.1rem' }} />
+                            </IconButton>
+
+                            {/* Botón página anterior */}
+                            <IconButton
+                              onClick={() => setPage(page - 1)}
+                              disabled={page === 0}
+                              sx={{
+                                width: 40,
+                                height: 40,
+                                borderRadius: 2,
+                                border: '1.5px solid #e2e8f0',
+                                bgcolor: '#f8fafc',
+                                color: '#501b36',
+                                transition: 'all 0.2s ease-in-out',
+                                '&:hover:not(:disabled)': {
+                                  bgcolor: 'rgba(80, 27, 54, 0.1)',
+                                  borderColor: '#501b36',
+                                  transform: 'translateY(-1px)',
+                                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                },
+                                '&:disabled': {
+                                  color: '#9ca3af',
+                                  borderColor: '#e5e7eb',
+                                  bgcolor: '#f3f4f6',
+                                },
+                              }}
+                            >
+                              <NavigateNext sx={{ fontSize: '1.1rem', transform: 'rotate(180deg)' }} />
+                            </IconButton>
+
+                            {/* Información de página actual */}
+                            <Box sx={{
+                              px: 3,
+                              py: 1,
+                              borderRadius: 2,
+                              bgcolor: '#501b36',
+                              color: 'white',
+                              minWidth: '80px',
+                              textAlign: 'center',
+                              fontWeight: 600,
+                              fontSize: '0.875rem',
+                              border: '1.5px solid #501b36',
+                            }}>
+                              {page + 1} de {Math.ceil(filteredUnifiedItems.length / rowsPerPage)}
+                            </Box>
+
+                            {/* Botón página siguiente */}
+                            <IconButton
+                              onClick={() => setPage(page + 1)}
+                              disabled={page >= Math.ceil(filteredUnifiedItems.length / rowsPerPage) - 1}
+                              sx={{
+                                width: 40,
+                                height: 40,
+                                borderRadius: 2,
+                                border: '1.5px solid #e2e8f0',
+                                bgcolor: '#f8fafc',
+                                color: '#501b36',
+                                transition: 'all 0.2s ease-in-out',
+                                '&:hover:not(:disabled)': {
+                                  bgcolor: 'rgba(80, 27, 54, 0.1)',
+                                  borderColor: '#501b36',
+                                  transform: 'translateY(-1px)',
+                                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                },
+                                '&:disabled': {
+                                  color: '#9ca3af',
+                                  borderColor: '#e5e7eb',
+                                  bgcolor: '#f3f4f6',
+                                },
+                              }}
+                            >
+                              <NavigateNext sx={{ fontSize: '1.1rem' }} />
+                            </IconButton>
+
+                            {/* Botón última página */}
+                            <IconButton
+                              onClick={() => setPage(Math.ceil(filteredUnifiedItems.length / rowsPerPage) - 1)}
+                              disabled={page >= Math.ceil(filteredUnifiedItems.length / rowsPerPage) - 1}
+                              sx={{
+                                width: 40,
+                                height: 40,
+                                borderRadius: 2,
+                                border: '1.5px solid #e2e8f0',
+                                bgcolor: '#f8fafc',
+                                color: '#501b36',
+                                transition: 'all 0.2s ease-in-out',
+                                '&:hover:not(:disabled)': {
+                                  bgcolor: 'rgba(80, 27, 54, 0.1)',
+                                  borderColor: '#501b36',
+                                  transform: 'translateY(-1px)',
+                                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                },
+                                '&:disabled': {
+                                  color: '#9ca3af',
+                                  borderColor: '#e5e7eb',
+                                  bgcolor: '#f3f4f6',
+                                },
+                              }}
+                            >
+                              <NavigateNext sx={{ fontSize: '1.1rem' }} />
+                            </IconButton>
+                          </Box>
+                        </Box>
+                      </Box>
+                    )}
+                    
+                    {/* Mensaje cuando no hay elementos */}
+                    {filteredUnifiedItems.length === 0 && (
+                      <Box sx={{ 
+                        p: 6, 
+                        textAlign: 'center', 
+                        bgcolor: '#f8fafc',
+                        borderTop: '1px solid #e2e8f0'
+                      }}>
+                        <Box
+                          sx={{
+                            p: 3,
+                            borderRadius: '50%',
+                            bgcolor: 'rgba(80, 27, 54, 0.1)',
+                            display: 'inline-flex',
+                            mb: 2,
+                          }}
+                        >
+                          <InsertDriveFile sx={{ fontSize: 48, color: '#501b36' }} />
+                        </Box>
+                        <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.primary', mb: 1 }}>
+                          {searchTerm 
+                            ? 'No se encontraron elementos' 
+                            : currentPath !== '/' 
+                              ? 'Carpeta vacía'
+                              : 'No hay elementos para mostrar'
+                          }
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                          {searchTerm 
+                            ? `No hay carpetas ni archivos que coincidan con "${searchTerm}"`
+                            : currentPath !== '/'
+                              ? 'Esta carpeta está vacía. Puedes subir archivos o crear subcarpetas.'
+                              : 'Esta ubicación está vacía. Puedes crear carpetas o subir archivos.'
+                          }
+                        </Typography>
+                      </Box>
+                    )}
+                  </TableContainer>
+                  </Box>
+                )
+              )}
+            </Box>
+          </Paper>
+        </Fade>
+
+        {/* Snackbar */}
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={6000}
+          onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         >
-          <Edit sx={{ mr: 1 }} />
-          Renombrar
-        </MenuItemComponent>
-        
-        {contextMenu?.type === 'file' && (
-          <MenuItemComponent
-            onClick={() => {
-              const file = files.find(f => f.id === contextMenu.id);
-              if (file) handleDownload(file);
+          <Alert
+            onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+            severity={snackbar.severity}
+            sx={{ 
+              width: '100%',
+              borderRadius: 2,
+              fontWeight: 600,
             }}
           >
-            <Download sx={{ mr: 1 }} />
-            Descargar
-          </MenuItemComponent>
-        )}
-        
-        <Divider />
-        
-        <MenuItemComponent
-          onClick={() => {
-            if (contextMenu) {
-              handleDelete(contextMenu.type, contextMenu.id);
-            }
-          }}
-          sx={{ color: 'error.main' }}
-        >
-          <Delete sx={{ mr: 1 }} />
-          Eliminar
-        </MenuItemComponent>
-      </Menu>
+            {snackbar.message}
+          </Alert>
+        </Snackbar>
 
-      {/* Diálogo crear carpeta */}
-      <Dialog open={createFolderDialog} onClose={() => setCreateFolderDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Crear Nueva Carpeta</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Nombre de la carpeta"
-            fullWidth
-            variant="outlined"
-            value={newFolderName}
-            onChange={(e) => setNewFolderName(e.target.value)}
-            sx={{ mb: 2 }}
-          />
-          <FormControl fullWidth>
-            <InputLabel>Tipo de carpeta</InputLabel>
-            <Select
-              value={newFolderType}
-              label="Tipo de carpeta"
-              onChange={(e) => setNewFolderType(e.target.value as TrafficFolder['type'])}
-            >
-              <MenuItem value="company">Empresa</MenuItem>
-              <MenuItem value="vehicle_type">Tipo de Vehículo</MenuItem>
-              <MenuItem value="vehicle">Vehículo</MenuItem>
-              <MenuItem value="folder">Carpeta General</MenuItem>
-            </Select>
-          </FormControl>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setCreateFolderDialog(false)}>Cancelar</Button>
-          <Button onClick={handleCreateFolder} variant="contained">Crear</Button>
-        </DialogActions>
-      </Dialog>
+        {/* Modales */}
+        <CreateFolderModal
+          open={createFolderModal}
+          onClose={() => setCreateFolderModal(false)}
+          onConfirm={handleCreateFolder}
+        />
+        
+        <UploadModal
+          open={uploadModal}
+          onClose={() => setUploadModal(false)}
+          onConfirm={handleUploadFiles}
+        />
 
-      {/* Diálogo subir archivos */}
-      <Dialog open={uploadDialog} onClose={() => setUploadDialog(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Subir Archivos</DialogTitle>
-        <DialogContent>
-          <input
-            type="file"
-            multiple
-            onChange={(e) => setUploadFiles(e.target.files)}
-            style={{ marginBottom: 16 }}
-          />
-          {isUploading && (
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="body2" sx={{ mb: 1 }}>
-                Subiendo archivo... {uploadProgress}%
-              </Typography>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Box sx={{ width: '100%' }}>
-                  <LinearProgress variant="determinate" value={uploadProgress} />
-                </Box>
-                <CircularProgress size={20} />
-              </Box>
+        {/* Modal de preview de archivos */}
+        <PdfPreview
+          open={previewOpen}
+          onClose={() => setPreviewOpen(false)}
+          fileUrl={previewFileUrl}
+          fileName={previewFileName}
+          title="Vista previa - Tráfico"
+        />
+      </Box>
+    </>
+  );
+};
+
+// Componente de tarjeta de estadísticas moderno
+interface StatsCardProps {
+  title: string;
+  value: number | string;
+  icon: React.ReactNode;
+  color: string;
+  loading: boolean;
+  isSize?: boolean;
+}
+
+const StatsCard: React.FC<StatsCardProps> = ({ 
+  title, 
+  value, 
+  icon, 
+  color, 
+  loading,
+  isSize = false
+}) => (
+  <Paper
+    elevation={0}
+    sx={{
+      p: 2,
+      borderRadius: 2,
+      border: '1px solid #e2e8f0',
+      background: '#ffffff',
+      height: '100%',
+      minHeight: '100px',
+      transition: 'all 0.3s ease',
+      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+      '&:hover': {
+        boxShadow: `0 4px 12px ${alpha(color, 0.12)}`,
+        transform: 'translateY(-1px)',
+        borderColor: alpha(color, 0.3),
+      },
+    }}
+  >
+    {loading ? (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
+        <CircularProgress size={20} sx={{ color }} />
+      </Box>
+    ) : (
+      <Fade in timeout={600}>
+        <Box sx={{ textAlign: 'center' }}>
+          <Box
+            sx={{
+              p: 1,
+              borderRadius: 2,
+              backgroundColor: alpha(color, 0.1),
+              color: color,
+              mb: 1.5,
+              display: 'inline-flex',
+              border: `1px solid ${alpha(color, 0.2)}`,
+            }}
+          >
+            <Box sx={{ fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {icon}
             </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setUploadDialog(false)} disabled={isUploading}>
+          </Box>
+          
+          <Typography variant="h5" sx={{ fontWeight: 800, color: 'text.primary', mb: 0.5 }}>
+            {isSize ? value : typeof value === 'number' ? value.toLocaleString() : value}
+          </Typography>
+          
+          <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, fontSize: '0.7rem' }}>
+            {title}
+          </Typography>
+        </Box>
+      </Fade>
+    )}
+  </Paper>
+);
+
+// Modal para crear carpeta
+const CreateFolderModal: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  onConfirm: (folderName: string) => void;
+}> = ({ open, onClose, onConfirm }) => {
+  const [folderName, setFolderName] = useState('');
+
+  const handleSubmit = () => {
+    if (folderName.trim()) {
+      onConfirm(folderName.trim());
+      setFolderName('');
+    }
+  };
+
+  return (
+    <Box
+      sx={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        bgcolor: 'rgba(0, 0, 0, 0.5)',
+        display: open ? 'flex' : 'none',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1300,
+      }}
+    >
+      <Paper
+        sx={{
+          p: 3,
+          borderRadius: 2,
+          width: '90%',
+          maxWidth: '400px',
+        }}
+      >
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          Nueva Carpeta
+        </Typography>
+        
+        <TextField
+          fullWidth
+          label="Nombre de la carpeta"
+          value={folderName}
+          onChange={(e) => setFolderName(e.target.value)}
+          onKeyPress={(e) => e.key === 'Enter' && handleSubmit()}
+          sx={{ mb: 2 }}
+        />
+        
+        <Stack direction="row" spacing={2} justifyContent="flex-end">
+          <Button onClick={onClose} variant="outlined">
             Cancelar
           </Button>
           <Button 
-            onClick={handleFileUpload} 
-            variant="contained" 
-            disabled={!uploadFiles || isUploading}
+            onClick={handleSubmit} 
+            variant="contained"
+            disabled={!folderName.trim()}
           >
-            Subir
+            Crear
           </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Diálogo renombrar */}
-      <Dialog open={renameDialog.open} onClose={() => setRenameDialog({ open: false, type: 'folder', id: 0, currentName: '' })}>
-        <DialogTitle>Renombrar {renameDialog.type === 'folder' ? 'Carpeta' : 'Archivo'}</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Nuevo nombre"
-            fullWidth
-            variant="outlined"
-            value={renameDialog.currentName}
-            onChange={(e) => setRenameDialog(prev => ({ ...prev, currentName: e.target.value }))}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setRenameDialog({ open: false, type: 'folder', id: 0, currentName: '' })}>
-            Cancelar
-          </Button>
-          <Button onClick={handleRename} variant="contained">
-            Renombrar
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Componente de preview de PDF */}
-      <PdfPreview
-        open={pdfPreview.open}
-        onClose={() => setPdfPreview({ open: false, fileUrl: '', fileName: '' })}
-        fileUrl={pdfPreview.fileUrl}
-        fileName={pdfPreview.fileName}
-        title={`Vista previa: ${pdfPreview.fileName}`}
-      />
+        </Stack>
+      </Paper>
     </Box>
   );
 };
+
+// Modal para subir archivos
+const UploadModal: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  onConfirm: (files: File[]) => void;
+}> = ({ open, onClose, onConfirm }) => {
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      setSelectedFiles(Array.from(event.target.files));
+    }
+  };
+
+  const handleSubmit = () => {
+    if (selectedFiles.length > 0) {
+      onConfirm(selectedFiles);
+      setSelectedFiles([]);
+    }
+  };
+
+  return (
+    <Box
+      sx={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        bgcolor: 'rgba(0, 0, 0, 0.5)',
+        display: open ? 'flex' : 'none',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1300,
+      }}
+    >
+      <Paper
+        sx={{
+          p: 3,
+          borderRadius: 2,
+          width: '90%',
+          maxWidth: '500px',
+        }}
+      >
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          Subir Archivos
+        </Typography>
+        
+        <Button
+          variant="outlined"
+          component="label"
+          startIcon={<Upload />}
+          sx={{ mb: 2, width: '100%' }}
+        >
+          Seleccionar Archivos
+          <input
+            type="file"
+            hidden
+            multiple
+            onChange={handleFileChange}
+          />
+        </Button>
+
+        {selectedFiles.length > 0 && (
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              Archivos seleccionados ({selectedFiles.length}):
+            </Typography>
+            {selectedFiles.map((file, index) => (
+              <Typography key={index} variant="caption" sx={{ display: 'block' }}>
+                {file.name}
+              </Typography>
+            ))}
+          </Box>
+        )}
+        
+        <Stack direction="row" spacing={2} justifyContent="flex-end">
+          <Button onClick={onClose} variant="outlined">
+            Cancelar
+          </Button>
+          <Button 
+            onClick={handleSubmit} 
+            variant="contained"
+            disabled={selectedFiles.length === 0}
+          >
+            Subir
+          </Button>
+        </Stack>
+      </Paper>
+    </Box>
+  );
+};
+
+export default Traffic;

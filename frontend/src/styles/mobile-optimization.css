@@ -1,0 +1,261 @@
+/* Mobile Optimization CSS */
+
+/* Viewport and responsive layout */
+@viewport {
+  width: device-width;
+  zoom: 1.0;
+}
+
+/* Fix MUI Toolbar spacing issues */
+.MuiToolbar-root.MuiToolbar-gutters {
+  padding-left: 0px !important;
+  padding-right: 0px !important;
+  justify-content: center !important;
+  position: relative !important;
+}
+
+@media (min-width: 600px) {
+  .MuiToolbar-root.MuiToolbar-gutters {
+    padding-left: 0px !important;
+    padding-right: 0px !important;
+  }
+}
+
+/* Override MUI default spacing */
+.MuiToolbar-regular {
+  min-height: 56px !important;
+}
+
+/* Root mobile container fixes */
+.mobile-container {
+  width: 100vw;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+/* Mobile content wrapper */
+.mobile-content {
+  width: 100%;
+  max-width: 100vw;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 0;
+  margin: 0 auto;
+  box-sizing: border-box;
+  position: relative;
+  left: 0;
+  right: 0;
+  transform: translateX(0);
+}
+
+/* Mobile centered sections */
+.mobile-section {
+  width: 100%;
+  max-width: 600px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  position: relative;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* Mobile cards container */
+.mobile-cards-container {
+  width: 100%;
+  max-width: 600px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  padding: 0 16px;
+  margin: 0 auto;
+  box-sizing: border-box;
+  justify-items: center;
+}
+
+/* Mobile card layout */
+.mobile-card {
+  width: 100%;
+  max-width: 320px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  text-align: center;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+/* Mobile search bar container */
+.mobile-search-container {
+  width: 100%;
+  max-width: 500px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0 16px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+/* Mobile tabs container */
+.mobile-tabs-container {
+  width: 100%;
+  max-width: 600px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 0 8px;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+/* Mobile responsive text */
+.mobile-text {
+  text-align: center;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  hyphens: auto;
+  line-height: 1.4;
+}
+
+/* Mobile responsive images */
+.mobile-image {
+  width: 100%;
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+/* Mobile touch targets */
+.mobile-touch-target {
+  min-height: 44px;
+  min-width: 44px;
+  padding: 8px;
+  margin: 4px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* Mobile safe area padding */
+.mobile-safe-area {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Mobile scrollable content */
+.mobile-scroll {
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+  width: 100%;
+  max-width: 100vw;
+}
+
+/* Mobile header fixed positioning */
+.mobile-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  z-index: 1100;
+  background-color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 16px;
+  box-sizing: border-box;
+}
+
+/* Mobile content with header offset */
+.mobile-content-with-header {
+  margin-top: 64px; /* Adjust based on header height */
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 16px;
+  box-sizing: border-box;
+}
+
+/* Mobile responsive breakpoints */
+@media (max-width: 480px) {
+  .mobile-section {
+    padding: 0 12px;
+  }
+  
+  .mobile-cards-container {
+    grid-template-columns: 1fr;
+    padding: 0 12px;
+    gap: 12px;
+  }
+  
+  .mobile-search-container {
+    padding: 0 12px;
+  }
+  
+  .mobile-tabs-container {
+    padding: 0 4px;
+  }
+}
+
+@media (min-width: 481px) and (max-width: 768px) {
+  .mobile-cards-container {
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  }
+}
+
+/* Fix for horizontal scrolling */
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  overflow-x: hidden;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+/* iOS Safari specific fixes */
+@supports (-webkit-touch-callout: none) {
+  .mobile-container {
+    min-height: -webkit-fill-available;
+  }
+  
+  .mobile-scroll {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Android Chrome specific fixes */
+@media screen and (-webkit-min-device-pixel-ratio: 1) {
+  .mobile-container {
+    min-height: 100vh;
+    min-height: stretch;
+  }
+}

@@ -1,719 +1,808 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  Paper,
-  Typography,
-  Card,
   Box,
-  Chip,
-  Button,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
+  Typography,
+  Paper,
+  IconButton,
   Alert,
-  CircularProgress,
+  GlobalStyles,
+  Fade,
+  Chip,
+  Menu,
+  Button,
+  Stack,
+  List,
+  ListItem,
+  ListItemText,
+  MenuItem,
   LinearProgress,
-  TextField,
+  Skeleton,
+  Tooltip,
 } from '@mui/material';
+import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { es as esLocale } from 'date-fns/locale';
+import { alpha } from '@mui/material/styles';
+import { LocalShipping as TruckIcon } from '@mui/icons-material';
 import {
-  CloudUpload,
-  PictureAsPdf,
-  FileUpload,
+  Assessment,
+  People,
+  Description,
+  NotificationsNone,
   Check,
-  Search,
-  FilterList,
+  Close,
+  FileDownload,
+  ListAlt,
+  PictureAsPdf,
+  TableView,
+  LocalShipping,
 } from '@mui/icons-material';
+import { useTheme } from '@mui/material/styles';
+import useMediaQuery from '@mui/material/useMediaQuery';
+// Sin gráfico pesado: usaremos tarjetas con barras de progreso
+import { useAuth } from '../hooks/useAuth';
+import StatsCard from '../components/dashboard/StatsCards';
+import QuickActions from '../components/dashboard/QuickActions';
+import RecentActivity from '../components/dashboard/RecentActivity';
+import { usersAPI } from '../services/api';
+import { dashboardService } from '../services/dashboardService';
+import { vacationService } from '../services/vacationService';
+import { ModernModal, ModernButton } from '../components/ModernModal';
+import { DashboardStats as IDashboardStats, AvailableWorkersResponse, UserStatsSummary, PENDING_POLL_MS } from '../types/dashboard';
 
-interface UploadHistoryItem {
-  id: number;
-  fileName: string;
-  uploadDate: string;
-  user: string;
-  documentType: 'nomina' | 'dieta';
-  month: string;
-  year: string;
-  totalPages: number;
-  processedPages: number;
-  status: 'processing' | 'completed' | 'error';
-}
+// Tipos reemplazados por interfaces en types/dashboard
 
-interface UploadState {
-  isDragOver: boolean;
-  isUploading: boolean;
-  uploadProgress: number;
-  file: File | null;
-  documentType: 'nomina' | 'dieta' | '';
-  month: string;
-  year: string;
-  error: string;
-  success: boolean;
-}
-
-const PDFUploadComponent: React.FC = () => {
-  const [uploadState, setUploadState] = useState<UploadState>({
-    isDragOver: false,
-    isUploading: false,
-    uploadProgress: 0,
-    file: null,
-    documentType: '',
-    month: '',
-    year: new Date().getFullYear().toString(),
-    error: '',
-    success: false,
+export const Dashboard: React.FC = () => {
+  const { user } = useAuth();
+  const [stats, setStats] = useState<IDashboardStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [notifAnchor, setNotifAnchor] = useState<null | HTMLElement>(null);
+  const [pendingVacation, setPendingVacation] = useState<any[]>([]);
+  const [userStats, setUserStats] = useState<UserStatsSummary | null>(null);
+  const [availableWorkers, setAvailableWorkers] = useState<
+    | AvailableWorkersResponse
+    | null
+  >(null);
+  const [availableLoading, setAvailableLoading] = useState<boolean>(false);
+  const [selectedDate, setSelectedDate] = useState<string>(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   });
+  const [showAvailableDialog, setShowAvailableDialog] = useState(false);
+  const [exportAnchor, setExportAnchor] = useState<null | HTMLElement>(null);
+  const exportBtnAnchorRef = useRef<HTMLDivElement | null>(null);
+  const theme = useTheme();
+  const isXs = useMediaQuery(theme.breakpoints.down('sm'));
 
-  const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
-  const months = [
-    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-  ];
+  // (sin normalizador adicional: el DatePicker ya controla el formato)
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setUploadState(prev => ({ ...prev, isDragOver: true }));
-  }, []);
+  // Export helpers
+  const handleExportExcel = useCallback(() => {
+    if (!availableWorkers) return;
+    const rows = availableWorkers.available;
+    const header = ['Nombre', 'DNI/NIE', 'Fecha'];
+    const csvRows = [header.join(';'), ...rows.map((r) => [r.full_name, r.dni_nie, availableWorkers.date].join(';'))];
+    const csvContent = '\uFEFF' + csvRows.join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `conductores_disponibles_${availableWorkers.date}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  }, [availableWorkers]);
 
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setUploadState(prev => ({ ...prev, isDragOver: false }));
-  }, []);
-
-  const validateFile = (file: File): string => {
-    if (file.type !== 'application/pdf') {
-      return 'Solo se permiten archivos PDF';
-    }
-    if (file.size > 10 * 1024 * 1024) { // 10MB
-      return 'El archivo no puede superar los 10MB';
-    }
-    return '';
-  };
-
-  const handleDrop = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setUploadState(prev => ({ ...prev, isDragOver: false, error: '', success: false }));
-    
-    const files = Array.from(e.dataTransfer.files);
-    if (files.length > 1) {
-      setUploadState(prev => ({ ...prev, error: 'Solo se puede subir un archivo a la vez' }));
-      return;
-    }
-
-    const file = files[0];
-    const error = validateFile(file);
-    if (error) {
-      setUploadState(prev => ({ ...prev, error }));
-      return;
-    }
-
-    setUploadState(prev => ({ ...prev, file }));
-  }, []);
-
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const error = validateFile(file);
-      if (error) {
-        setUploadState(prev => ({ ...prev, error, file: null }));
-        return;
-      }
-      setUploadState(prev => ({ ...prev, file, error: '', success: false }));
-    }
-  };
-
-  const canUpload = uploadState.file && uploadState.documentType && uploadState.month && uploadState.year;
-
-  const handleUpload = async () => {
-    if (!canUpload) return;
-
-    setUploadState(prev => ({ ...prev, isUploading: true, error: '', uploadProgress: 0 }));
-
+  const handleExportPDF = useCallback(async () => {
+    if (!availableWorkers) return;
     try {
-      // Simular progreso de subida
-      for (let i = 0; i <= 100; i += 10) {
-        await new Promise(resolve => setTimeout(resolve, 100));
-        setUploadState(prev => ({ ...prev, uploadProgress: i }));
-      }
+      const jsPdfMod: any = await import('jspdf');
+      const autoTableMod: any = await import('jspdf-autotable');
+      const jsPDF = jsPdfMod.jsPDF || jsPdfMod.default || jsPdfMod;
+      const autoTable = autoTableMod.default || autoTableMod.autoTable || autoTableMod;
 
-      // Aquí iría la lógica real de subida al backend
-      console.log('Uploading:', {
-        file: uploadState.file,
-        type: uploadState.documentType,
-        month: uploadState.month,
-        year: uploadState.year,
-      });
-
-      setUploadState(prev => ({ 
-        ...prev, 
-        isUploading: false, 
-        success: true,
-        file: null,
-        documentType: '',
-        month: '',
-        uploadProgress: 0,
-      }));
-
-    } catch {
-      setUploadState(prev => ({ 
-        ...prev, 
-        isUploading: false, 
-        error: 'Error al subir el archivo. Intenta de nuevo.',
-        uploadProgress: 0,
-      }));
+      const doc = new jsPDF();
+      doc.setFontSize(14);
+      doc.text(`Conductores disponibles — ${availableWorkers.date}`, 14, 16);
+      const head = [['Nombre', 'DNI/NIE']];
+      const body = availableWorkers.available.map((u) => [u.full_name, u.dni_nie]);
+      autoTable(doc, { head, body, startY: 22, styles: { fontSize: 10 } });
+      doc.save(`conductores_disponibles_${availableWorkers.date}.pdf`);
+    } catch (e) {
+      console.error('Export PDF failed or library missing. Falling back to CSV.', e);
+      handleExportExcel();
     }
-  };
+  }, [availableWorkers, handleExportExcel]);
 
-  const resetUpload = () => {
-    setUploadState({
-      isDragOver: false,
-      isUploading: false,
-      uploadProgress: 0,
-      file: null,
-      documentType: '',
-      month: '',
-      year: new Date().getFullYear().toString(),
-      error: '',
-      success: false,
-    });
-  };
+  // (helper contrast color eliminado por no uso)
+
+  const loadDashboardData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+    const [statsRes, _vacRes, usersRes, availableRes] = await Promise.all([
+  dashboardService.getStats(),
+        vacationService.getVacationStats().catch(() => null),
+        usersAPI.getUserStats().catch(() => null),
+  dashboardService.getAvailableWorkers(selectedDate).catch(() => null),
+      ]);
+
+  setStats(statsRes);
+      if (usersRes) {
+        console.log('User stats cargados:', usersRes); // DEBUG: verificar estructura
+        setUserStats(usersRes);
+      }
+      if (availableRes) setAvailableWorkers(availableRes);
+
+      if (user?.role === 'ADMINISTRADOR' || user?.role === 'MASTER_ADMIN') {
+        const pend = await vacationService.getPendingRequestsForAdmin();
+        setPendingVacation(pend);
+      } else {
+        setPendingVacation([]);
+      }
+    } catch (err) {
+      setError('Error al cargar los datos del dashboard');
+      console.error('Error loading dashboard:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [user?.role, selectedDate]);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [loadDashboardData]);
+
+  // Polling en tiempo (casi) real para solicitudes de vacaciones pendientes (solo admin)
+  useEffect(() => {
+    if (!(user?.role === 'ADMINISTRADOR' || user?.role === 'MASTER_ADMIN')) return;
+    let cancelled = false;
+    const POLL_MS = PENDING_POLL_MS;
+    let id: any;
+    const fetchPending = async () => {
+      if (document.hidden) return; // pausar si pestaña no visible
+      try {
+        const pend = await vacationService.getPendingRequestsForAdmin();
+        if (!cancelled) setPendingVacation(pend);
+      } catch {}
+    };
+    fetchPending();
+    id = setInterval(fetchPending, POLL_MS);
+    const visHandler = () => { if (!document.hidden) fetchPending(); };
+    document.addEventListener('visibilitychange', visHandler);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', visHandler);
+    };
+  }, [user?.role]);
+
+  // Refrescar sólo la lista de disponibles cuando cambia la fecha
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (!selectedDate) return;
+      try {
+        setAvailableLoading(true);
+  const res = await dashboardService.getAvailableWorkers(selectedDate);
+        if (!cancelled) setAvailableWorkers(res);
+      } catch (e) {
+        console.error('Error cargando disponibles:', e);
+        if (!cancelled) setAvailableWorkers({ date: selectedDate, available: [] });
+      } finally {
+        if (!cancelled) setAvailableLoading(false);
+      }
+    };
+    run();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDate]);
 
   return (
-    <Card
-      sx={{
-        p: { xs: 3, sm: 4 },
-        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.7) 100%)',
-        backdropFilter: 'blur(20px)',
-        borderRadius: '8px',
-        border: uploadState.isDragOver ? '2px dashed #722F37' : '1px solid rgba(255, 255, 255, 0.3)',
-        transition: 'all 0.3s ease',
-        minHeight: { xs: '350px', sm: '400px' },
-      }}
-    >
-      {/* Área de drag and drop */}
-      <Box
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        sx={{
-          border: uploadState.isDragOver ? '2px dashed #722F37' : '2px dashed #ccc',
-          borderRadius: '8px',
-          p: { xs: 3, sm: 4 },
-          textAlign: 'center',
-          backgroundColor: uploadState.isDragOver ? 'rgba(114, 47, 55, 0.05)' : 'rgba(0, 0, 0, 0.02)',
-          transition: 'all 0.3s ease',
-          mb: 3,
-          cursor: 'pointer',
-          position: 'relative',
+    <>
+      <GlobalStyles
+        styles={{
+          body: {
+            paddingRight: '0px !important',
+            overflow: 'auto !important',
+            overflowX: 'hidden !important',
+          },
+          '.MuiModal-root': {
+            paddingRight: '0px !important',
+          },
+          '.MuiPopover-root': {
+            paddingRight: '0px !important',
+          },
         }}
-      >
-        <input
-          type="file"
-          accept=".pdf"
-          onChange={handleFileSelect}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            opacity: 0,
-            cursor: 'pointer',
-          }}
-        />
-        
-        <CloudUpload
-          sx={{
-            fontSize: { xs: 36, sm: 48 },
-            color: uploadState.isDragOver ? '#722F37' : '#ccc',
-            mb: 2,
-          }}
-        />
-        
-        {uploadState.file ? (
-          <Box>
-            <Box sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              gap: 1, 
-              mb: 1,
-              flexDirection: { xs: 'column', sm: 'row' }
-            }}>
-              <PictureAsPdf sx={{ color: '#d32f2f' }} />
-              <Typography 
-                variant="h6" 
-                sx={{ 
-                  color: '#722F37', 
-                  fontWeight: 600,
-                  fontSize: { xs: '1rem', sm: '1.25rem' },
-                  textAlign: 'center',
-                  wordBreak: 'break-all'
-                }}
-              >
-                {uploadState.file.name}
-              </Typography>
-            </Box>
-            <Typography variant="body2" sx={{ color: '#6c757d' }}>
-              {(uploadState.file.size / 1024 / 1024).toFixed(2)} MB
-            </Typography>
-          </Box>
-        ) : (
-          <Box>
-            <Typography 
-              variant="h6" 
-              sx={{ 
-                color: '#722F37', 
-                mb: 1,
-                fontSize: { xs: '1rem', sm: '1.25rem' },
-                px: { xs: 1, sm: 0 }
+      />
+
+      {/* Header */}
+      <Box sx={{ p: { xs: 2, md: 3 }, maxWidth: '100%', bgcolor: '#f5f5f5' }}>
+        <Box sx={{ mb: 4 }}>
+          <Fade in timeout={800}>
+            <Paper
+              elevation={0}
+              sx={{
+                p: { xs: 3, sm: 4 },
+                background: 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 55%, #d4a574 100%)',
+                color: 'white',
+                borderRadius: 3,
+                position: 'relative',
+                overflow: 'hidden',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  inset: 0,
+                  backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\\"60\\" height=\\"60\\" viewBox=\\"0 0 60 60\\" xmlns=\\"http://www.w3.org/2000/svg\\"%3E%3Cg fill=\\"none\\" fill-rule=\\"evenodd\\"%3E%3Cg fill=\\"%23ffffff\\" fill-opacity=\\"0.08\\"%3E%3Cpath d=\\"m36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\\"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
+                },
               }}
             >
-              Arrastra un archivo PDF aquí o haz clic para seleccionar
-            </Typography>
-            <Typography variant="body2" sx={{ color: '#6c757d' }}>
-              Máximo 10MB • Solo archivos PDF
-            </Typography>
-          </Box>
+              <Box sx={{ position: 'relative', zIndex: 1 }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <Box
+                    sx={{
+                      p: 2,
+                      bgcolor: 'rgba(255,255,255,0.18)',
+                      borderRadius: 2,
+                      backdropFilter: 'blur(8px)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Assessment sx={{ fontSize: 32 }} />
+                  </Box>
+                  <Box>
+                    <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
+                      Panel de control
+                    </Typography>
+                    <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400 }}>
+                      Resumen general del sistema
+                    </Typography>
+                  </Box>
+                  {(user?.role === 'ADMINISTRADOR' || user?.role === 'MASTER_ADMIN') && (
+                    <Button
+                      size="small"
+                      variant="contained"
+                      onClick={(e) => setNotifAnchor(e.currentTarget)}
+                      startIcon={<NotificationsNone />}
+                      sx={{
+                        textTransform: 'none',
+                        borderRadius: 999,
+                        backgroundColor: '#c62828',
+                        '&:hover': { backgroundColor: '#b71c1c' },
+                        minWidth: 'auto',
+                        color: 'white',
+                        fontWeight: 600,
+                        ml: 'auto'
+                      }}
+                    >
+                      ({pendingVacation.length})
+                    </Button>
+                  )}
+                </Box>
+              </Box>
+            </Paper>
+          </Fade>
+        </Box>
+
+        {error && (
+          <Fade in timeout={400}>
+            <Alert
+              severity="error"
+              sx={{
+                mb: 3,
+                borderRadius: 2,
+                '& .MuiAlert-icon': {
+                  fontSize: 24,
+                },
+              }}
+              action={
+                <Button color="inherit" size="small" onClick={loadDashboardData}>
+                  Reintentar
+                </Button>
+              }
+            >
+              {error}
+            </Alert>
+          </Fade>
         )}
-      </Box>
 
-      {/* Controles de selección */}
-      <Box sx={{ 
-        display: 'grid', 
-        gridTemplateColumns: { xs: '1fr', sm: 'repeat(auto-fit, minmax(200px, 1fr))' }, 
-        gap: 2, 
-        mb: 3 
-      }}>
-        <FormControl fullWidth required>
-          <InputLabel>Tipo de Documento</InputLabel>
-          <Select
-            value={uploadState.documentType}
-            label="Tipo de Documento"
-            onChange={(e) => setUploadState(prev => ({ ...prev, documentType: e.target.value as 'nomina' | 'dieta' }))}
-          >
-            <MenuItem value="nomina">Nómina</MenuItem>
-            <MenuItem value="dieta">Dieta</MenuItem>
-          </Select>
-        </FormControl>
-
-        <FormControl fullWidth required>
-          <InputLabel>Mes</InputLabel>
-          <Select
-            value={uploadState.month}
-            label="Mes"
-            onChange={(e) => setUploadState(prev => ({ ...prev, month: e.target.value }))}
-          >
-            {months.map((month, index) => (
-              <MenuItem key={index} value={(index + 1).toString().padStart(2, '0')}>
-                {month}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-
-        <FormControl fullWidth required>
-          <InputLabel>Año</InputLabel>
-          <Select
-            value={uploadState.year}
-            label="Año"
-            onChange={(e) => setUploadState(prev => ({ ...prev, year: e.target.value }))}
-          >
-            {years.map((year) => (
-              <MenuItem key={year} value={year.toString()}>
-                {year}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      </Box>
-
-      {/* Mensajes de error y éxito */}
-      {uploadState.error && (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {uploadState.error}
-        </Alert>
-      )}
-
-      {uploadState.success && (
-        <Alert severity="success" sx={{ mb: 2 }} action={
-          <Button color="inherit" size="small" onClick={resetUpload}>
-            Subir Otro
-          </Button>
-        }>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Check />
-            Documento subido exitosamente
-          </Box>
-        </Alert>
-      )}
-
-      {/* Progreso de subida */}
-      {uploadState.isUploading && (
-        <Box sx={{ mb: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-            <CircularProgress size={20} />
-            <Typography variant="body2">
-              Subiendo archivo... {uploadState.uploadProgress}%
-            </Typography>
-          </Box>
-          <LinearProgress 
-            variant="determinate" 
-            value={uploadState.uploadProgress}
-            sx={{
-              height: 8,
-              borderRadius: 4,
-              backgroundColor: 'rgba(0, 0, 0, 0.1)',
-              '& .MuiLinearProgress-bar': {
-                background: '#1565C0',
-                borderRadius: 4,
-              },
-            }}
-          />
-        </Box>
-      )}
-
-      {/* Botón de subida */}
-      <Box sx={{ 
-        display: 'flex', 
-        gap: 2, 
-        justifyContent: 'flex-end',
-        flexDirection: { xs: 'column-reverse', sm: 'row' }
-      }}>
-        {uploadState.file && !uploadState.success && (
-          <Button
-            variant="outlined"
-            onClick={resetUpload}
-            disabled={uploadState.isUploading}
-            sx={{ width: { xs: '100%', sm: 'auto' } }}
-          >
-            Cancelar
-          </Button>
-        )}
-        <Button
-          variant="contained"
-          onClick={handleUpload}
-          disabled={!canUpload || uploadState.isUploading}
-          startIcon={uploadState.isUploading ? <CircularProgress size={20} /> : <FileUpload />}
-          sx={{
-            background: '#1565C0',
-            width: { xs: '100%', sm: 'auto' },
-            '&:hover': {
-              background: '#0D47A1',
-            },
-            '&:disabled': {
-              background: '#ccc',
-            },
-          }}
-        >
-          {uploadState.isUploading ? 'Subiendo...' : 'Subir Documento'}
-        </Button>
-      </Box>
-    </Card>
-  );
-};
-
-const UploadHistoryComponent: React.FC = () => {
-  // Historial de uploads
-  const [uploadHistory] = useState<UploadHistoryItem[]>([]);
-
-  // Estados para los filtros
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterType, setFilterType] = useState<'all' | 'nomina' | 'dieta'>('all');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'completed' | 'processing' | 'error'>('all');
-  const [filterUser, setFilterUser] = useState('all');
-
-  // Datos filtrados
-  const filteredData = uploadHistory.filter((item) => {
-    const matchesSearch = item.fileName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         item.user.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesType = filterType === 'all' || item.documentType === filterType;
-    const matchesStatus = filterStatus === 'all' || item.status === filterStatus;
-    const matchesUser = filterUser === 'all' || item.user === filterUser;
-    
-    return matchesSearch && matchesType && matchesStatus && matchesUser;
-  });
-
-  // Obtener usuarios únicos para el filtro
-  const uniqueUsers = [...new Set(uploadHistory.map(item => item.user))];
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return '#4caf50';
-      case 'processing': return '#ff9800';
-      case 'error': return '#f44336';
-      default: return '#6c757d';
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'completed': return 'Completado';
-      case 'processing': return 'Procesando';
-      case 'error': return 'Error';
-      default: return 'Desconocido';
-    }
-  };
-
-  const getMonthName = (month: string) => {
-    const months = [
-      'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-      'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
-    ];
-    return months[parseInt(month) - 1] || month;
-  };
-
-  const clearFilters = () => {
-    setSearchTerm('');
-    setFilterType('all');
-    setFilterStatus('all');
-    setFilterUser('all');
-  };
-
-  return (
-    <Paper
-      sx={{
-        p: 3,
-        background: '#ffffff',
-        borderRadius: '8px',
-        border: '1px solid #e0e0e0',
-      }}
-    >
-      <Typography
-        variant="h6"
-        sx={{
-          mb: 3,
-          fontWeight: 700,
-          color: '#1565C0',
-        }}
-      >
-        Historial de Subidas
-      </Typography>
-
-      {/* Filtros */}
-      <Box sx={{ mb: 3 }}>
-        <Box 
-          sx={{ 
-            display: 'grid',
-            gridTemplateColumns: {
-              xs: '1fr',
-              sm: 'repeat(2, 1fr)',
-              md: '2fr 1fr 1fr 1fr 1fr',
-            },
-            gap: 2,
-            alignItems: 'center',
-            mb: 2,
-          }}
-        >
-          <TextField
-            fullWidth
-            size="small"
-            placeholder="Buscar archivo o usuario..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            InputProps={{
-              startAdornment: <Search sx={{ color: '#6c757d', mr: 1 }} />,
-            }}
-            sx={{
-              '& .MuiOutlinedInput-root': {
-                borderRadius: '12px',
-              },
-            }}
-          />
-          
-          <FormControl fullWidth size="small">
-            <InputLabel>Tipo</InputLabel>
-            <Select
-              value={filterType}
-              label="Tipo"
-              onChange={(e) => setFilterType(e.target.value as 'all' | 'nomina' | 'dieta')}
-              sx={{ borderRadius: '12px' }}
-            >
-              <MenuItem value="all">Todos</MenuItem>
-              <MenuItem value="nomina">Nómina</MenuItem>
-              <MenuItem value="dieta">Dieta</MenuItem>
-            </Select>
-          </FormControl>
-
-          <FormControl fullWidth size="small">
-            <InputLabel>Estado</InputLabel>
-            <Select
-              value={filterStatus}
-              label="Estado"
-              onChange={(e) => setFilterStatus(e.target.value as 'all' | 'completed' | 'processing' | 'error')}
-              sx={{ borderRadius: '12px' }}
-            >
-              <MenuItem value="all">Todos</MenuItem>
-              <MenuItem value="completed">Completado</MenuItem>
-              <MenuItem value="processing">Procesando</MenuItem>
-              <MenuItem value="error">Error</MenuItem>
-            </Select>
-          </FormControl>
-
-          <FormControl fullWidth size="small">
-            <InputLabel>Usuario</InputLabel>
-            <Select
-              value={filterUser}
-              label="Usuario"
-              onChange={(e) => setFilterUser(e.target.value)}
-              sx={{ borderRadius: '12px' }}
-            >
-              <MenuItem value="all">Todos</MenuItem>
-              {uniqueUsers.map((user) => (
-                <MenuItem key={user} value={user}>
-                  {user}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          <Button
-            variant="outlined"
-            onClick={clearFilters}
-            startIcon={<FilterList />}
-            sx={{
-              borderRadius: '12px',
-              height: '40px',
-              textTransform: 'none',
-            }}
-          >
-            Limpiar
-          </Button>
-        </Box>
-
-        {/* Contador de resultados */}
-        <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Typography variant="body2" sx={{ color: '#6c757d' }}>
-            Mostrando {filteredData.length} de {uploadHistory.length} documentos
-          </Typography>
-          {(searchTerm || filterType !== 'all' || filterStatus !== 'all' || filterUser !== 'all') && (
-            <Chip
-              label="Filtros activos"
-              size="small"
-              color="primary"
-              variant="outlined"
-              sx={{ fontSize: '0.75rem' }}
-            />
-          )}
-        </Box>
-      </Box>
-
-      <Box sx={{ overflowX: 'auto' }}>
-        <Box sx={{ minWidth: 800 }}>
-          {/* Header */}
+        {/* Stats */}
+        <Fade in timeout={1000}>
+          <Box sx={{ position: 'relative' }}>
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 100px',
-              gap: 2,
-              p: 2,
-              borderBottom: '2px solid rgba(114, 47, 55, 0.1)',
-              mb: 1,
+              gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr', md: 'repeat(3, 1fr)' },
+              gap: 3,
+              mb: 4,
             }}
           >
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#722F37' }}>
-              Archivo
-            </Typography>
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#722F37' }}>
-              Usuario
-            </Typography>
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#722F37' }}>
-              Fecha
-            </Typography>
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#722F37' }}>
-              Tipo/Período
-            </Typography>
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#722F37' }}>
-              Páginas
-            </Typography>
-            <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#722F37' }}>
-              Estado
-            </Typography>
+            <StatsCard
+              title="Usuarios"
+              value={userStats?.total_users ?? stats?.total_users ?? 0}
+              icon={<People />}
+              color="#2196f3"
+              loading={loading}
+              details={(() => {
+                const total = userStats?.total_users ?? stats?.total_users ?? 0;
+                const activos = userStats?.active_users ?? 0;
+                const inactivos = total > 0 ? total - activos : 0;
+                const pct = total > 0 ? Math.round((activos / total) * 100) : 0;
+                const colorPct = pct >= 80 ? '#2e7d32' : pct >= 50 ? '#ed6c02' : '#c62828';
+                return (
+                  <>Activos {activos} · Inactivos {inactivos} · <Tooltip title="% de usuarios con estado activo"><span style={{ color: colorPct }}>{pct}% activos</span></Tooltip></>
+                );
+              })()}
+            />
+            <StatsCard
+              title="Trabajadores disponibles hoy"
+              value={availableWorkers?.available.length || 0}
+              icon={<LocalShipping />}
+              color="#ff9800"
+              loading={availableLoading || loading}
+              onClick={() => setShowAvailableDialog(true)}
+              details={(() => {
+                const totalTrab = (userStats?.roles?.TRABAJADOR ?? 0) as number;
+                const disp = availableWorkers?.available.length || 0;
+                const pct = totalTrab > 0 ? Math.round((disp / totalTrab) * 100) : 0;
+                const colorPct = pct >= 70 ? '#2e7d32' : pct >= 40 ? '#ed6c02' : '#c62828';
+                return <>De {totalTrab} (<Tooltip title="% trabajadores disponibles respecto al total de TRABAJADOR"><span style={{ color: colorPct }}>{pct}% disponibles</span></Tooltip>)</>;
+              })()}
+            />
+            <StatsCard
+              title="Solicitudes Pendientes"
+              value={pendingVacation.length}
+              icon={<Assessment />}
+              color="#f44336"
+              loading={loading && pendingVacation.length === 0}
+            />
           </Box>
+          {/* Etiqueta de última actualización eliminada según preferencia del usuario */}
+          </Box>
+        </Fade>
 
-          {/* Rows */}
-          {filteredData.length > 0 ? (
-            filteredData.map((item) => (
+        {/* Charts and Available Workers */}
+        <Fade in timeout={1200}>
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: { xs: 2, md: 3 }, mb: 4 }}>
+            <Paper elevation={0} sx={{ borderRadius: 2, border: '1px solid #e0e0e0', background: '#ffffff' }}>
+              <Box sx={{ p: { xs: 2, sm: 3 }, borderBottom: '1px solid', borderColor: 'divider', display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Assessment sx={{ color: '#501b36' }} />
+                <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                  Usuarios por rol
+                </Typography>
+              </Box>
+              <Box sx={{ p: { xs: 2, sm: 3 }, height: { xs: 'auto', md: 320 }, display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {loading ? (
+                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    {[1,2,3,4].map(i => (
+                      <Skeleton key={i} variant="rectangular" height={isXs ? 52 : 64} sx={{ borderRadius: 2 }} />
+                    ))}
+                  </Box>
+                ) : userStats ? (
+                  (() => {
+                    const entries = Object.entries(userStats.roles || {});
+                    if (entries.length === 0) {
+                      return <Typography color="text.secondary">Sin datos de roles</Typography>;
+                    }
+                    const total = entries.reduce((acc, [, c]) => acc + Number(c), 0) || 0;
+                    const roleColors: Record<string, string> = {
+                      TRABAJADOR: '#7d2d52',
+                      ADMINISTRADOR: '#d4a574',
+                      TRAFICO: '#1976d2',
+                    };
+                    const sorted = entries.sort((a, b) => Number(b[1]) - Number(a[1]));
+                    return (
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
+                        <Typography variant="body2" color="text.secondary">
+                          Total usuarios: <strong>{total}</strong>
+                        </Typography>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: { xs: 1.5, sm: 2 } }}>
+                          {sorted.map(([role, count]) => {
+                            const n = Number(count) || 0;
+                            const pct = total > 0 ? Math.round((n / total) * 100) : 0;
+                            const color = roleColors[role] || '#90a4ae';
+                            return (
+          <Box key={role} sx={{ p: { xs: 1.5, sm: 2 }, border: '1px solid #ede7e9', borderRadius: 2, background: 'linear-gradient(135deg, #fafafa 0%, #f5f5f5 100%)' }}>
+                                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Box sx={{ width: 10, height: 10, bgcolor: color, borderRadius: '50%' }} />
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{role}</Typography>
+                                  </Box>
+                                  <Typography variant="subtitle2">{n}</Typography>
+                                </Box>
+                                <LinearProgress
+                                  variant="determinate"
+                                  value={pct}
+                                  sx={{
+                                    height: 8,
+                                    borderRadius: 6,
+                                    backgroundColor: alpha(color, 0.15),
+                                    overflow: 'hidden',
+                                    '& .MuiLinearProgress-bar': {
+                                      backgroundColor: color,
+                                      borderRadius: 6,
+                                      transition: 'transform .6s ease, width .6s ease',
+                                    },
+                                  }}
+                                />
+                                <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+                                  {pct}% del total
+                                </Typography>
+                              </Box>
+                            );
+                          })}
+                        </Box>
+                      </Box>
+                    );
+                  })()
+                ) : (
+                  <Typography color="text.secondary">Sin datos</Typography>
+                )}
+              </Box>
+            </Paper>
+
+            <Paper elevation={0} sx={{ borderRadius: 2, border: '1px solid #e0e0e0', background: '#ffffff' }}>
               <Box
-                key={item.id}
                 sx={{
-                  display: 'grid',
-                  gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr 100px',
-                  gap: 2,
-                  p: 2,
-                  borderBottom: '1px solid rgba(114, 47, 55, 0.05)',
-                  alignItems: 'center',
-                  '&:hover': {
-                    backgroundColor: 'rgba(114, 47, 55, 0.03)',
-                  },
+                  p: { xs: 2, sm: 3 },
+                  borderBottom: '1px solid',
+                  borderColor: 'divider',
+                  display: 'flex',
+                  alignItems: { xs: 'flex-start', sm: 'center' },
+                  justifyContent: 'space-between',
+                  gap: 1.5,
+                  flexDirection: { xs: 'column', sm: 'row' },
                 }}
               >
-                <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                  {item.fileName}
-                </Typography>
-                
-                <Typography variant="body2" sx={{ color: '#6c757d' }}>
-                  {item.user}
-                </Typography>
-                
-                <Typography variant="body2" sx={{ color: '#6c757d' }}>
-                  {new Date(item.uploadDate).toLocaleDateString()}
-                </Typography>
-                
-                <Box>
-                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                    {item.documentType === 'nomina' ? 'Nómina' : 'Dieta'}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: '#6c757d' }}>
-                    {getMonthName(item.month)} {item.year}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Description sx={{ color: '#501b36' }} />
+                  <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    Conductores disponibles
                   </Typography>
                 </Box>
-                
-                <Typography variant="body2" sx={{ color: '#6c757d' }}>
-                  {item.processedPages}/{item.totalPages}
-                </Typography>
-                
-                <Chip
-                  label={getStatusText(item.status)}
-                  size="small"
-                  sx={{
-                    backgroundColor: getStatusColor(item.status),
-                    color: 'white',
-                    fontWeight: 600,
-                    fontSize: '0.7rem',
-                  }}
-                />
+                <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }} sx={{ width: { xs: '100%', sm: 'auto' } }}>
+                  <Box
+                    sx={{
+                      '& .MuiInputAdornment-root .MuiIconButton-root': {
+                        backgroundColor: 'transparent !important',
+                        boxShadow: 'none !important',
+                        border: 'none !important',
+                      },
+                      '& .MuiInputAdornment-root .MuiIconButton-root:hover': {
+                        backgroundColor: 'transparent !important',
+                        boxShadow: 'none !important',
+                      },
+                      '& .MuiInputAdornment-root .MuiIconButton-root:active': {
+                        backgroundColor: 'transparent !important',
+                        boxShadow: 'none !important',
+                      },
+                      '& .MuiInputAdornment-root .MuiIconButton-root:focus, & .MuiInputAdornment-root .MuiIconButton-root:focus-visible': {
+                        outline: 'none !important',
+                        boxShadow: 'none !important',
+                        backgroundColor: 'transparent !important',
+                      },
+                      '& .MuiInputAdornment-root .MuiIconButton-root .MuiTouchRipple-root': {
+                        display: 'none !important',
+                      },
+                    }}
+                  >
+                    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={esLocale}>
+                      <DatePicker
+                        format="dd/MM/yyyy"
+                        value={selectedDate ? new Date(selectedDate) : null}
+                        onChange={(val) => {
+                          if (!val || isNaN(val.getTime())) return;
+                          const y = val.getFullYear();
+                          const m = String(val.getMonth() + 1).padStart(2, '0');
+                          const d = String(val.getDate()).padStart(2, '0');
+                          setSelectedDate(`${y}-${m}-${d}`);
+                        }}
+                        slotProps={{
+                          textField: {
+                            size: 'small',
+                            fullWidth: isXs,
+                            sx: {
+                              minWidth: { xs: '100%', sm: 160 },
+                              '& .MuiIconButton-root': {
+                                backgroundColor: 'transparent !important',
+                                boxShadow: 'none',
+                                border: 'none',
+                                '&:hover': {
+                                  backgroundColor: 'transparent !important',
+                                  boxShadow: 'none',
+                                },
+                                '& .MuiTouchRipple-root': { display: 'none' },
+                                '&:focus': { outline: 'none' },
+                              },
+                            },
+                          },
+                          openPickerButton: {
+                            disableRipple: true,
+                            disableFocusRipple: true,
+                            disableTouchRipple: true,
+                            sx: {
+                              backgroundColor: 'transparent !important',
+                              boxShadow: 'none',
+                              border: 'none',
+                              '&:hover': {
+                                backgroundColor: 'transparent !important',
+                                boxShadow: 'none',
+                              },
+                              '& .MuiTouchRipple-root': { display: 'none' },
+                              '&:focus': { outline: 'none' },
+                            },
+                          },
+                        }}
+                      />
+                    </LocalizationProvider>
+                  </Box>
+                  <ModernButton
+                    size="small"
+                    startIcon={<ListAlt />}
+                    disabled={!availableWorkers || (availableWorkers?.available?.length ?? 0) === 0}
+                    onClick={() => setShowAvailableDialog(true)}
+                  >
+                    Ver todo
+                  </ModernButton>
+                  <Box ref={exportBtnAnchorRef}>
+                    <ModernButton
+                      size="small"
+                      startIcon={<FileDownload />}
+                      disabled={!availableWorkers || (availableWorkers?.available?.length ?? 0) === 0}
+                      onClick={() => setExportAnchor(exportBtnAnchorRef.current)}
+                    >
+                      Exportar
+                    </ModernButton>
+                  </Box>
+                </Stack>
               </Box>
-            ))
-          ) : (
-            <Box sx={{ textAlign: 'center', py: 4 }}>
-              <Typography variant="body2" sx={{ color: '#6c757d' }}>
-                No se encontraron documentos que coincidan con los filtros aplicados.
-              </Typography>
+              <Box id="available-workers-panel" sx={{ p: { xs: 1.5, sm: 2 }, height: { xs: 'auto', md: 320 }, display: 'flex', flexDirection: 'column' }}>
+                {availableLoading || loading ? (
+                  <Box sx={{ p: 1 }}>
+                    {[1,2,3,4,5].map(i => (
+                      <Skeleton key={i} variant="rectangular" height={isXs ? 40 : 48} sx={{ mb: 1, borderRadius: 1.5 }} />
+                    ))}
+                  </Box>
+                ) : availableWorkers ? (
+                  <Box sx={{ overflowY: 'auto', maxHeight: { xs: 260, md: 'unset' } }}>
+                    {availableWorkers.available.length === 0 ? (
+                      <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
+                        <TruckIcon sx={{ fontSize: 48, opacity: 0.25, mb: 1 }} />
+                        <Typography variant="body2" sx={{ mb: 1 }}>No hay trabajadores disponibles</Typography>
+                        <Button size="small" variant="outlined" onClick={() => {
+                          // abre el date picker via foco
+                          const el = document.querySelector('#available-workers-panel input');
+                          if (el instanceof HTMLElement) el.focus();
+                        }}>Cambiar fecha</Button>
+                      </Box>
+                    ) : (
+                      availableWorkers.available.map((u) => (
+                        <Box key={u.id} sx={{ p: 1, borderBottom: '1px solid', borderColor: 'divider' }}>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            {u.full_name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {u.dni_nie}
+                          </Typography>
+                        </Box>
+                      ))
+                    )}
+                  </Box>
+                ) : (
+                  <Typography color="text.secondary">Sin datos</Typography>
+                )}
+              </Box>
+            </Paper>
+          </Box>
+        </Fade>
+
+        {/* Quick Actions + Actividad Reciente */}
+        <Fade in timeout={1200}>
+          <Box sx={{ mb: 4, display: 'grid', gap: 3, gridTemplateColumns: { xs: '1fr', md: '2fr 1fr' }, alignItems: 'stretch' }}>
+            <Box sx={{ minHeight: { md: 500 } }}>
+              <RecentActivity />
             </Box>
-          )}
-        </Box>
+            <Box sx={{ minHeight: { md: 500 } }}>
+              <QuickActions />
+            </Box>
+          </Box>
+        </Fade>
+
+        {/* Notificaciones (solo vacaciones) */}
+        <Menu
+          anchorEl={notifAnchor}
+          open={Boolean(notifAnchor)}
+          onClose={() => setNotifAnchor(null)}
+          PaperProps={{
+            sx: {
+              borderRadius: 2,
+              mt: 1,
+              minWidth: 360,
+              maxHeight: 420,
+              overflow: 'auto',
+              boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+              border: '1px solid rgba(0,0,0,0.08)',
+            },
+          }}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+          transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        >
+          <Box sx={{ p: 2 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+              <Typography variant="h6" sx={{ fontWeight: 600, color: '#501b36' }}>
+                Solicitudes de Vacaciones
+              </Typography>
+              <Chip
+                label={`${pendingVacation.length} pendiente${pendingVacation.length !== 1 ? 's' : ''}`}
+                size="small"
+                sx={{ bgcolor: alpha('#501b36', 0.1), color: '#501b36', fontWeight: 600 }}
+              />
+            </Box>
+            {pendingVacation.length === 0 ? (
+              <Box sx={{ py: 3, textAlign: 'center', color: 'text.secondary' }}>
+                <NotificationsNone sx={{ fontSize: 48, mb: 1, opacity: 0.3 }} />
+                <Typography variant="body2">No hay solicitudes pendientes</Typography>
+              </Box>
+            ) : (
+              <Box sx={{ maxHeight: 300, overflow: 'auto' }}>
+                {pendingVacation.map((req) => (
+                  <Box
+                    key={req.id}
+                    sx={{
+                      p: 1.5,
+                      mb: 0.75,
+                      borderRadius: 1.5,
+                      bgcolor: alpha('#fff4e6', 0.5),
+                      border: '1px solid',
+                      borderColor: alpha('#ff9800', 0.2),
+                      '&:last-child': { mb: 0 },
+                    }}
+                  >
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography
+                          variant="subtitle2"
+                          sx={{
+                            fontWeight: 600,
+                            color: '#501b36',
+                            mb: 0.25,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                        >
+                          {req.employee_name || 'Usuario'}
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+                          {new Date(req.start_date).toLocaleDateString('es-ES', {
+                            day: 'numeric',
+                            month: 'short',
+                          })}{' '}
+                          -{' '}
+                          {new Date(req.end_date).toLocaleDateString('es-ES', { day: 'numeric', month: 'short' })} •{' '}
+                          {req.duration_days || '-'} días
+                        </Typography>
+                      </Box>
+                    </Box>
+                    <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end' }}>
+                      <IconButton
+                        size="small"
+                        onClick={async () => {
+                          await vacationService.updateVacationStatus(req.id, 'rejected');
+                          loadDashboardData();
+                        }}
+                        sx={{ width: 28, height: 28, bgcolor: alpha('#f44336', 0.1), color: '#f44336', '&:hover': { bgcolor: alpha('#f44336', 0.2) } }}
+                      >
+                        <Close sx={{ fontSize: 14 }} />
+                      </IconButton>
+                      <IconButton
+                        size="small"
+                        onClick={async () => {
+                          await vacationService.updateVacationStatus(req.id, 'approved');
+                          loadDashboardData();
+                        }}
+                        sx={{ width: 28, height: 28, bgcolor: alpha('#4caf50', 0.1), color: '#4caf50', '&:hover': { bgcolor: alpha('#4caf50', 0.2) } }}
+                      >
+                        <Check sx={{ fontSize: 14 }} />
+                      </IconButton>
+                    </Box>
+                  </Box>
+                ))}
+              </Box>
+            )}
+          </Box>
+        </Menu>
       </Box>
-    </Paper>
+
+      {/* Menú exportación (tarjeta exterior) */}
+      <Menu
+        anchorEl={exportAnchor}
+        open={Boolean(exportAnchor)}
+        onClose={() => setExportAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <MenuItem
+          onClick={() => {
+            setExportAnchor(null);
+            handleExportExcel();
+          }}
+          disabled={!availableWorkers || (availableWorkers?.available?.length ?? 0) === 0}
+        >
+          <TableView fontSize="small" style={{ marginRight: 8 }} />
+          Exportar Excel
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            setExportAnchor(null);
+            handleExportPDF();
+          }}
+          disabled={!availableWorkers || (availableWorkers?.available?.length ?? 0) === 0}
+        >
+          <PictureAsPdf fontSize="small" style={{ marginRight: 8 }} />
+          Exportar PDF
+        </MenuItem>
+      </Menu>
+
+      {/* Modal: lista completa de disponibles */}
+      <ModernModal
+        open={showAvailableDialog}
+        onClose={() => setShowAvailableDialog(false)}
+        title={`Conductores disponibles — ${availableWorkers?.date ?? ''}`}
+        icon={<Description />}
+        maxWidth="sm"
+        actions={
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            <ModernButton
+              variant="outlined"
+              size="small"
+              onClick={() => setShowAvailableDialog(false)}
+            >
+              Cerrar
+            </ModernButton>
+            <ModernButton
+              size="small"
+              disabled={!availableWorkers || (availableWorkers?.available?.length ?? 0) === 0}
+              startIcon={<FileDownload />}
+              onClick={handleExportExcel}
+            >
+              Excel
+            </ModernButton>
+            <ModernButton
+              size="small"
+              disabled={!availableWorkers || (availableWorkers?.available?.length ?? 0) === 0}
+              startIcon={<FileDownload />}
+              onClick={handleExportPDF}
+            >
+              PDF
+            </ModernButton>
+          </Box>
+        }
+      >
+        {!availableWorkers || availableWorkers.available.length === 0 ? (
+          <Typography color="text.secondary">No hay trabajadores disponibles</Typography>
+        ) : (
+          <List>
+            {availableWorkers.available.map((u) => (
+              <ListItem key={u.id} divider>
+                <ListItemText
+                  primary={<Typography sx={{ fontWeight: 600 }}>{u.full_name}</Typography>}
+                  secondary={<Typography variant="caption" color="text.secondary">{u.dni_nie}</Typography>}
+                />
+              </ListItem>
+            ))}
+          </List>
+        )}
+      </ModernModal>
+    </>
   );
 };
 
-export const Dashboard: React.FC = () => {
-  return (
-    <Box sx={{ 
-      width: '100%', 
-      maxWidth: { xs: '100%', sm: '100%', md: '1200px', lg: '1400px' },
-      mx: 'auto',
-      px: { xs: 0, sm: 1, md: 2 }
-    }}>
-      {/* Componente de subida de PDFs */}
-      <Box sx={{ mb: 4 }}>
-        <PDFUploadComponent />
-      </Box>
-
-      {/* Historial de Subidas */}
-      <Box sx={{ mb: 4 }}>
-        <UploadHistoryComponent />
-      </Box>
-    </Box>
-  );
-};
+export default Dashboard;

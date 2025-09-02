@@ -1,7 +1,27 @@
 import axios from 'axios';
-import type { DashboardStats, TrafficData, VacationRequest, Document, Activity, TrafficFolder, TrafficDocument, PayrollDocument, PayrollStats, User } from '../types';
+import type { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-const API_BASE_URL = 'http://127.0.0.1:8000';
+// Flag simple para evitar bucles infinitos de refresh
+let isRefreshing = false;
+let pendingQueue: { resolve: (token: string) => void; reject: (err: unknown) => void; }[] = [];
+
+const processQueue = (error: unknown, newToken: string | null) => {
+  pendingQueue.forEach(prom => {
+    if (error) {
+      prom.reject(error);
+    } else if (newToken) {
+      prom.resolve(newToken);
+    }
+  });
+  pendingQueue = [];
+};
+import type { TrafficData, VacationRequest, Document, TrafficFolder, TrafficDocument, PayrollDocument, PayrollStats, User, DietaRecord } from '../types';
+
+// Usar variable de entorno en Vite para configurar el backend en dev/prod
+const envUrl = (import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined;
+export const API_BASE_URL = envUrl && envUrl.trim() !== ''
+  ? envUrl
+  : (typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:8000');
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -10,12 +30,70 @@ const api = axios.create({
   },
 });
 
-export const dashboardAPI = {
-  getStats: (): Promise<DashboardStats> => 
-    api.get('/api/dashboard/stats').then(res => res.data),
-  getRecentActivity: (): Promise<{ activities: Activity[] }> => 
-    api.get('/api/dashboard/recent-activity').then(res => res.data),
-};
+// Interceptor para agregar el token de autenticación
+api.interceptors.request.use((config) => {
+  const token = localStorage.getItem('access_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
+// Interceptor de respuesta para manejar expiración (401)
+api.interceptors.response.use(
+  (response) => response,
+  async (error: AxiosError) => {
+    const originalRequest = error.config as InternalAxiosRequestConfig & { _retry?: boolean };
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      // Evitar reintentos múltiples simultáneos
+      if (isRefreshing) {
+        return new Promise((resolve, reject) => {
+          pendingQueue.push({
+            resolve: (token: string) => {
+              if (originalRequest.headers) originalRequest.headers.Authorization = `Bearer ${token}`;
+              resolve(api(originalRequest));
+            },
+            reject
+          });
+        });
+      }
+      originalRequest._retry = true;
+      isRefreshing = true;
+      try {
+        const currentToken = localStorage.getItem('access_token');
+        if (!currentToken) throw error;
+        const refreshRes = await fetch(`${API_BASE_URL}/api/auth/refresh`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${currentToken}` }
+        });
+        if (!refreshRes.ok) {
+          throw error;
+        }
+        const data = await refreshRes.json();
+        localStorage.setItem('access_token', data.access_token);
+        localStorage.setItem('user_data', JSON.stringify(data.user));
+        processQueue(null, data.access_token);
+        if (originalRequest.headers) originalRequest.headers.Authorization = `Bearer ${data.access_token}`;
+        return api(originalRequest);
+      } catch (err) {
+        processQueue(err, null);
+        // Limpiar credenciales y redirigir a login
+        localStorage.removeItem('access_token');
+        localStorage.removeItem('user_data');
+        if (typeof window !== 'undefined') {
+          // Evitar múltiples redirecciones
+          if (!window.location.pathname.includes('login')) {
+            window.location.replace('/login');
+          }
+        }
+        return Promise.reject(err);
+      } finally {
+        isRefreshing = false;
+      }
+    }
+    return Promise.reject(error);
+  }
+);
 
 export const trafficAPI = {
   getTrafficData: (): Promise<TrafficData[]> => 
@@ -48,6 +126,55 @@ export const trafficAPI = {
     api.delete(`/api/traffic/documents/${id}`).then(res => res.data),
 };
 
+// Nueva API para el sistema de archivos de Traffic
+export const trafficFilesAPI = {
+  // Obtener carpetas
+  getFolders: (path?: string) => {
+    const queryParams = path ? `?path=${encodeURIComponent(path)}` : '';
+    return api.get(`/api/traffic/folders${queryParams}`).then(res => res.data);
+  },
+  
+  // Crear carpeta
+  createFolder: (name: string, path?: string) => {
+    return api.post('/api/traffic/folders', { name, path }).then(res => res.data);
+  },
+  
+  // Obtener archivos
+  getFiles: (path?: string) => {
+    const queryParams = path ? `?path=${encodeURIComponent(path)}` : '';
+    return api.get(`/api/traffic/files${queryParams}`).then(res => res.data);
+  },
+  
+  // Subir archivos
+  uploadFiles: (files: File[], targetPath?: string) => {
+    const formData = new FormData();
+    files.forEach(file => formData.append('files', file));
+    if (targetPath) {
+      formData.append('target_path', targetPath);
+    }
+    return api.post('/api/traffic/upload', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }).then(res => res.data);
+  },
+  
+  // Descargar archivo
+  downloadFile: (relativePath: string) => {
+    return api.get(`/api/traffic/download/${encodeURIComponent(relativePath)}`, {
+      responseType: 'blob'
+    });
+  },
+  
+  // Eliminar archivo
+  deleteFile: (relativePath: string) => {
+    return api.delete(`/api/traffic/files?path=${encodeURIComponent(relativePath)}`).then(res => res.data);
+  },
+  
+  // Eliminar carpeta
+  deleteFolder: (relativePath: string) => {
+    return api.delete(`/api/traffic/folders/${encodeURIComponent(relativePath)}`).then(res => res.data);
+  }
+};
+
 export const vacationsAPI = {
   getVacationRequests: (): Promise<VacationRequest[]> => 
     api.get('/api/vacations/').then(res => res.data),
@@ -72,6 +199,14 @@ export const documentsAPI = {
     api.get(`/api/documents/category/${category}`).then(res => res.data),
   getStats: () => 
     api.get('/api/documents/stats/summary').then(res => res.data),
+  // Subir documentos generales (visibles para todos)
+  uploadGeneralDocuments: (file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post('/api/documents/upload-general-documents', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }).then(res => res.data);
+  }
 };
 
 export const payrollAPI = {
@@ -134,7 +269,37 @@ export const payrollAPI = {
       return api.post('/api/payroll/admin/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       }).then(res => res.data);
+    },
+
+    // Procesar PDF con múltiples nóminas (solo admin)
+    processMultiplePayrolls: (file: File, monthYear: string) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('month_year', monthYear);
+      return api.post('/api/payroll/process-multiple-payrolls', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      }).then(res => res.data);
     }
+  },
+
+  // Procesar PDF con múltiples nóminas (solo admin)
+  processPayrollPDF: (file: File, monthYear: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('month_year', monthYear);
+    return api.post('/api/payroll/process-payroll-pdf', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }).then(res => res.data);
+  },
+
+  // Procesar PDF con múltiples dietas (solo admin)
+  processDietasPDF: (file: File, monthYear: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('month_year', monthYear);
+    return api.post('/api/payroll/process-multiple-dietas', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }).then(res => res.data);
   }
 };
 
@@ -252,9 +417,10 @@ export const usersAPI = {
     last_name: string;
     email: string;
     phone?: string;
-    role: 'ADMIN' | 'MANAGER' | 'EMPLOYEE';
+    role: 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR';
     department: string;
     position?: string;
+  worker_type?: 'antiguo' | 'nuevo';
     hire_date?: string;
     birth_date?: string;
     address?: string;
@@ -284,6 +450,7 @@ export const usersAPI = {
     postal_code: string;
     emergency_contact_name: string;
     emergency_contact_phone: string;
+  worker_type: 'antiguo' | 'nuevo';
   }>) => api.put(`/api/users/${id}`, userData).then(res => res.data),
 
   // Desactivar usuario (soft delete)
@@ -306,5 +473,172 @@ export const usersAPI = {
 
   // Obtener estadísticas de usuarios
   getUserStats: () => 
-    api.get('/api/users/stats').then(res => res.data),
+  // Endpoint corregido: el backend expone /api/users/stats/summary
+  api.get('/api/users/stats/summary').then(res => res.data),
+};
+
+// API Dietas
+export const dietasAPI = {
+  createRecord: (data: {
+    user_id: number;
+    worker_type: string;
+    order_number?: string;
+    month: string;
+    total_amount: number;
+    concepts: { code: string; label: string; quantity: number; rate: number; subtotal: number; }[];
+    notes?: string;
+  }): Promise<DietaRecord> => api.post('/api/dietas/', data).then(r=>r.data),
+  list: (params?: { user_id?: number; start_month?: string; end_month?: string; start_date?: string; end_date?: string; worker_type?: string; order_number?: string; }) => {
+    const sp = new URLSearchParams();
+    if (params?.user_id) sp.append('user_id', String(params.user_id));
+    // Compatibilidad anterior
+    if (params?.start_month) sp.append('start_date', params.start_month);
+    if (params?.end_month) sp.append('end_date', params.end_month);
+    if (params?.start_date) sp.append('start_date', params.start_date);
+    if (params?.end_date) sp.append('end_date', params.end_date);
+    if (params?.worker_type) sp.append('worker_type', params.worker_type);
+    if (params?.order_number) sp.append('order_number', params.order_number);
+    return api.get(`/api/dietas/?${sp.toString()}`).then(r=>r.data as DietaRecord[]);
+  },
+  get: (id: number): Promise<DietaRecord> => api.get(`/api/dietas/${id}`).then(r=>r.data)
+};
+
+// API Distancieros
+export const distancierosAPI = {
+  listGrouped: (active?: boolean) => {
+    const sp = new URLSearchParams();
+    if (active !== undefined) sp.append('active', String(active));
+    return api.get(`/api/distancieros/grouped?${sp.toString()}`).then(r=>r.data as { client_name:string; total_routes:number; active_routes:number; min_km:number; max_km:number; }[]);
+  },
+  listRoutes: (clientName: string, params?: { onlyActive?: boolean; q?: string; limit?: number; offset?: number; }) => {
+    const sp = new URLSearchParams();
+    if (params?.onlyActive !== undefined) sp.append('only_active', String(params.onlyActive));
+    if (params?.q) sp.append('q', params.q);
+    if (params?.limit) sp.append('limit', String(params.limit));
+    if (params?.offset) sp.append('offset', String(params.offset));
+    return api.get(`/api/distancieros/${encodeURIComponent(clientName)}/routes?${sp.toString()}`).then(r=>r.data as { total:number; items:{ id:number; client_name:string; destination:string; destination_normalized:string; km:number; active:boolean; notes?:string; created_at:string; updated_at:string; }[]; limit:number; offset:number });
+  },
+  create: (data: { client_name:string; destination:string; km:number; active?:boolean; notes?:string; }) => api.post('/api/distancieros/', data).then(r=>r.data),
+  update: (id:number, data: Partial<{ client_name:string; destination:string; km:number; active:boolean; notes:string; }>) => api.put(`/api/distancieros/${id}`, data).then(r=>r.data),
+  remove: (id:number) => api.delete(`/api/distancieros/${id}`).then(r=>r.data)
+};
+
+// API para archivos de usuario
+export const userFilesAPI = {
+  // Obtener documentos de una carpeta específica
+  getUserDocuments: (folderType: string) => 
+    api.get(`/api/user-files/user-documents/${folderType}`).then(res => res.data),
+    
+  // Descargar un archivo
+  downloadFile: (dniNie: string, folderType: string, filename: string) => 
+    `${API_BASE_URL}/api/user-files/download/${dniNie}/${folderType}/${filename}`,
+
+  // Descarga directa de archivo con autenticación
+  downloadFileBlob: async (downloadUrl: string): Promise<Blob> => {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      throw new Error('Token de autenticación no encontrado');
+    }
+
+    const response = await fetch(`${API_BASE_URL}${downloadUrl}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error('Error al descargar el archivo');
+    }
+
+    return response.blob();
+  },
+    
+  // Subir un archivo
+  uploadFile: (folderType: string, file: File) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    return api.post(`/api/user-files/upload/${folderType}`, formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    }).then(res => res.data);
+  },
+  
+  // Eliminar un archivo
+  deleteFile: (folderType: string, filename: string) => 
+    api.delete(`/api/user-files/delete/${folderType}/${filename}`).then(res => res.data),
+    
+  // Obtener estadísticas de carpetas
+  getFolderStats: () => 
+    api.get('/api/user-files/folder-stats').then(res => res.data),
+
+  // Historial de subidas
+  getUploadHistory: (params?: {
+    skip?: number;
+    limit?: number;
+    document_type?: string;
+    status?: string;
+    year?: string;
+  }) => {
+    const searchParams = new URLSearchParams();
+    if (params?.skip) searchParams.append('skip', params.skip.toString());
+    if (params?.limit) searchParams.append('limit', params.limit.toString());
+    if (params?.document_type) searchParams.append('document_type', params.document_type);
+    if (params?.status) searchParams.append('status', params.status);
+    if (params?.year) searchParams.append('year', params.year);
+    
+    return api.get(`/api/user-files/upload-history?${searchParams.toString()}`).then(res => res.data);
+  },
+
+  createUploadHistory: (historyItem: any) => 
+    api.post('/api/user-files/upload-history', historyItem).then(res => res.data),
+
+  updateUploadHistory: (historyId: number, status: string, successfulPages?: number, failedPages?: number) => {
+    const data: any = { status };
+    if (successfulPages !== undefined) data.successful_pages = successfulPages;
+    if (failedPages !== undefined) data.failed_pages = failedPages;
+    return api.put(`/api/user-files/upload-history/${historyId}`, data).then(res => res.data);
+  },
+
+  // APIs de administrador
+  admin: {
+    // Obtener todos los usuarios y sus documentos
+    getAllUsersDocuments: () => 
+      api.get('/api/user-files/admin/all-users-documents').then(res => res.data),
+    
+    // Obtener documentos de un usuario específico
+    getUserDocuments: (dniNie: string) => 
+      api.get(`/api/user-files/admin/user/${dniNie}/documents`).then(res => res.data),
+  }
+};
+
+export interface TripRecord {
+  id: number;
+  order_number: string;
+  pernocta: boolean;
+  festivo: boolean;
+  event_date: string; // YYYY-MM-DD
+  note?: string;
+  created_at: string;
+  user_id: number;
+  user_name?: string;
+}
+
+export interface TripPage { total: number; page: number; page_size: number; items: TripRecord[] }
+
+export const tripsAPI = {
+  create: (data: { order_number: string; pernocta: boolean; festivo: boolean; event_date: string; note?: string; }): Promise<TripRecord> =>
+    api.post('/api/trips/', data).then(r=>r.data),
+  listAll: (params?: { user_id?: number; start?: string; end?: string; page?: number; page_size?: number; }): Promise<TripPage> => {
+    const sp = new URLSearchParams();
+    if (params?.user_id) sp.append('user_id', String(params.user_id));
+    if (params?.start) sp.append('start', params.start);
+    if (params?.end) sp.append('end', params.end);
+    if (params?.page) sp.append('page', String(params.page));
+    if (params?.page_size) sp.append('page_size', String(params.page_size));
+    return api.get(`/api/trips/?${sp.toString()}`).then(r=>r.data as TripPage);
+  },
+  listMine: (): Promise<TripRecord[]> => api.get('/api/trips/mine').then(r=>r.data),
+  remove: (id: number) => api.delete(`/api/trips/${id}`).then(r=>r.data),
+  userSuggestions: (q: string): Promise<{ id:number; label:string; role:string; }[]> =>
+    api.get('/api/trips/user-suggestions', { params: { q } }).then(r=>r.data)
 };

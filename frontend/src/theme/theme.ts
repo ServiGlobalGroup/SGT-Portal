@@ -3,9 +3,9 @@ import { createTheme } from '@mui/material/styles';
 // Colores principales
 const colors = {
   primary: {
-    main: '#1565C0',
-    light: '#42A5F5',
-    dark: '#0D47A1',
+    main: '#501b36',
+    light: '#7d2d52',
+    dark: '#3d1429',
     contrastText: '#ffffff',
   },
   secondary: {
@@ -26,7 +26,7 @@ const colors = {
 
 // Gradientes personalizados
 const gradients = {
-  primary: 'linear-gradient(135deg, #1565C0 0%, #42A5F5 100%)',
+  primary: 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 70%, #501b36 100%)',
   secondary: 'linear-gradient(135deg, #455A64 0%, #78909C 100%)',
   success: 'linear-gradient(135deg, #2E7D32 0%, #66BB6A 100%)',
   warning: 'linear-gradient(135deg, #F57C00 0%, #FFB74D 100%)',
@@ -135,28 +135,37 @@ const theme = createTheme({
     MuiButton: {
       styleOverrides: {
         root: {
-          borderRadius: 6,
-          fontWeight: 500,
-          textTransform: 'uppercase',
+          borderRadius: 20,
+          fontWeight: 700,
+          textTransform: 'none',
           fontSize: '0.875rem',
-          letterSpacing: '0.5px',
-          transition: 'all 0.2s ease',
+          letterSpacing: '0.2px',
+          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           boxShadow: 'none',
-          '&:hover': {
-            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-          },
         },
         contained: {
-          boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+          background: 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 70%, #501b36 100%)',
+          color: '#fff',
+          boxShadow: '0 4px 12px rgba(80,27,54,0.3), 0 2px 4px rgba(80,27,54,0.2)',
           '&:hover': {
-            boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+            background: 'linear-gradient(135deg, #3d1429 0%, #5a1d3a 30%, #6b2545 70%, #3d1429 100%)',
+            boxShadow: '0 6px 16px rgba(80,27,54,0.4), 0 2px 8px rgba(80,27,54,0.3)',
+            transform: 'translateY(-1px)',
+          },
+          '&.Mui-disabled': {
+            background: 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 70%, #501b36 100%)',
+            color: '#fff',
+            opacity: 0.6,
           },
         },
         outlined: {
           borderWidth: '1.5px',
+          borderColor: '#501b36',
+          color: '#501b36',
           '&:hover': {
             borderWidth: '1.5px',
-            backgroundColor: 'rgba(0,0,0,0.04)',
+            backgroundColor: 'rgba(80,27,54,0.06)',
+            borderColor: '#3d1429',
           },
         },
       },

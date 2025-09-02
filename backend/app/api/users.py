@@ -66,7 +66,7 @@ async def get_users(
     
     # Filtrar por activos si se solicita
     if active_only:
-        users = [user for user in users if user.is_active]
+        users = [user for user in users if bool(user.is_active)]
     
     # Aplicar paginación si no es una búsqueda
     if not search and not department and not role:
@@ -78,8 +78,11 @@ async def get_users(
     
     total_pages = math.ceil(total_users / per_page)
     
+    # Convertir a esquema UserList si es necesario
+    from app.models.user_schemas import UserList as UserListSchema
+    users_schema = [UserListSchema.model_validate(u, from_attributes=True) for u in paginated_users]
     return UserListResponse(
-        users=paginated_users,
+        users=users_schema,
         total=total_users,
         page=page,
         per_page=per_page,
@@ -160,10 +163,11 @@ async def delete_user_permanently(
     """
     success = UserService.delete_user_permanently(db, user_id)
     if not success:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario no encontrado"
-        )
+        # Comprobar si existe usuario para diferenciar error
+        user = UserService.get_user_by_id(db, user_id)
+        if user:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No se puede eliminar: usuario tiene dietas asociadas")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
 
 @router.patch("/users/{user_id}/toggle-status", response_model=UserResponse)
 async def toggle_user_status(
@@ -181,7 +185,7 @@ async def toggle_user_status(
         )
     
     # Alternar estado
-    if user.is_active:
+    if bool(user.is_active):
         success = UserService.delete_user(db, user_id)  # Desactivar
     else:
         success = UserService.activate_user(db, user_id)  # Activar
@@ -226,6 +230,10 @@ async def change_user_password(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail="Error al cambiar la contraseña"
             )
+        
+        # Forzar cambio de contraseña en el próximo login
+        setattr(user, 'must_change_password', True)
+        db.commit()
         
         return {"message": "Contraseña cambiada exitosamente"}
     except Exception as e:
@@ -293,7 +301,7 @@ async def get_user_stats(db: Session = Depends(get_db)):
     Obtener estadísticas generales de usuarios.
     """
     total_users = len(UserService.get_all_users(db))
-    active_users = len([u for u in UserService.get_all_users(db) if u.is_active])
+    active_users = len([u for u in UserService.get_all_users(db) if bool(u.is_active)])
     
     # Estadísticas por departamento
     departments = {}

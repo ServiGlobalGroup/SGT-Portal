@@ -1,0 +1,111 @@
+/* Estilos adicionales para asegurar funcionalidad completa de los inputs */
+
+/* Reset básico para inputs */
+input, textarea, select {
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  user-select: text !important;
+  
+  -webkit-touch-callout: default !important;
+  -webkit-tap-highlight-color: transparent;
+  
+  outline: none;
+  border: none;
+  background: transparent;
+}
+
+/* Asegurar que los campos MUI sean seleccionables */
+.MuiInputBase-input {
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  user-select: text !important;
+  
+  pointer-events: auto !important;
+  cursor: text !important;
+}
+
+/* Inputs en foco */
+.MuiInputBase-input:focus {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Inputs deshabilitados */
+.MuiInputBase-input:disabled {
+  -webkit-text-fill-color: rgba(0, 0, 0, 0.6) !important;
+  cursor: not-allowed !important;
+}
+
+/* Autocompletado del navegador */
+.MuiInputBase-input:-webkit-autofill,
+.MuiInputBase-input:-webkit-autofill:hover,
+.MuiInputBase-input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0px 1000px white inset !important;
+  -webkit-text-fill-color: #000 !important;
+  border-radius: 4px !important;
+}
+
+/* Placeholders */
+.MuiInputBase-input::placeholder {
+  color: rgba(0, 0, 0, 0.6) !important;
+  opacity: 1 !important;
+}
+
+/* Botones */
+.MuiButton-root {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+}
+
+.MuiButton-root:disabled {
+  cursor: not-allowed !important;
+}
+
+/* IconButtons */
+.MuiIconButton-root {
+  cursor: pointer !important;
+  pointer-events: auto !important;
+}
+
+.MuiIconButton-root:disabled {
+  cursor: not-allowed !important;
+}
+
+/* Asegurar que los labels sean clickeables */
+.MuiFormLabel-root {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+/* Contenedores de input */
+.MuiOutlinedInput-root {
+  cursor: text !important;
+  pointer-events: auto !important;
+}
+
+.MuiOutlinedInput-root:hover {
+  cursor: text !important;
+}
+
+/* Animaciones suaves */
+.MuiInputBase-root {
+  transition: all 0.2s ease-in-out !important;
+}
+
+/* Scroll suave */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Selección de texto personalizada */
+::selection {
+  background-color: #501b36;
+  color: white;
+}
+
+::-moz-selection {
+  background-color: #501b36;
+  color: white;
+}

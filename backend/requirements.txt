@@ -9,3 +9,4 @@ python-jose[cryptography]
 passlib[bcrypt]
 python-dotenv
 pydantic-settings
+PyMuPDF==1.23.26

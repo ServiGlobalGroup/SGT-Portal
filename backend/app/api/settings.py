@@ -1,272 +1,204 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
+from typing import Optional
 from datetime import datetime
+from app.database.connection import get_db
+from app.api.auth import get_current_user
+from app.models.user import User, MasterAdminUser
+import os
+import json
 
 router = APIRouter()
 
-# Modelos de configuración
-class SystemConfig(BaseModel):
-    app_name: str = "Portal Grupo SGT"
-    company_name: str = "Grupo SGT"
-    dark_mode: bool = False
-    language: str = "es"
-    timezone: str = "Europe/Madrid"
-    date_format: str = "DD/MM/YYYY"
-    allow_registration: bool = False
-    maintenance_mode: bool = False
-    debug_mode: bool = False
+# Archivo para almacenar el estado de mantenimiento
+MAINTENANCE_FILE = "maintenance_status.json"
 
-class EmailConfig(BaseModel):
-    smtp_server: str = ""
-    smtp_port: str = "587"
-    smtp_user: str = ""
-    smtp_password: str = ""
-    enable_email_notifications: bool = True
-    order_notifications: bool = True
-    vacation_notifications: bool = True
+class MaintenanceConfig(BaseModel):
+    maintenance_mode: bool
+    maintenance_message: Optional[str] = "Sistema en mantenimiento. Por favor, intente más tarde."
+    maintenance_start: Optional[datetime] = None
+    maintenance_end: Optional[datetime] = None
 
-class StorageConfig(BaseModel):
-    max_file_size: str = "50"  # MB
-    max_total_storage: str = "10"  # GB
-    allowed_extensions: List[str] = ["pdf", "doc", "docx", "xls", "xlsx", "jpg", "png"]
-    auto_backup: bool = True
-    backup_frequency: str = "daily"
-    retention_days: str = "365"
+class SystemStats(BaseModel):
+    app_name: str = "Portal SGT"
+    version: str = "1.0.0"
+    uptime: str
+    total_users: int
+    active_sessions: int
+    maintenance_mode: bool
+    last_backup: Optional[str] = None
 
-class SecurityConfig(BaseModel):
-    password_min_length: int = 8
-    require_uppercase: bool = True
-    require_numbers: bool = True
-    require_special_chars: bool = True
-    session_timeout: int = 30  # minutos
-    two_factor_auth: bool = False
-    login_attempts: int = 5
-    lockout_time: int = 15  # minutos
+def load_maintenance_config():
+    """Cargar configuración de mantenimiento desde archivo"""
+    try:
+        if os.path.exists(MAINTENANCE_FILE):
+            with open(MAINTENANCE_FILE, 'r') as f:
+                data = json.load(f)
+                return MaintenanceConfig(**data)
+    except Exception:
+        pass
+    return MaintenanceConfig(maintenance_mode=False)
 
-class ConfigUpdate(BaseModel):
-    section: str
-    config: Dict[str, Any]
+def save_maintenance_config(config: MaintenanceConfig):
+    """Guardar configuración de mantenimiento en archivo"""
+    try:
+        with open(MAINTENANCE_FILE, 'w') as f:
+            json.dump(config.dict(), f, indent=2, default=str)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error guardando configuración: {str(e)}")
 
-# Datos simulados de configuración (en una implementación real estarían en la base de datos)
-settings_data = {
-    "system": {
-        "app_name": "Portal Grupo SGT",
-        "company_name": "Grupo SGT",
-        "dark_mode": False,
-        "language": "es",
-        "timezone": "Europe/Madrid",
-        "date_format": "DD/MM/YYYY",
-        "allow_registration": False,
-        "maintenance_mode": False,
-        "debug_mode": False,
-        "updated_at": "2025-07-14T15:30:00Z"
-    },
-    "email": {
-        "smtp_server": "",
-        "smtp_port": "587",
-        "smtp_user": "",
-        "smtp_password": "",
-        "enable_email_notifications": True,
-        "order_notifications": True,
-        "vacation_notifications": True,
-        "updated_at": "2025-07-14T15:30:00Z"
-    },
-    "storage": {
-        "max_file_size": "50",
-        "max_total_storage": "10",
-        "allowed_extensions": ["pdf", "doc", "docx", "xls", "xlsx", "jpg", "png"],
-        "auto_backup": True,
-        "backup_frequency": "daily",
-        "retention_days": "365",
-        "updated_at": "2025-07-14T15:30:00Z"
-    },
-    "security": {
-        "password_min_length": 8,
-        "require_uppercase": True,
-        "require_numbers": True,
-        "require_special_chars": True,
-        "session_timeout": 30,
-        "two_factor_auth": False,
-        "login_attempts": 5,
-        "lockout_time": 15,
-        "updated_at": "2025-07-14T15:30:00Z"
-    }
-}
+def is_master_admin(user) -> bool:
+    """Verificar si el usuario es el administrador maestro"""
+    return isinstance(user, MasterAdminUser)
 
-@router.get("/settings")
-async def get_all_settings():
+@router.get("/settings", response_model=dict)
+async def get_system_settings(current_user: User | MasterAdminUser = Depends(get_current_user)):
     """
-    Obtener todas las configuraciones del sistema
+    Obtener configuración del sistema - SOLO para usuario maestro
     """
-    return {
-        "system": settings_data["system"],
-        "email": {**settings_data["email"], "smtp_password": "••••••••"},  # Ocultar contraseña
-        "storage": settings_data["storage"],
-        "security": settings_data["security"]
-    }
-
-@router.get("/settings/{section}")
-async def get_settings_section(section: str):
-    """
-    Obtener configuración de una sección específica
-    """
-    if section not in settings_data:
-        raise HTTPException(status_code=404, detail=f"Sección '{section}' no encontrada")
+    if not is_master_admin(current_user):
+        raise HTTPException(status_code=403, detail="Acceso denegado. Solo el usuario maestro puede acceder a la configuración.")
     
-    config = settings_data[section].copy()
-    # Ocultar contraseñas sensibles
-    if section == "email" and "smtp_password" in config:
-        config["smtp_password"] = "••••••••"
-    
-    return config
-
-@router.put("/settings/{section}")
-async def update_settings_section(section: str, config_update: Dict[str, Any]):
-    """
-    Actualizar configuración de una sección específica
-    """
-    if section not in settings_data:
-        raise HTTPException(status_code=404, detail=f"Sección '{section}' no encontrada")
-    
-    # Actualizar solo los campos proporcionados
-    for key, value in config_update.items():
-        if key in settings_data[section]:
-            settings_data[section][key] = value
-    
-    # Actualizar timestamp
-    settings_data[section]["updated_at"] = datetime.now().isoformat()
+    maintenance_config = load_maintenance_config()
     
     return {
-        "message": f"Configuración de {section} actualizada correctamente",
-        "updated_at": settings_data[section]["updated_at"]
-    }
-
-@router.post("/settings/test-email")
-async def test_email_config():
-    """
-    Enviar email de prueba para verificar configuración
-    """
-    # En una implementación real, se enviaría un email usando la configuración SMTP
-    return {
-        "message": "Email de prueba enviado correctamente",
-        "timestamp": datetime.now().isoformat(),
-        "recipient": settings_data["email"]["smtp_user"]
-    }
-
-@router.post("/settings/backup")
-async def create_system_backup():
-    """
-    Crear backup del sistema
-    """
-    # En una implementación real, se crearía un backup real del sistema
-    backup_id = f"backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    return {
-        "message": "Backup creado correctamente",
-        "backup_id": backup_id,
-        "timestamp": datetime.now().isoformat(),
-        "size": "2.5 GB"
-    }
-
-@router.post("/settings/clear-cache")
-async def clear_system_cache():
-    """
-    Limpiar caché del sistema
-    """
-    # En una implementación real, se limpiaría la caché
-    return {
-        "message": "Caché del sistema limpiada correctamente",
-        "timestamp": datetime.now().isoformat(),
-        "cleared_items": 1247
-    }
-
-@router.post("/settings/reset")
-async def reset_system_settings():
-    """
-    Restablecer configuración del sistema a valores por defecto
-    """
-    global settings_data
-    
-    # Restablecer a valores por defecto
-    settings_data = {
+        "maintenance": {
+            "maintenance_mode": maintenance_config.maintenance_mode,
+            "maintenance_message": maintenance_config.maintenance_message,
+            "maintenance_start": maintenance_config.maintenance_start,
+            "maintenance_end": maintenance_config.maintenance_end
+        },
         "system": {
-            "app_name": "Portal Grupo SGT",
-            "company_name": "Grupo SGT",
-            "dark_mode": False,
-            "language": "es",
-            "timezone": "Europe/Madrid",
-            "date_format": "DD/MM/YYYY",
-            "allow_registration": False,
-            "maintenance_mode": False,
-            "debug_mode": False,
-            "updated_at": datetime.now().isoformat()
-        },
-        "email": {
-            "smtp_server": "",
-            "smtp_port": "587",
-            "smtp_user": "",
-            "smtp_password": "",
-            "enable_email_notifications": True,
-            "order_notifications": True,
-            "vacation_notifications": True,
-            "updated_at": datetime.now().isoformat()
-        },
-        "storage": {
-            "max_file_size": "50",
-            "max_total_storage": "10",
-            "allowed_extensions": ["pdf", "doc", "docx", "xls", "xlsx", "jpg", "png"],
-            "auto_backup": True,
-            "backup_frequency": "daily",
-            "retention_days": "365",
-            "updated_at": datetime.now().isoformat()
-        },
-        "security": {
-            "password_min_length": 8,
-            "require_uppercase": True,
-            "require_numbers": True,
-            "require_special_chars": True,
-            "session_timeout": 30,
-            "two_factor_auth": False,
-            "login_attempts": 5,
-            "lockout_time": 15,
-            "updated_at": datetime.now().isoformat()
+            "app_name": "Portal SGT",
+            "version": "1.0.0",
+            "environment": "production",
+            "debug_mode": False
         }
     }
+
+@router.post("/settings/maintenance", response_model=dict)
+async def toggle_maintenance_mode(
+    maintenance_config: MaintenanceConfig,
+    current_user: User | MasterAdminUser = Depends(get_current_user)
+):
+    """
+    Activar/Desactivar modo de mantenimiento - SOLO para usuario maestro
+    """
+    if not is_master_admin(current_user):
+        raise HTTPException(status_code=403, detail="Acceso denegado. Solo el usuario maestro puede cambiar el modo de mantenimiento.")
+    
+    # Actualizar timestamps
+    if maintenance_config.maintenance_mode:
+        maintenance_config.maintenance_start = datetime.now()
+    else:
+        maintenance_config.maintenance_end = datetime.now()
+    
+    save_maintenance_config(maintenance_config)
+    
+    action = "activado" if maintenance_config.maintenance_mode else "desactivado"
     
     return {
-        "message": "Configuración del sistema restablecida correctamente",
-        "timestamp": datetime.now().isoformat()
+        "message": f"Modo de mantenimiento {action} correctamente",
+        "maintenance_mode": maintenance_config.maintenance_mode,
+        "timestamp": datetime.now().isoformat(),
+        "changed_by": "Usuario Maestro"
     }
 
-@router.get("/settings/export")
-async def export_settings():
+@router.get("/settings/maintenance/status")
+async def get_maintenance_status():
     """
-    Exportar toda la configuración del sistema
+    Obtener estado de mantenimiento - Endpoint público para verificar el estado
     """
-    export_data = settings_data.copy()
-    # Ocultar información sensible
-    if "email" in export_data and "smtp_password" in export_data["email"]:
-        export_data["email"]["smtp_password"] = "••••••••"
+    maintenance_config = load_maintenance_config()
     
     return {
-        "settings": export_data,
-        "exported_at": datetime.now().isoformat(),
-        "version": "1.0"
+        "maintenance_mode": maintenance_config.maintenance_mode,
+        "maintenance_message": maintenance_config.maintenance_message,
+        "maintenance_start": maintenance_config.maintenance_start,
+        "maintenance_end": maintenance_config.maintenance_end
     }
 
-@router.get("/settings/system-info")
-async def get_system_info():
+@router.get("/settings/system-stats", response_model=dict)
+async def get_system_stats(
+    current_user: User | MasterAdminUser = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     """
-    Obtener información del sistema
+    Obtener estadísticas del sistema - SOLO para usuario maestro
     """
+    if not is_master_admin(current_user):
+        raise HTTPException(status_code=403, detail="Acceso denegado. Solo el usuario maestro puede ver las estadísticas del sistema.")
+    
+    maintenance_config = load_maintenance_config()
+    
+    # Obtener número total de usuarios (consulta a la base de datos)
+    from app.models.user import User as UserModel
+    total_users = db.query(UserModel).count()
+    
     return {
-        "version": "1.0.0",
-        "uptime": "5 días, 12 horas",
-        "database_size": "156 MB",
-        "total_users": 25,
-        "active_sessions": 8,
-        "storage_used": "2.3 GB",
-        "storage_available": "7.7 GB",
-        "last_backup": "2025-07-13T02:00:00Z",
-        "system_health": "Óptimo"
+        "system": {
+            "app_name": "Portal SGT",
+            "version": "1.0.0",
+            "maintenance_mode": maintenance_config.maintenance_mode,
+            "uptime": "Sistema operativo",
+            "environment": "production"
+        },
+        "users": {
+            "total_users": total_users,
+            "active_sessions": 1,  # En una implementación real se consultarían las sesiones activas
+            "master_admin_access": True
+        },
+        "storage": {
+            "total_space": "100 GB",
+            "used_space": "2.5 GB", 
+            "available_space": "97.5 GB"
+        },
+        "security": {
+            "last_backup": "N/A",
+            "system_health": "Óptimo",
+            "security_level": "Máximo"
+        }
+    }
+
+@router.post("/settings/emergency-shutdown", response_model=dict)
+async def emergency_shutdown(current_user: User | MasterAdminUser = Depends(get_current_user)):
+    """
+    Cierre de emergencia del sistema - SOLO para usuario maestro
+    """
+    if not is_master_admin(current_user):
+        raise HTTPException(status_code=403, detail="Acceso denegado. Solo el usuario maestro puede realizar un cierre de emergencia.")
+    
+    # Activar modo de mantenimiento inmediatamente
+    emergency_config = MaintenanceConfig(
+        maintenance_mode=True,
+        maintenance_message="Sistema temporalmente fuera de servicio por mantenimiento de emergencia. Contacte al administrador.",
+        maintenance_start=datetime.now()
+    )
+    
+    save_maintenance_config(emergency_config)
+    
+    return {
+        "message": "Sistema puesto en modo de mantenimiento de emergencia",
+        "maintenance_mode": True,
+        "timestamp": datetime.now().isoformat(),
+        "action_by": "Usuario Maestro - Cierre de Emergencia"
+    }
+
+@router.delete("/settings/reset-all", response_model=dict)
+async def reset_system_settings(current_user: User | MasterAdminUser = Depends(get_current_user)):
+    """
+    Restablecer todas las configuraciones del sistema - SOLO para usuario maestro
+    """
+    if not is_master_admin(current_user):
+        raise HTTPException(status_code=403, detail="Acceso denegado. Solo el usuario maestro puede restablecer el sistema.")
+    
+    # Restablecer modo de mantenimiento
+    default_config = MaintenanceConfig(maintenance_mode=False)
+    save_maintenance_config(default_config)
+    
+    return {
+        "message": "Sistema restablecido correctamente. Modo de mantenimiento desactivado.",
+        "timestamp": datetime.now().isoformat(),
+        "reset_by": "Usuario Maestro"
     }

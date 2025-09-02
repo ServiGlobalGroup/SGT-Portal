@@ -1,19 +1,32 @@
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 from typing import Optional
 from datetime import datetime
 from app.models.user import UserRole
+from app.utils.dni_validation import validate_dni_nie_format, sanitize_dni_nie_for_login
 
 # Esquemas base
 class UserBase(BaseModel):
     """Esquema base para usuario con campos comunes"""
-    dni_nie: str = Field(..., min_length=8, max_length=20, description="DNI o NIE")
+    dni_nie: str = Field(..., min_length=2, max_length=20, description="DNI o NIE")
     first_name: str = Field(..., min_length=2, max_length=100, description="Nombre")
     last_name: str = Field(..., min_length=2, max_length=100, description="Apellidos")
     email: EmailStr = Field(..., description="Email corporativo")
     phone: Optional[str] = Field(None, max_length=20, description="Teléfono")
     department: str = Field(..., min_length=2, max_length=100, description="Departamento")
     position: Optional[str] = Field(None, max_length=100, description="Puesto de trabajo")
-    role: UserRole = Field(default=UserRole.EMPLOYEE, description="Rol del usuario")
+    role: UserRole = Field(default=UserRole.TRABAJADOR, description="Rol del usuario")
+    worker_type: str = Field(default="antiguo", pattern="^(antiguo|nuevo)$", description="Clasificación del trabajador (antiguo/nuevo)")
+    
+    @field_validator('dni_nie')
+    @classmethod
+    def validate_dni_nie(cls, v: str) -> str:
+        """
+        Valida el formato del DNI/NIE con excepción para usuarios especiales.
+        """
+        v = sanitize_dni_nie_for_login(v)
+        if not validate_dni_nie_format(v):
+            raise ValueError('DNI/NIE no válido')
+        return v
 
 # Esquemas para creación
 class UserCreate(UserBase):
@@ -37,6 +50,7 @@ class UserUpdate(BaseModel):
     department: Optional[str] = Field(None, min_length=2, max_length=100)
     position: Optional[str] = Field(None, max_length=100)
     role: Optional[UserRole] = None
+    worker_type: Optional[str] = Field(None, pattern="^(antiguo|nuevo)$")
     hire_date: Optional[datetime] = None
     birth_date: Optional[datetime] = None
     address: Optional[str] = None
@@ -64,6 +78,7 @@ class UserResponse(UserBase):
     created_at: datetime
     updated_at: datetime
     last_login: Optional[datetime] = None
+    must_change_password: bool | None = False
     
     # Propiedades calculadas
     full_name: str = Field(..., description="Nombre completo")
@@ -81,6 +96,7 @@ class UserList(BaseModel):
     department: str
     position: Optional[str] = None
     role: UserRole
+    worker_type: str = Field(..., pattern="^(antiguo|nuevo)$")
     is_active: bool
     last_login: Optional[datetime] = None
     created_at: datetime
@@ -96,6 +112,14 @@ class UserLogin(BaseModel):
     """Esquema para login de usuario"""
     dni_nie: str = Field(..., description="DNI/NIE o email del usuario")
     password: str = Field(..., description="Contraseña")
+    
+    @field_validator('dni_nie')
+    @classmethod
+    def sanitize_dni_nie_login(cls, v: str) -> str:
+        """
+        Sanitiza el DNI/NIE para login, preservando usuarios especiales.
+        """
+        return sanitize_dni_nie_for_login(v)
 
 class Token(BaseModel):
     """Esquema para respuesta de token"""

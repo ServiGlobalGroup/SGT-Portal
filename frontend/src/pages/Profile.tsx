@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { DevelopmentModal } from '../components/DevelopmentModal';
 import {
   Box,
   Typography,
@@ -45,7 +46,7 @@ export const Profile: React.FC = () => {
     last_name: "",
     email: "",
     phone: "",
-    role: "",
+    role: "TRABAJADOR",
     department: "",
     position: "",
     hire_date: "",
@@ -64,6 +65,7 @@ export const Profile: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editedProfile, setEditedProfile] = useState<UserProfile>(userProfile);
   const [alert, setAlert] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+  const [showDevelopmentModal, setShowDevelopmentModal] = useState(true);
 
   // Funciones auxiliares
   const formatDate = (dateString: string): string => {
@@ -196,7 +198,7 @@ export const Profile: React.FC = () => {
                   size="small"
                   onClick={handleAvatarChange}
                   sx={{
-                    bgcolor: '#1565C0',
+                    bgcolor: '#501b36',
                     color: 'white',
                     '&:hover': { bgcolor: '#0d47a1' },
                     width: { xs: 28, sm: 32 },
@@ -209,7 +211,7 @@ export const Profile: React.FC = () => {
             >
               <Avatar
                 sx={{
-                  bgcolor: '#1565C0',
+                  bgcolor: '#501b36',
                   width: { xs: 80, sm: 120 },
                   height: { xs: 80, sm: 120 },
                   fontSize: { xs: '1.5rem', sm: '2.5rem' },
@@ -224,7 +226,7 @@ export const Profile: React.FC = () => {
             <Box>
               <Typography variant="h4" sx={{ 
                 fontWeight: 'bold', 
-                color: '#1565C0', 
+                color: '#501b36', 
                 mb: 1,
                 fontSize: { xs: '1.5rem', sm: '2.125rem' }
               }}>
@@ -656,6 +658,25 @@ export const Profile: React.FC = () => {
           </Button>
         </Box>
       )}
+
+      {/* Modal de desarrollo */}
+      <DevelopmentModal
+        open={showDevelopmentModal}
+        onClose={() => setShowDevelopmentModal(false)}
+        pageTitle="Perfil de Usuario"
+        description="Esta funcionalidad está siendo desarrollada para gestionar la información personal y laboral de los usuarios."
+        features={[
+          'Edición completa de datos personales',
+          'Gestión de información laboral',
+          'Cambio de avatar personalizado',
+          'Configuración de preferencias',
+          'Historial de cambios',
+          'Integración con LDAP/AD'
+        ]}
+        estimatedCompletion="Agosto 2025"
+        progressValue={90}
+        corporateColor="#501b36"
+      />
     </Box>
   );
 };

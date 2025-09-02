@@ -1,622 +1,348 @@
-import React, { useState, useEffect } from 'react';
-import {
-  Box,
-  Typography,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Chip,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  TextField,
-  IconButton,
-  Menu,
-  MenuItem as MenuItemComponent,
-  Alert,
-  Button,
-  Tooltip,
-  Badge,
-} from '@mui/material';
-import {
-  Assignment,
-  Email,
-  Search,
-  MoreVert,
-  Visibility,
-  Business,
-  Schedule,
-  PriorityHigh,
-  CheckCircle,
-  Pending,
-  Cancel,
-  HourglassTop,
-  AttachFile,
-  Refresh,
-  MailOutline,
-} from '@mui/icons-material';
-import { PdfPreview } from '../components/PdfPreview';
-import { ordersAPI } from '../services/api';
-import type { Order, OrderDocument } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
+import { Box, Typography, Paper, TextField, Button, Fade, GlobalStyles, Alert, Switch, FormControlLabel, Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Stack, IconButton, Tooltip, ToggleButtonGroup, ToggleButton, Pagination, Autocomplete, CircularProgress } from '@mui/material';
+import { WorkOutline, DeleteOutline } from '@mui/icons-material';
+import { useAuth } from '../hooks/useAuth';
+import { hasPermission, Permission } from '../utils/permissions';
+import { tripsAPI, type TripRecord } from '../services/api';
 
-export const Orders: React.FC = () => {
-  // Estados principales
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [orderDocuments, setOrderDocuments] = useState<OrderDocument[]>([]);
-  const [loading, setLoading] = useState(true);
+interface PernoctaEntry { id: string; orderNumber: string; pernocta: boolean; festivo: boolean; nota: string; createdAt: string; eventDate: string; userName: string; }
+
+export const Trips: React.FC = () => {
+  const { user } = useAuth();
+  const isAdmin = !!user && hasPermission(user, Permission.MANAGE_TRIPS);
+  const [orderNumber, setOrderNumber] = useState('');
+  const [pernocta, setPernocta] = useState(false);
+  const [festivo, setFestivo] = useState(false);
+  const [nota, setNota] = useState('');
+  const [eventDate, setEventDate] = useState<string>(new Date().toISOString().slice(0,10)); // YYYY-MM-DD
+  const [entries, setEntries] = useState<PernoctaEntry[]>([]);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [tab, setTab] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(25);
+  const [total, setTotal] = useState(0);
+  // Filtros admin
+  const [filterUserId, setFilterUserId] = useState<string>('');
+  const [filterStart, setFilterStart] = useState<string>('');
+  const [filterEnd, setFilterEnd] = useState<string>('');
+  // Autocomplete usuarios
+  const [userSearch, setUserSearch] = useState('');
+  const [userOptions, setUserOptions] = useState<{ id:number; label:string; role?:string; }[]>([]);
+  const [selectedUser, setSelectedUser] = useState<{ id:number; label:string; role?:string; } | null>(null);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const searchTimeoutRef = useRef<number | null>(null);
+  const lastQueryRef = useRef<string>('');
 
-  // Estados de filtros
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'processing' | 'completed' | 'cancelled'>('all');
-  const [filterPriority, setFilterPriority] = useState<'all' | 'low' | 'normal' | 'high' | 'urgent'>('all');
-
-  // Estados UI
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [pdfPreview, setPdfPreview] = useState<{ open: boolean; fileUrl: string; fileName: string }>({
-    open: false,
-    fileUrl: '',
-    fileName: ''
-  });
-
-  // Cargar datos
+  // Cargar registros iniciales (mis viajes o todos si admin)
   useEffect(() => {
-    loadOrders();
-  }, []);
+    let active = true;
+    setLoading(true);
+    if (isAdmin) {
+      tripsAPI.listAll({
+        user_id: filterUserId ? Number(filterUserId) : undefined,
+        start: filterStart || undefined,
+        end: filterEnd || undefined,
+        page,
+        page_size: pageSize
+      }).then(data => {
+        if (!active) return;
+        setTotal(data.total);
+        const mapped: PernoctaEntry[] = data.items.map((t: TripRecord) => ({
+          id: String(t.id),
+          orderNumber: t.order_number,
+          pernocta: t.pernocta,
+          festivo: t.festivo,
+          nota: t.note || '',
+            createdAt: t.created_at,
+          eventDate: t.event_date,
+          userName: t.user_name || '—'
+        }));
+        setEntries(mapped);
+      }).catch(err => { if(active) setError(err?.response?.data?.detail || 'Error cargando registros'); }).finally(()=> active && setLoading(false));
+    } else {
+      tripsAPI.listMine().then(data => {
+        if (!active) return;
+        const mapped: PernoctaEntry[] = data.map((t: TripRecord) => ({
+          id: String(t.id),
+          orderNumber: t.order_number,
+          pernocta: t.pernocta,
+          festivo: t.festivo,
+          nota: t.note || '',
+          createdAt: t.created_at,
+          eventDate: t.event_date,
+          userName: t.user_name || '—'
+        }));
+        setEntries(mapped);
+      }).catch(err => { if(active) setError(err?.response?.data?.detail || 'Error cargando registros'); }).finally(()=> active && setLoading(false));
+    }
+    return () => { active = false; };
+  }, [isAdmin, page, filterUserId, filterStart, filterEnd, pageSize]);
 
-  const loadOrders = async () => {
+  const handleAdd = async () => {
+    if (!orderNumber.trim()) { setError('El número de Albarán / OC es obligatorio'); return; }
+    if (!eventDate) { setError('La fecha del evento es obligatoria'); return; }
+    setError(null);
     try {
-      setLoading(true);
-      const ordersData = await ordersAPI.getOrders();
-      setOrders(ordersData);
-      
-      // Cargar documentos para cada orden
-      const allDocuments: OrderDocument[] = [];
-      for (const order of ordersData) {
-        const orderDocs = await ordersAPI.getOrderDocuments(order.id!);
-        allDocuments.push(...orderDocs);
+      const created = await tripsAPI.create({
+        order_number: orderNumber.trim(),
+        pernocta,
+        festivo,
+        event_date: eventDate,
+        note: nota.trim() || undefined
+      } as any); // simple cast
+      const entry: PernoctaEntry = {
+        id: String(created.id),
+        orderNumber: created.order_number,
+        pernocta: created.pernocta,
+        festivo: created.festivo,
+        nota: created.note || '',
+        createdAt: created.created_at,
+        eventDate: created.event_date,
+        userName: created.user_name || user?.full_name || '—'
+      };
+      setEntries(p => [entry, ...p]);
+      setOrderNumber(''); setPernocta(false); setFestivo(false); setNota(''); setEventDate(new Date().toISOString().slice(0,10)); setSuccess('Registro guardado'); setTimeout(() => setSuccess(null), 3000);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Error guardando');
+    }
+  };
+  const handleClear = () => { setOrderNumber(''); setPernocta(false); setFestivo(false); setNota(''); setEventDate(new Date().toISOString().slice(0,10)); setError(null); };
+  const handleDelete = async (id: string) => {
+    const prev = entries;
+    setEntries(p => p.filter(e => e.id !== id));
+    try {
+      await tripsAPI.remove(Number(id));
+    } catch (e) {
+      setEntries(prev); // revertir
+      setError('No se pudo eliminar');
+    }
+  };
+  const handleChangeTab = (_: React.SyntheticEvent, v: number) => { if(v!==null) setTab(v); };
+
+  // Cargar opciones de usuario para filtro
+  useEffect(() => {
+    if (!isAdmin) return;
+    const term = userSearch.trim();
+    if (searchTimeoutRef.current) window.clearTimeout(searchTimeoutRef.current);
+    if (term.length < 2) { setUserOptions([]); setLoadingUsers(false); lastQueryRef.current=''; return; }
+    searchTimeoutRef.current = window.setTimeout(async () => {
+      if (lastQueryRef.current === term) return;
+      lastQueryRef.current = term;
+      setLoadingUsers(true);
+      try {
+        const res = await tripsAPI.userSuggestions(term);
+        setUserOptions(res.map(u => ({ id: u.id, label: `${u.label} (${u.role})`, role: u.role })));
+      } catch {
+        setUserOptions([]);
+      } finally {
+        setLoadingUsers(false);
       }
-      setOrderDocuments(allDocuments);
-    } catch {
-      setError('Error al cargar las órdenes');
-    } finally {
-      setLoading(false);
-    }
-  };
+    }, 300);
+    return () => { if (searchTimeoutRef.current) window.clearTimeout(searchTimeoutRef.current); };
+  }, [userSearch, isAdmin]);
 
-  const simulateNewEmail = async () => {
-    try {
-      setLoading(true);
-      const result = await ordersAPI.simulateEmail();
-      setSuccess(`Nueva orden recibida: ${result.order.order_number} de ${result.order.company_name}`);
-      await loadOrders();
-    } catch {
-      setError('Error al simular correo electrónico');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Funciones auxiliares
-  const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('es-ES', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'pending': return <Pending sx={{ color: '#ed6c02' }} />;
-      case 'processing': return <HourglassTop sx={{ color: '#1976d2' }} />;
-      case 'completed': return <CheckCircle sx={{ color: '#2e7d32' }} />;
-      case 'cancelled': return <Cancel sx={{ color: '#d32f2f' }} />;
-      default: return <Pending sx={{ color: '#757575' }} />;
-    }
-  };
-
-  const getStatusColor = (status: string): 'error' | 'warning' | 'info' | 'success' | 'default' => {
-    switch (status) {
-      case 'pending': return 'warning';
-      case 'processing': return 'info';
-      case 'completed': return 'success';
-      case 'cancelled': return 'error';
-      default: return 'default';
-    }
-  };
-
-  const getPriorityColor = (priority: string): 'error' | 'warning' | 'info' | 'success' | 'default' => {
-    switch (priority) {
-      case 'urgent': return 'error';
-      case 'high': return 'warning';
-      case 'normal': return 'info';
-      case 'low': return 'success';
-      default: return 'default';
-    }
-  };
-
-  const getPriorityIcon = (priority: string) => {
-    switch (priority) {
-      case 'urgent':
-      case 'high':
-        return <PriorityHigh sx={{ fontSize: 16 }} />;
-      default:
-        return null;
-    }
-  };
-
-  // Handlers
-  const handleMenuClick = (event: React.MouseEvent<HTMLElement>, order: Order) => {
-    setAnchorEl(event.currentTarget);
-    setSelectedOrder(order);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-    setSelectedOrder(null);
-  };
-
-  const handleViewDocuments = async () => {
-    if (selectedOrder) {
-      const docs = orderDocuments.filter(doc => doc.order_id === selectedOrder.id);
-      if (docs.length > 0) {
-        try {
-          const blob = await ordersAPI.viewDocument(docs[0].id!);
-          const url = URL.createObjectURL(blob);
-          setPdfPreview({
-            open: true,
-            fileUrl: url,
-            fileName: docs[0].file_name
-          });
-        } catch {
-          setError('Error al cargar el documento');
-        }
-      }
-    }
-    handleMenuClose();
-  };
-
-  const handleUpdateStatus = async (orderId: number, newStatus: string) => {
-    try {
-      await ordersAPI.updateOrderStatus(orderId, newStatus);
-      setOrders(orders.map(order => 
-        order.id === orderId ? { ...order, status: newStatus as Order['status'] } : order
-      ));
-      setSuccess(`Estado actualizado a "${newStatus}"`);
-    } catch {
-      setError('Error al actualizar el estado');
-    }
-    handleMenuClose();
-  };
-
-  const getOrderDocumentsCount = (orderId: number): number => {
-    return orderDocuments.filter(doc => doc.order_id === orderId).length;
-  };
-
-  // Filtrar órdenes
-  const filteredOrders = orders.filter(order => {
-    const matchesSearch = order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         order.company_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         order.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         order.email_received_from.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = filterStatus === 'all' || order.status === filterStatus;
-    const matchesPriority = filterPriority === 'all' || order.priority === filterPriority;
-    
-    return matchesSearch && matchesStatus && matchesPriority;
-  });
-
-  return (
-    <Box sx={{ 
-      width: '100%', 
-      maxWidth: { xs: '100%', sm: '100%', md: '1200px', lg: '1400px' },
-      mx: 'auto',
-      px: { xs: 0, sm: 1, md: 2 }
-    }}>
-      <Typography variant="h4" gutterBottom sx={{ 
-        fontWeight: 700, 
-        color: '#1565C0',
-        fontSize: { xs: '1.5rem', sm: '2rem', md: '2.125rem' },
-        mb: { xs: 2, sm: 3 }
-      }}>
-        Gestión de Órdenes
-      </Typography>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 2 }} onClose={() => setError(null)}>
-          {error}
-        </Alert>
-      )}
-
-      {success && (
-        <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccess(null)}>
-          {success}
-        </Alert>
-      )}
-
-      {/* Filtros */}
-      <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3 }}>
-        <Box sx={{ 
-          display: 'flex', 
-          alignItems: { xs: 'stretch', sm: 'center' }, 
-          justifyContent: 'space-between', 
-          gap: 2, 
-          flexDirection: { xs: 'column', lg: 'row' },
-          flexWrap: 'wrap' 
-        }}>
-          <Box sx={{ 
-            display: 'flex', 
-            alignItems: { xs: 'stretch', sm: 'center' }, 
-            gap: 2, 
-            flexDirection: { xs: 'column', sm: 'row' },
-            flexWrap: 'wrap',
-            width: { xs: '100%', lg: 'auto' }
-          }}>
-            <TextField
-              placeholder="Buscar órdenes..."
-              variant="outlined"
-              size="small"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              InputProps={{
-                startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />,
-              }}
-              sx={{ 
-                minWidth: { xs: '100%', sm: 250 },
-                flex: { xs: 1, sm: 0 }
-              }}
-            />
-            
-            <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 150 } }}>
-              <InputLabel>Estado</InputLabel>
-              <Select
-                value={filterStatus}
-                label="Estado"
-                onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
-              >
-                <MenuItem value="all">Todos</MenuItem>
-                <MenuItem value="pending">Pendientes</MenuItem>
-                <MenuItem value="processing">En Proceso</MenuItem>
-                <MenuItem value="completed">Completadas</MenuItem>
-                <MenuItem value="cancelled">Canceladas</MenuItem>
-              </Select>
-            </FormControl>
-
-            <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 150 } }}>
-              <InputLabel>Prioridad</InputLabel>
-              <Select
-                value={filterPriority}
-                label="Prioridad"
-                onChange={(e) => setFilterPriority(e.target.value as typeof filterPriority)}
-              >
-                <MenuItem value="all">Todas</MenuItem>
-                <MenuItem value="urgent">Urgente</MenuItem>
-                <MenuItem value="high">Alta</MenuItem>
-                <MenuItem value="normal">Normal</MenuItem>
-                <MenuItem value="low">Baja</MenuItem>
-              </Select>
-            </FormControl>
-          </Box>
-
-          <Box sx={{ 
-            display: 'flex', 
-            gap: 2,
-            flexDirection: { xs: 'column', sm: 'row' },
-            width: { xs: '100%', lg: 'auto' }
-          }}>
-            <Button
-              variant="contained"
-              startIcon={<MailOutline />}
-              onClick={simulateNewEmail}
-              disabled={loading}
-              sx={{ 
-                bgcolor: '#1976d2',
-                '&:hover': { bgcolor: '#1565c0' },
-                width: { xs: '100%', sm: 'auto' }
-              }}
-            >
-              Simular Nuevo Correo
-            </Button>
-            <Button
-              variant="outlined"
-              startIcon={<Refresh />}
-              onClick={loadOrders}
-              disabled={loading}
-            >
-              Actualizar
-            </Button>
-          </Box>
-        </Box>
-      </Paper>
-
-      {/* Tabla de órdenes / Cards en móvil */}
-      <Paper sx={{ p: { xs: 2, sm: 3 } }}>
-        <Typography variant="h6" sx={{ 
-          mb: 2, 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: 1,
-          fontSize: { xs: '1.1rem', sm: '1.25rem' }
-        }}>
-          <Email />
-          Órdenes Recibidas por Correo
-        </Typography>
-        
-        {/* Vista de tabla para desktop */}
-        <Box sx={{ display: { xs: 'none', lg: 'block' } }}>
-          <TableContainer>
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell sx={{ fontWeight: 600 }}>Número de Orden</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Empresa</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Asunto</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Fecha Recibida</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Estado</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Prioridad</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Documentos</TableCell>
-                  <TableCell sx={{ fontWeight: 600 }}>Acciones</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {filteredOrders.map((order) => (
-                  <TableRow key={order.id} hover>
-                    <TableCell>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {order.order_number}
-                      </Typography>
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Business sx={{ color: '#1565C0', fontSize: 20 }} />
-                        <Box>
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                            {order.company_name}
-                          </Typography>
-                          <Typography variant="caption" color="textSecondary">
-                            {order.email_received_from}
-                          </Typography>
-                        </Box>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Tooltip title={order.subject}>
-                        <Typography variant="body2" sx={{ 
-                          maxWidth: 200, 
-                          overflow: 'hidden', 
-                          textOverflow: 'ellipsis',
-                          whiteSpace: 'nowrap'
-                        }}>
-                          {order.subject}
-                        </Typography>
-                      </Tooltip>
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <Schedule sx={{ color: '#757575', fontSize: 16 }} />
-                        <Typography variant="body2">
-                          {formatDate(order.received_date)}
-                        </Typography>
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        {getStatusIcon(order.status)}
-                        <Chip
-                          label={order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                          size="small"
-                          color={getStatusColor(order.status)}
-                        />
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        {getPriorityIcon(order.priority)}
-                        <Chip
-                          label={order.priority.charAt(0).toUpperCase() + order.priority.slice(1)}
-                          size="small"
-                          variant="outlined"
-                          color={getPriorityColor(order.priority)}
-                        />
-                      </Box>
-                    </TableCell>
-                    <TableCell>
-                      <Badge badgeContent={getOrderDocumentsCount(order.id)} color="primary">
-                        <AttachFile sx={{ color: '#757575' }} />
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <IconButton 
-                        size="small"
-                        onClick={(e) => handleMenuClick(e, order)}
-                      >
-                        <MoreVert />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-        </Box>
-
-        {/* Vista de cards para móvil y tablet */}
-        <Box sx={{ display: { xs: 'block', lg: 'none' } }}>
-          {filteredOrders.map((order) => (
-            <Paper 
-              key={order.id} 
-              elevation={2} 
-              sx={{ 
-                mb: 2, 
-                p: 2,
-                border: '1px solid #e0e0e0',
-                '&:hover': {
-                  boxShadow: 3,
-                  transform: 'translateY(-2px)',
-                  transition: 'all 0.2s ease'
+  return (<>
+    <GlobalStyles styles={{ body: { paddingRight: '0px !important', overflow: 'auto !important', overflowX: 'hidden !important' } }} />
+    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: '100%', bgcolor: '#f5f5f5', minHeight: '100vh' }}>
+      <Box sx={{ mb: 4 }}>
+        <Fade in timeout={700}>
+          <Paper elevation={0} sx={{ p: { xs: 3, sm: 4 }, background: 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 55%, #d4a574 100%)', color: 'white', borderRadius: 3, position: 'relative', overflow: 'hidden', '&::before': { content: '""', position: 'absolute', inset: 0, backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\\"60\\" height=\\"60\\" viewBox=\\"0 0 60 60\\" xmlns=\\"http://www.w3.org/2000/svg\\"%3E%3Cg fill=\\"none\\" fill-rule=\\"evenodd\\"%3E%3Cg fill=\\"%23ffffff\\" fill-opacity=\\"0.08\\"%3E%3Cpath d=\\"m36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\\"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")' } }}>
+            <Box sx={{ position: 'relative', zIndex: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.18)', borderRadius: 2, backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <WorkOutline sx={{ fontSize: 32, color: '#ffffff' }} />
+                </Box>
+                <Box>
+                  <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>Registro de Viajes (Pernocta / Festivo)</Typography>
+                  <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400, fontSize: { xs: '1rem', sm: '1.1rem' } }}>Indica si una orden tuvo pernocta y/o fue en día festivo</Typography>
+                </Box>
+              </Box>
+            </Box>
+          </Paper>
+        </Fade>
+      </Box>
+      {error && <Fade in timeout={300}><Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setError(null)}>{error}</Alert></Fade>}
+      {success && <Fade in timeout={300}><Alert severity="success" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setSuccess(null)}>{success}</Alert></Fade>}
+      {/* Selector estilo Dietas */}
+      <Box sx={{ mb:3, display:'flex', justifyContent:'flex-start' }}>
+        <Box
+          sx={{
+            p:0.5,
+            borderRadius:3,
+            background:'linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%)',
+            border:'2px solid #e0e0e0',
+            boxShadow:'inset 0 1px 3px rgba(0,0,0,0.1)',
+            display:'inline-block'
+          }}
+        >
+          <ToggleButtonGroup
+            value={tab}
+            exclusive
+            onChange={handleChangeTab}
+            size="small"
+            sx={{
+              '& .MuiToggleButtonGroup-grouped': {
+                border:'none',
+                '&:not(:first-of-type)': { borderRadius:3, marginLeft:'4px' },
+                '&:first-of-type': { borderRadius:3 }
+              },
+              '& .MuiToggleButton-root': {
+                borderRadius:'20px !important',
+                px:2.5, py:1,
+                textTransform:'none',
+                fontSize:'0.8rem', fontWeight:700,
+                border:'none !important', minWidth:140,
+                transition:'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                position:'relative', overflow:'hidden',
+                '&::before': { content:'""', position:'absolute', inset:0, background:'linear-gradient(135deg, rgba(80,27,54,0.1) 0%, rgba(80,27,54,0.05) 100%)', opacity:0, transition:'opacity 0.3s ease' },
+                '&:hover::before': { opacity:1 },
+                '&.Mui-selected': {
+                  background:'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 70%, #501b36 100%)',
+                  color:'white',
+                  boxShadow:'0 4px 12px rgba(80,27,54,0.3), 0 2px 4px rgba(80,27,54,0.2)',
+                  transform:'translateY(-1px)',
+                  '&:hover': { background:'linear-gradient(135deg, #3d1429 0%, #5a1d3a 30%, #6b2545 70%, #3d1429 100%)', boxShadow:'0 6px 16px rgba(80,27,54,0.4), 0 2px 8px rgba(80,27,54,0.3)' },
+                  '&::before': { opacity:0 }
+                },
+                '&:not(.Mui-selected)': {
+                  color:'#501b36', backgroundColor:'rgba(255,255,255,0.8)', backdropFilter:'blur(10px)',
+                  '&:hover': { backgroundColor:'rgba(255,255,255,0.95)', transform:'translateY(-0.5px)', boxShadow:'0 2px 8px rgba(0,0,0,0.1)' }
                 }
-              }}
-            >
-              {/* Header de la card con número de orden y acciones */}
-              <Box sx={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'flex-start',
-                mb: 2,
-                flexWrap: 'wrap',
-                gap: 1
-              }}>
-                <Typography variant="h6" fontWeight={600} color="primary">
-                  {order.order_number}
-                </Typography>
-                <IconButton 
-                  size="small"
-                  onClick={(e) => handleMenuClick(e, order)}
-                >
-                  <MoreVert />
-                </IconButton>
-              </Box>
-
-              {/* Información de la empresa */}
-              <Box sx={{ mb: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                  <Business sx={{ color: '#1565C0', fontSize: 20 }} />
-                  <Typography variant="subtitle1" fontWeight={500}>
-                    {order.company_name}
-                  </Typography>
-                </Box>
-                <Typography variant="body2" color="textSecondary" sx={{ ml: 3 }}>
-                  {order.email_received_from}
-                </Typography>
-              </Box>
-
-              {/* Asunto */}
-              <Box sx={{ mb: 2 }}>
-                <Typography variant="body2" fontWeight={500} sx={{ mb: 1 }}>
-                  Asunto:
-                </Typography>
-                <Typography variant="body2" color="textSecondary">
-                  {order.subject}
-                </Typography>
-              </Box>
-
-              {/* Fecha y documentos */}
-              <Box sx={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center',
-                mb: 2,
-                flexWrap: 'wrap',
-                gap: 1
-              }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Schedule sx={{ color: '#757575', fontSize: 16 }} />
-                  <Typography variant="body2">
-                    {formatDate(order.received_date)}
-                  </Typography>
-                </Box>
-                <Badge badgeContent={getOrderDocumentsCount(order.id)} color="primary">
-                  <AttachFile sx={{ color: '#757575' }} />
-                </Badge>
-              </Box>
-
-              {/* Estado y prioridad */}
-              <Box sx={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center',
-                pt: 2,
-                borderTop: '1px solid #e0e0e0',
-                flexWrap: 'wrap',
-                gap: 1
-              }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  {getStatusIcon(order.status)}
-                  <Chip
-                    label={order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                    size="small"
-                    color={getStatusColor(order.status)}
-                  />
-                </Box>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                  {getPriorityIcon(order.priority)}
-                  <Chip
-                    label={order.priority.charAt(0).toUpperCase() + order.priority.slice(1)}
-                    size="small"
-                    variant="outlined"
-                    color={getPriorityColor(order.priority)}
-                  />
-                </Box>
-              </Box>
-            </Paper>
-          ))}
-        </Box>
-
-        {filteredOrders.length === 0 && (
-          <Box sx={{ textAlign: 'center', py: 4 }}>
-            <Assignment sx={{ fontSize: 60, color: '#ccc', mb: 2 }} />
-            <Typography variant="h6" color="textSecondary" gutterBottom>
-              No hay órdenes disponibles
-            </Typography>
-            <Typography variant="body2" color="textSecondary">
-              {searchTerm || filterStatus !== 'all' || filterPriority !== 'all'
-                ? 'Intenta ajustar los filtros de búsqueda'
-                : 'Las órdenes aparecerán aquí cuando se reciban por correo electrónico'
               }
-            </Typography>
-          </Box>
-        )}
-      </Paper>
+            }}
+          >
+            <ToggleButton value={0}>Nuevo Registro</ToggleButton>
+            {isAdmin && <ToggleButton value={1}>{`Registros (${total})`}</ToggleButton>}
+          </ToggleButtonGroup>
+        </Box>
+      </Box>
 
-      {/* Menú contextual */}
-      <Menu
-        anchorEl={anchorEl}
-        open={Boolean(anchorEl)}
-        onClose={handleMenuClose}
-      >
-        <MenuItemComponent onClick={handleViewDocuments}>
-          <Visibility sx={{ mr: 1 }} />
-          Ver Documentos
-        </MenuItemComponent>
-        {selectedOrder?.status === 'pending' && (
-          <MenuItemComponent onClick={() => selectedOrder && handleUpdateStatus(selectedOrder.id, 'processing')}>
-            <HourglassTop sx={{ mr: 1 }} />
-            Marcar en Proceso
-          </MenuItemComponent>
-        )}
-        {selectedOrder?.status === 'processing' && (
-          <MenuItemComponent onClick={() => selectedOrder && handleUpdateStatus(selectedOrder.id, 'completed')}>
-            <CheckCircle sx={{ mr: 1 }} />
-            Marcar Completada
-          </MenuItemComponent>
-        )}
-        {(selectedOrder?.status === 'pending' || selectedOrder?.status === 'processing') && (
-          <MenuItemComponent onClick={() => selectedOrder && handleUpdateStatus(selectedOrder.id, 'cancelled')}>
-            <Cancel sx={{ mr: 1 }} />
-            Cancelar Orden
-          </MenuItemComponent>
-        )}
-      </Menu>
+      {tab === 0 && (
+        <Fade in timeout={600}>
+          <Paper elevation={0} sx={{ p:3, mb:3, borderRadius:2, border:'1px solid #e0e0e0', background:'#ffffff', width:'100%', maxWidth:900 }}>
+            <Stack spacing={2} sx={{ width:'100%' }}>
+              <TextField fullWidth label="Albarán / OC" value={orderNumber} onChange={e => setOrderNumber(e.target.value)} required size="small" helperText={!orderNumber.trim() ? 'Obligatorio' : ' '} error={!orderNumber.trim() && !!orderNumber} />
+              <TextField fullWidth label="Fecha pernocta / festivo" type="date" value={eventDate} onChange={e => setEventDate(e.target.value)} size="small" InputLabelProps={{ shrink:true }} required />
+              <Box sx={{ display:'flex', flexWrap:'wrap', gap:3 }}>
+                <FormControlLabel control={<Switch checked={pernocta} onChange={e => setPernocta(e.target.checked)} />} label="Pernocta" />
+                <FormControlLabel control={<Switch checked={festivo} onChange={e => setFestivo(e.target.checked)} />} label="Festivo" />
+              </Box>
+              <TextField fullWidth label="Nota (opcional)" value={nota} onChange={e => setNota(e.target.value)} multiline minRows={2} size="small" inputProps={{ maxLength:300 }} helperText={`${nota.length}/300`} />
+              <Box sx={{ display:'flex', flexWrap:'wrap', gap:2 }}>
+                <Button variant="contained" onClick={handleAdd} disabled={!orderNumber.trim() || !eventDate} sx={{ fontWeight:600 }}>Guardar</Button>
+                <Button variant="outlined" onClick={handleClear}>Limpiar</Button>
+              </Box>
+            </Stack>
+          </Paper>
+        </Fade>
+      )}
 
-      {/* Preview de PDF */}
-      <PdfPreview
-        open={pdfPreview.open}
-        onClose={() => setPdfPreview({ open: false, fileUrl: '', fileName: '' })}
-        fileUrl={pdfPreview.fileUrl}
-        fileName={pdfPreview.fileName}
-        title="Documento de Orden"
-      />
+      {isAdmin && tab === 1 && (
+        <Fade in timeout={600}>
+          <Paper elevation={0} sx={{ p:2, mb:3, borderRadius:2, border:'1px solid #e0e0e0', background:'#ffffff' }}>
+            {/* Filtros */}
+            <Stack direction={{ xs:'column', sm:'row' }} spacing={2} sx={{ mb:2 }}>
+              <Autocomplete
+                sx={{ minWidth: 260 }}
+                size="small"
+                options={userOptions}
+                loading={loadingUsers}
+                value={selectedUser}
+                onChange={(_, val) => { setSelectedUser(val); setFilterUserId(val ? String(val.id) : ''); setPage(1); }}
+                onInputChange={(_, val, reason) => {
+                  if (reason === 'input') setUserSearch(val);
+                  if (!val) { setSelectedUser(null); setFilterUserId(''); setPage(1); }
+                }}
+                filterOptions={(opts) => opts} /* no filtrado adicional en cliente */
+                isOptionEqualToValue={(o,v)=> o.id===v.id }
+                getOptionLabel={(o)=> o.label }
+                renderOption={(props, option) => (
+                  <li {...props} key={option.id}>
+                    <Box sx={{ display:'flex', flexDirection:'column' }}>
+                      <Typography variant="body2" fontWeight={600}>{option.label}</Typography>
+                    </Box>
+                  </li>
+                )}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Conductor"
+                    placeholder="Nombre o apellidos"
+                    InputProps={{
+                      ...params.InputProps,
+                      endAdornment: (
+                        <>
+                          {loadingUsers ? <CircularProgress color="inherit" size={16} sx={{ mr:1 }} /> : null}
+                          {params.InputProps.endAdornment}
+                        </>
+                      )
+                    }}
+                  />
+                )}
+                noOptionsText={userSearch.length < 2 ? 'Teclee 2+ letras' : 'Sin resultados'}
+                clearText="Limpiar"
+              />
+              <TextField label="Desde" type="date" size="small" value={filterStart} onChange={e=>{ setPage(1); setFilterStart(e.target.value); }} InputLabelProps={{ shrink:true }} />
+              <TextField label="Hasta" type="date" size="small" value={filterEnd} onChange={e=>{ setPage(1); setFilterEnd(e.target.value); }} InputLabelProps={{ shrink:true }} />
+              <Button variant="outlined" size="small" onClick={()=>{ setSelectedUser(null); setUserSearch(''); setFilterUserId(''); setFilterStart(''); setFilterEnd(''); setPage(1); }}>Limpiar</Button>
+            </Stack>
+            <TableContainer sx={{ border:'1px solid #e0e0e0', borderRadius:2 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ background:'linear-gradient(180deg,#fafafa,#f0f0f0)', '& th': { fontWeight:600 } }}>
+                    <TableCell>Conductor</TableCell>
+                    <TableCell>Albarán / OC</TableCell>
+                    <TableCell>Pernocta</TableCell>
+                    <TableCell>Festivo</TableCell>
+                    <TableCell>Fecha Evento</TableCell>
+                    <TableCell>Fecha Registro</TableCell>
+                    <TableCell>Nota</TableCell>
+                    <TableCell align="right">Acciones</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {entries.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={8} align="center" sx={{ py:6 }}>
+                        <Typography variant="body2" sx={{ opacity:0.7 }}>Sin registros todavía</Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {entries.map(e => (
+                    <TableRow key={e.id} hover>
+                      <TableCell sx={{ fontWeight:500 }}>{e.userName || '—'}</TableCell>
+                      <TableCell sx={{ fontWeight:600 }}>{e.orderNumber}</TableCell>
+                      <TableCell>{e.pernocta ? 'Sí' : 'No'}</TableCell>
+                      <TableCell>{e.festivo ? 'Sí' : 'No'}</TableCell>
+                      <TableCell>{new Date(e.eventDate + 'T00:00:00').toLocaleDateString('es-ES', { day:'2-digit', month:'2-digit', year:'2-digit' })}</TableCell>
+                      <TableCell>{new Date(e.createdAt).toLocaleString('es-ES', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' })}</TableCell>
+                      <TableCell>
+                        <Tooltip title={e.nota || ''} disableInteractive placement="top-start">
+                          <Typography variant="body2" sx={{ maxWidth:200, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{e.nota || '-'}</Typography>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell align="right">
+                        <IconButton size="small" onClick={() => handleDelete(e.id)}>
+                          <DeleteOutline fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+            {total > pageSize && (
+              <Box sx={{ display:'flex', justifyContent:'center', mt:2 }}>
+                <Pagination count={Math.ceil(total / pageSize)} page={page} onChange={(_,v)=> setPage(v)} size="small" />
+              </Box>
+            )}
+          </Paper>
+        </Fade>
+      )}
+      {/* Mostrar indicador simple */}
+      {loading && <Box sx={{ position:'fixed', top:70, right:20, zIndex:2000, background:'#501b36', color:'#fff', px:2, py:1, borderRadius:2, boxShadow:3 }}>Cargando...</Box>}
     </Box>
-  );
+  </>);
 };

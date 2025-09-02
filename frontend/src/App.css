@@ -36,7 +36,7 @@
   font-size: 2.5rem;
   font-weight: 700;
   margin: 0;
-  color: #1565C0;
+  color: #501b36;
 }
 
 .page-subtitle {
@@ -79,7 +79,7 @@
   font-size: 3rem;
   font-weight: 800;
   margin: 16px 0;
-  color: #1565C0;
+  color: #501b36;
 }
 
 .stat-label {
@@ -90,16 +90,3 @@
   letter-spacing: 0.5px;
 }
 
-.activity-item {
-  padding: 16px;
-  border-radius: 8px;
-  background: #ffffff;
-  margin-bottom: 12px;
-  border: 1px solid #e0e0e0;
-  transition: all 0.2s ease;
-}
-
-.activity-item:hover {
-  transform: translateX(4px);
-  box-shadow: 0 1px 3px rgba(0,0,0,0.12);
-}
