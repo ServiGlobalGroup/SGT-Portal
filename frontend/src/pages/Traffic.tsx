@@ -58,6 +58,7 @@ import {
   ViewList,
   Warning,
 } from '@mui/icons-material';
+import { trafficFilesAPI } from '../services/api';
 
 interface TrafficFolder {
   id: number;
@@ -96,70 +97,9 @@ export const Traffic: React.FC = () => {
                           currentUser?.role === 'MASTER_ADMIN';
 
   // Estados principales
-  const [currentFolderId, setCurrentFolderId] = useState<number | null>(null);
-  const [folders] = useState<TrafficFolder[]>([
-    { 
-      id: 1, 
-      name: 'ServiGlobal Canarias', 
-      parentId: null, 
-      createdDate: '2025-01-15', 
-      type: 'company',
-      description: 'Documentos y archivos de la sede de Canarias'
-    },
-    { 
-      id: 2, 
-      name: 'ServiGlobal Península', 
-      parentId: null, 
-      createdDate: '2025-01-10', 
-      type: 'company',
-      description: 'Documentos y archivos de la sede de Península'
-    },
-    { 
-      id: 3, 
-      name: 'Transporte Urbano', 
-      parentId: null, 
-      createdDate: '2025-01-20', 
-      type: 'company',
-      description: 'División especializada en transporte urbano'
-    },
-    { 
-      id: 4, 
-      name: 'Vehículos Ligeros', 
-      parentId: 1, 
-      createdDate: '2025-01-16', 
-      type: 'vehicle_type',
-      description: 'Furgonetas y vehículos de hasta 3.5T'
-    },
-    { 
-      id: 5, 
-      name: 'Vehículos Pesados', 
-      parentId: 1, 
-      createdDate: '2025-01-17', 
-      type: 'vehicle_type',
-      description: 'Camiones y vehículos de más de 3.5T'
-    },
-  ]);
-  
-  const [files] = useState<TrafficFile[]>([
-    { 
-      id: 1, 
-      name: 'Licencia_Transporte_2024.pdf', 
-      size: 2048576, 
-      type: 'application/pdf', 
-      folderId: 1, 
-      uploadDate: '2025-01-15', 
-      url: 'blob:example1' 
-    },
-    { 
-      id: 2, 
-      name: 'Seguro_Vehiculos_2024.pdf', 
-      size: 1536789, 
-      type: 'application/pdf', 
-      folderId: 1, 
-      uploadDate: '2025-01-16', 
-      url: 'blob:example2' 
-    },
-  ]);
+  const [currentPath, setCurrentPath] = useState<string>('/');
+  const [folders, setFolders] = useState<TrafficFolder[]>([]);
+  const [files, setFiles] = useState<TrafficFile[]>([]);
 
   // Estados de UI
   const [loading, setLoading] = useState(false);
@@ -190,6 +130,86 @@ export const Traffic: React.FC = () => {
     setSnackbar({ open: true, message, severity });
   };
 
+  // Función para cargar carpetas desde la API
+  const loadFolders = async (path?: string) => {
+    try {
+      console.log('🔄 Loading folders for path:', path || 'root');
+      setLoading(true);
+      
+      // Por ahora, para evitar el bucle infinito, si no estamos en root,
+      // no cargar carpetas hasta que el backend esté implementado correctamente
+      if (path && path !== '/') {
+        console.log('⚠️ Not loading subfolders yet - API may not be ready');
+        setFolders([]);
+        return;
+      }
+      
+      const foldersData = await trafficFilesAPI.getFolders(path);
+      console.log('📁 Folders loaded:', foldersData);
+      
+      // Filtrar para evitar bucles: no mostrar la carpeta actual dentro de sí misma
+      const filteredFolders = Array.isArray(foldersData) 
+        ? foldersData.filter(folder => {
+            // Si estamos en un path específico, no mostrar carpetas que tengan el mismo nombre
+            if (path && path !== '/') {
+              const currentFolderName = path.split('/').pop();
+              return folder.name !== currentFolderName;
+            }
+            return true;
+          })
+        : [];
+        
+      setFolders(filteredFolders);
+    } catch (error) {
+      console.error('Error loading folders:', error);
+      showSnackbar('Error al cargar las carpetas', 'error');
+      setFolders([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Función para cargar archivos desde la API
+  const loadFiles = async (path?: string) => {
+    try {
+      console.log('🔄 Loading files for path:', path || 'root');
+      
+      // Por ahora, para evitar problemas, si no estamos en root,
+      // no cargar archivos hasta que el backend esté implementado correctamente
+      if (path && path !== '/') {
+        console.log('⚠️ Not loading files from subfolders yet - API may not be ready');
+        setFiles([]);
+        return;
+      }
+      
+      const filesData = await trafficFilesAPI.getFiles(path);
+      console.log('📄 Files loaded:', filesData);
+      setFiles(Array.isArray(filesData) ? filesData : []);
+    } catch (error) {
+      console.error('Error loading files:', error);
+      showSnackbar('Error al cargar los archivos', 'error');
+      setFiles([]);
+    }
+  };
+
+  // Cargar datos iniciales
+  useEffect(() => {
+    loadFolders();
+    loadFiles();
+  }, []);
+
+  // Cargar datos iniciales
+  useEffect(() => {
+    loadFolders(currentPath === '/' ? undefined : currentPath);
+    loadFiles(currentPath === '/' ? undefined : currentPath);
+  }, []);
+
+  // Recargar datos cuando cambie la carpeta actual
+  useEffect(() => {
+    loadFolders(currentPath === '/' ? undefined : currentPath);
+    loadFiles(currentPath === '/' ? undefined : currentPath);
+  }, [currentPath]);
+
   // Crear elementos unificados para vista lista
   useEffect(() => {
     const currentFolders = getCurrentFolders();
@@ -206,32 +226,36 @@ export const Traffic: React.FC = () => {
     }));
     
     setUnifiedItems([...folderItems, ...fileItems]);
-  }, [currentFolderId, searchTerm, folders, files]);
+  }, [currentPath, searchTerm, folders, files]);
 
   // Funciones auxiliares
   const getCurrentFolders = () => {
-    return folders.filter(folder => folder.parentId === currentFolderId);
+    // Como la API ya devuelve las carpetas del path actual,
+    // solo necesitamos filtrar por término de búsqueda si existe
+    const filteredFolders = searchTerm 
+      ? folders.filter(folder => 
+          folder.name.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      : folders;
+    
+    return filteredFolders;
   };
 
   const getCurrentFiles = () => {
-    return files.filter(file => file.folderId === (currentFolderId || 0));
+    // Como la API ya devuelve los archivos del path actual,
+    // solo necesitamos filtrar por término de búsqueda si existe
+    const filteredFiles = searchTerm 
+      ? files.filter(file => 
+          file.name.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      : files;
+    
+    return filteredFiles;
   };
 
-  const getBreadcrumbs = (): TrafficFolder[] => {
-    const breadcrumbs: TrafficFolder[] = [];
-    let currentId = currentFolderId;
-    
-    while (currentId) {
-      const folder = folders.find(f => f.id === currentId);
-      if (folder) {
-        breadcrumbs.unshift(folder);
-        currentId = folder.parentId;
-      } else {
-        break;
-      }
-    }
-    
-    return breadcrumbs;
+  const getBreadcrumbs = (): string[] => {
+    if (currentPath === '/') return [];
+    return currentPath.split('/').filter(p => p);
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -269,21 +293,76 @@ export const Traffic: React.FC = () => {
   };
 
   // Handlers
-  const handleFolderClick = (folderId: number) => {
-    setCurrentFolderId(folderId);
+  const handleFolderClick = (folderName: string) => {
+    const newPath = currentPath === '/' 
+      ? `/${folderName}`
+      : `${currentPath}/${folderName}`;
+    console.log('📂 Navigating from', currentPath, 'to', newPath);
+    setCurrentPath(newPath);
   };
 
   const handleBackClick = () => {
-    const currentFolder = folders.find(f => f.id === currentFolderId);
-    setCurrentFolderId(currentFolder?.parentId || null);
+    if (currentPath !== '/') {
+      const pathParts = currentPath.split('/').filter(p => p);
+      pathParts.pop();
+      const newPath = pathParts.length > 0 ? `/${pathParts.join('/')}` : '/';
+      setCurrentPath(newPath);
+    }
   };
 
   const handleRefresh = async () => {
     setLoading(true);
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      await loadFolders(currentPath === '/' ? undefined : currentPath);
+      await loadFiles(currentPath === '/' ? undefined : currentPath);
       showSnackbar('Datos actualizados correctamente', 'success');
-    }, 1000);
+    } catch (error) {
+      showSnackbar('Error al actualizar los datos', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handler para crear carpeta
+  const handleCreateFolder = async (folderName: string) => {
+    if (!folderName.trim()) return;
+    
+    try {
+      setLoading(true);
+      
+      await trafficFilesAPI.createFolder(folderName, currentPath === '/' ? undefined : currentPath);
+      
+      // Recargar carpetas
+      await loadFolders(currentPath === '/' ? undefined : currentPath);
+      showSnackbar('Carpeta creada exitosamente', 'success');
+      setCreateFolderModal(false);
+    } catch (error) {
+      console.error('Error creating folder:', error);
+      showSnackbar('Error al crear la carpeta', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handler para subir archivos
+  const handleUploadFiles = async (selectedFiles: File[]) => {
+    if (selectedFiles.length === 0) return;
+    
+    try {
+      setLoading(true);
+      
+      await trafficFilesAPI.uploadFiles(selectedFiles, currentPath === '/' ? undefined : currentPath);
+      
+      // Recargar archivos
+      await loadFiles(currentPath === '/' ? undefined : currentPath);
+      showSnackbar(`${selectedFiles.length} archivo(s) subido(s) exitosamente`, 'success');
+      setUploadModal(false);
+    } catch (error) {
+      console.error('Error uploading files:', error);
+      showSnackbar('Error al subir los archivos', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   // Estadísticas
@@ -337,120 +416,58 @@ export const Traffic: React.FC = () => {
           },
         }}
       />
-      <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: '100%', bgcolor: '#f8fafc', minHeight: '100vh' }}>
-        {/* Header Principal Moderno */}
-        <Fade in timeout={800}>
-          <Paper 
-            elevation={0}
-            sx={{
-              p: { xs: 3, sm: 4 },
-              mb: 4,
-              background: 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #8b3058 60%, #d4a574 100%)',
-              color: 'white',
-              borderRadius: 3,
-              position: 'relative',
-              overflow: 'hidden',
-              boxShadow: '0 8px 32px rgba(80, 27, 54, 0.15)',
-              '&::before': {
-                content: '""',
-                position: 'absolute',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                background: 'url("data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%23ffffff" fill-opacity="0.08"%3E%3Cpath d="m36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
-              },
-            }}
-          >
-            <Box sx={{ position: 'relative', zIndex: 1 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, mb: 2 }}>
-                <Box
-                  sx={{
-                    p: 2.5,
-                    bgcolor: 'rgba(255, 255, 255, 0.15)',
-                    borderRadius: 3,
-                    backdropFilter: 'blur(10px)',
-                    border: '1px solid rgba(255, 255, 255, 0.2)',
-                  }}
-                >
-                  <LocalShipping sx={{ fontSize: 36, color: 'white' }} />
-                </Box>
-                <Box sx={{ flex: 1 }}>
-                  <Typography variant="h3" sx={{ 
-                    fontWeight: 800, 
-                    mb: 0.5,
-                    background: 'linear-gradient(45deg, #ffffff, #f0f0f0)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent',
-                    textShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                  }}>
-                    Gestión de Tráfico
-                  </Typography>
-                  <Typography variant="h6" sx={{ 
-                    opacity: 0.9, 
-                    fontWeight: 400,
-                    textShadow: '0 1px 2px rgba(0,0,0,0.1)',
-                  }}>
-                    Gestión integral de documentos y archivos del departamento de tráfico
-                  </Typography>
-                </Box>
-                
-                {/* Información del usuario actual */}
-                <Box sx={{ 
-                  display: { xs: 'none', sm: 'flex' },
-                  alignItems: 'center',
-                  gap: 2,
-                  bgcolor: 'rgba(255, 255, 255, 0.1)',
-                  borderRadius: 2,
-                  p: 2,
-                  backdropFilter: 'blur(10px)',
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                }}>
-                  <Box sx={{ textAlign: 'right' }}>
-                    <Typography variant="body2" sx={{ opacity: 0.8 }}>
-                      Conectado como
+      <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: '100%', bgcolor: '#f5f5f5', minHeight: '100vh' }}>
+        {/* Header */}
+        <Box sx={{ mb: 4 }}>
+          <Fade in timeout={700}>
+            <Paper
+              elevation={0}
+              sx={{
+                p: { xs: 3, sm: 4 },
+                background: 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 55%, #d4a574 100%)',
+                color: 'white',
+                borderRadius: 3,
+                position: 'relative',
+                overflow: 'hidden',
+                '&::before': {
+                  content: '""',
+                  position: 'absolute',
+                  inset: 0,
+                  backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\\"60\\" height=\\"60\\" viewBox=\\"0 0 60 60\\" xmlns=\\"http://www.w3.org/2000/svg\\"%3E%3Cg fill=\\"none\\" fill-rule=\\"evenodd\\"%3E%3Cg fill=\\"%23ffffff\\" fill-opacity=\\"0.08\\"%3E%3Cpath d=\\"m36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\\"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
+                },
+              }}
+            >
+              <Box sx={{ position: 'relative', zIndex: 1 }}>
+                <Box sx={{ display:'flex', alignItems:'center', gap:2 }}>
+                  <Box
+                    sx={{
+                      p:2,
+                      bgcolor:'rgba(255,255,255,0.18)',
+                      borderRadius:2,
+                      backdropFilter:'blur(8px)',
+                      display:'flex',
+                      alignItems:'center',
+                      justifyContent:'center'
+                    }}
+                  >
+                    <LocalShipping sx={{ fontSize:32, color:'#ffffff' }} />
+                  </Box>
+                  <Box>
+                    <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
+                      Gestión de Tráfico
                     </Typography>
-                    <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                      {currentUser?.first_name} {currentUser?.last_name}
+
+                    <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400, fontSize: { xs: '1rem', sm: '1.1rem' } }}>
+                      Gestión integral de documentos y archivos del departamento de tráfico
                     </Typography>
-                    <Chip
-                      label={currentUser?.role}
-                      size="small"
-                      sx={{
-                        mt: 0.5,
-                        bgcolor: 'rgba(255, 255, 255, 0.2)',
-                        color: 'white',
-                        fontSize: '0.7rem',
-                        fontWeight: 600,
-                        border: '1px solid rgba(255, 255, 255, 0.3)',
-                      }}
-                    />
                   </Box>
                 </Box>
               </Box>
-              
-              {/* Mensaje de permisos si no puede gestionar */}
-              {!canManageTraffic && (
-                <Alert 
-                  severity="warning" 
-                  sx={{ 
-                    mt: 2,
-                    bgcolor: 'rgba(255, 193, 7, 0.1)',
-                    border: '1px solid rgba(255, 193, 7, 0.3)',
-                    '& .MuiAlert-icon': {
-                      color: '#ffb74d'
-                    }
-                  }}
-                  icon={<Warning />}
-                >
-                  Tu rol actual ({currentUser?.role}) permite visualizar pero tiene permisos limitados para gestión.
-                </Alert>
-              )}
-            </Box>
-          </Paper>
-        </Fade>
+            </Paper>
+          </Fade>
+        </Box>
 
-        {/* Estadísticas Principales */}
+        {/* Estadísticas Principales - Más Compactas */}
         <Fade in timeout={1000}>
           <Box sx={{ 
             display: 'grid', 
@@ -459,8 +476,8 @@ export const Traffic: React.FC = () => {
               sm: 'repeat(3, 1fr)', 
               md: 'repeat(5, 1fr)' 
             }, 
-            gap: 3, 
-            mb: 4 
+            gap: 2, 
+            mb: 3 
           }}>
             <StatsCard
               title="Empresas"
@@ -506,107 +523,156 @@ export const Traffic: React.FC = () => {
           <Paper
             elevation={0}
             sx={{
-              p: 3,
-              mb: 3,
+              p: { xs: 2, sm: 2.5 },
+              mb: 2,
               borderRadius: 3,
               border: '1px solid #e2e8f0',
               background: '#ffffff',
               boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
             }}
           >
-            {/* Navegación breadcrumbs */}
-            <Box sx={{ mb: 3 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                  {currentFolderId && (
-                    <Button
-                      startIcon={<ArrowBack />}
-                      onClick={handleBackClick}
-                      variant="outlined"
-                      size="small"
-                      sx={{
-                        borderRadius: 2,
-                        borderColor: '#501b36',
-                        color: '#501b36',
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        '&:hover': {
-                          borderColor: '#3d1429',
-                          bgcolor: alpha('#501b36', 0.04),
-                        },
-                      }}
-                    >
-                      Volver
-                    </Button>
-                  )}
-                  
-                  <Breadcrumbs separator={<NavigateNext fontSize="small" />}>
-                    <Link
-                      component="button"
-                      variant="body1"
-                      onClick={() => setCurrentFolderId(null)}
-                      sx={{ 
-                        display: 'flex', 
-                        alignItems: 'center',
-                        textDecoration: 'none',
-                        fontWeight: 600,
-                        color: '#501b36',
-                        '&:hover': { textDecoration: 'underline' }
-                      }}
-                    >
-                      <Home sx={{ mr: 0.5, fontSize: 18 }} />
-                      Inicio
-                    </Link>
-                    {getBreadcrumbs().map((folder) => (
-                      <Link
-                        key={folder.id}
-                        component="button"
-                        variant="body1"
-                        onClick={() => setCurrentFolderId(folder.id)}
-                        sx={{ 
-                          textDecoration: 'none',
-                          fontWeight: 600,
-                          color: '#501b36',
-                          '&:hover': { textDecoration: 'underline' }
-                        }}
-                      >
-                        {folder.name}
-                      </Link>
-                    ))}
-                  </Breadcrumbs>
-                </Box>
+            {/* Navegación breadcrumbs moderna - Simplificada */}
+            <Box sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              mb: 2,
+              p: 2,
+              borderRadius: 2,
+              bgcolor: 'rgba(248, 250, 252, 0.8)',
+              border: '1px solid #e2e8f0',
+            }}>
+              {/* Breadcrumb Navigation */}
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
+                {currentPath !== '/' && (
+                  <Button
+                    startIcon={<ArrowBack />}
+                    onClick={handleBackClick}
+                    variant="outlined"
+                    size="small"
+                    sx={{
+                      borderRadius: 2,
+                      borderColor: 'transparent',
+                      bgcolor: 'rgba(80, 27, 54, 0.08)',
+                      color: '#501b36',
+                      textTransform: 'none',
+                      fontWeight: 500,
+                      px: 2,
+                      py: 0.5,
+                      fontSize: '0.875rem',
+                      '&:hover': {
+                        bgcolor: 'rgba(80, 27, 54, 0.15)',
+                      },
+                    }}
+                  >
+                    Volver
+                  </Button>
+                )}
+                
+                {/* Breadcrumb Trail */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.875rem', color: '#64748b' }}>
+                  {/* Home */}
+                  <Button
+                    onClick={() => setCurrentPath('/')}
+                    sx={{
+                      minWidth: 'auto',
+                      p: 0.5,
+                      borderRadius: 1,
+                      color: currentPath === '/' ? '#501b36' : '#64748b',
+                      fontWeight: currentPath === '/' ? 600 : 400,
+                      '&:hover': { bgcolor: 'rgba(80, 27, 54, 0.08)' },
+                    }}
+                  >
+                    <Home sx={{ fontSize: 16 }} />
+                  </Button>
 
-                <Chip
-                  icon={<AccountTree />}
-                  label={currentFolderId ? `Nivel ${getBreadcrumbs().length + 1}` : 'Raíz'}
-                  variant="outlined"
-                  sx={{
-                    borderColor: '#501b36',
+                  {/* Breadcrumb Items */}
+                  {getBreadcrumbs().map((folderName, index) => {
+                    const pathToFolder = '/' + getBreadcrumbs().slice(0, index + 1).join('/');
+                    return (
+                      <React.Fragment key={folderName}>
+                        <Typography sx={{ color: '#cbd5e1', mx: 0.5, fontSize: '0.75rem' }}>
+                          /
+                        </Typography>
+                        <Button
+                          onClick={() => setCurrentPath(pathToFolder)}
+                          sx={{
+                            textTransform: 'none',
+                            fontWeight: index === getBreadcrumbs().length - 1 ? 600 : 400,
+                            fontSize: '0.875rem',
+                            color: index === getBreadcrumbs().length - 1 ? '#501b36' : '#64748b',
+                            px: 1,
+                            py: 0.5,
+                            borderRadius: 1,
+                            minWidth: 'auto',
+                            maxWidth: '150px',
+                            '&:hover': { bgcolor: 'rgba(80, 27, 54, 0.08)' },
+                          }}
+                        >
+                          <Typography
+                            sx={{
+                              textOverflow: 'ellipsis',
+                              overflow: 'hidden',
+                              whiteSpace: 'nowrap',
+                              fontSize: 'inherit',
+                            }}
+                          >
+                            {folderName}
+                          </Typography>
+                        </Button>
+                      </React.Fragment>
+                    );
+                  })}
+                </Box>
+              </Box>
+
+              {/* Level Indicator */}
+              <Box
+                sx={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  px: 2,
+                  py: 1,
+                  borderRadius: 2,
+                  bgcolor: 'rgba(80, 27, 54, 0.08)',
+                  border: '1px solid rgba(80, 27, 54, 0.15)',
+                }}
+              >
+                <AccountTree sx={{ color: '#501b36', fontSize: 16 }} />
+                <Typography
+                  variant="caption"
+                  sx={{ 
                     color: '#501b36',
                     fontWeight: 600,
+                    fontSize: '0.8rem',
                   }}
-                />
+                >
+                  Nivel {currentPath !== '/' ? getBreadcrumbs().length : 0}
+                </Typography>
               </Box>
             </Box>
 
-            {/* Controles de acción */}
+            {/* Controles de acción - Más compactos */}
             <Box sx={{ 
               display: 'flex', 
-              gap: 2, 
+              gap: 1.5, 
               alignItems: 'center',
               flexDirection: { xs: 'column', sm: 'row' },
-              justifyContent: 'space-between'
+              justifyContent: 'space-between',
+              mb: 2
             }}>
               <TextField
+                size="small"
                 placeholder="Buscar archivos y carpetas..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 InputProps={{
-                  startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />
+                  startAdornment: <Search sx={{ mr: 1, color: 'text.secondary', fontSize: 20 }} />
                 }}
                 sx={{ 
                   flex: 1,
-                  maxWidth: { xs: '100%', sm: 400 },
+                  maxWidth: { xs: '100%', sm: 350 },
                   '& .MuiOutlinedInput-root': {
                     borderRadius: 2,
                     bgcolor: '#f8fafc',
@@ -622,7 +688,6 @@ export const Traffic: React.FC = () => {
                     },
                   },
                 }}
-                size="small"
               />
               
               <Stack direction="row" spacing={1}>
@@ -728,8 +793,8 @@ export const Traffic: React.FC = () => {
                 <AccountTree sx={{ color: '#501b36', fontSize: 28 }} />
                 <Box sx={{ flex: 1 }}>
                   <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36' }}>
-                    {currentFolderId ? 
-                      getBreadcrumbs()[getBreadcrumbs().length - 1]?.name || 'Carpeta Actual' :
+                    {currentPath !== '/' ? 
+                      getBreadcrumbs()[getBreadcrumbs().length - 1] || 'Carpeta Actual' :
                       'Gestión de Empresas de Transporte'
                     }
                   </Typography>
@@ -768,20 +833,20 @@ export const Traffic: React.FC = () => {
                 }}>
                   <Box
                     sx={{
-                      p: 3,
+                      p: 2.5,
                       borderRadius: '50%',
                       bgcolor: alpha('#501b36', 0.1),
                       display: 'inline-flex',
-                      mb: 3,
+                      mb: 2,
                     }}
                   >
-                    <FolderOpen sx={{ fontSize: 48, color: '#501b36' }} />
+                    <FolderOpen sx={{ fontSize: 40, color: '#501b36' }} />
                   </Box>
-                  <Typography variant="h5" sx={{ fontWeight: 700, color: 'text.primary', mb: 1 }}>
+                  <Typography variant="h6" sx={{ fontWeight: 600, color: 'text.primary', mb: 1 }}>
                     Esta área está vacía
                   </Typography>
-                  <Typography variant="body1" sx={{ color: 'text.secondary', mb: 3, maxWidth: 500, mx: 'auto' }}>
-                    {currentFolderId 
+                  <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2, maxWidth: 500, mx: 'auto' }}>
+                    {currentPath !== '/' 
                       ? 'No hay carpetas ni archivos en esta ubicación. Puedes crear carpetas o subir archivos para empezar.' 
                       : 'Comienza creando carpetas para organizar tus documentos de tráfico por empresas y tipos de vehículos.'
                     }
@@ -857,7 +922,7 @@ export const Traffic: React.FC = () => {
                           borderColor: getFolderTypeColor(folder.type),
                         },
                       }}
-                      onClick={() => handleFolderClick(folder.id)}
+                      onClick={() => handleFolderClick(folder.name)}
                     >
                       <CardContent sx={{ p: 3 }}>
                         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2, mb: 2 }}>
@@ -1029,12 +1094,45 @@ export const Traffic: React.FC = () => {
                 </Box>
                 ) : (
                   // Vista de Lista Unificada
-                  <TableContainer component={Paper} sx={{ 
-                    borderRadius: 3,
-                    border: '1px solid #e2e8f0',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                    overflow: 'hidden'
-                  }}>
+                  <Box>
+                    {/* Header de información */}
+                    {filteredUnifiedItems.length > 0 && (
+                      <Box sx={{ 
+                        mb: 2, 
+                        p: 2, 
+                        bgcolor: 'rgba(80, 27, 54, 0.05)',
+                        borderRadius: 2,
+                        border: '1px solid rgba(80, 27, 54, 0.1)',
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center'
+                      }}>
+                        <Typography variant="body2" sx={{ color: '#501b36', fontWeight: 600 }}>
+                          Mostrando {Math.min((page * rowsPerPage) + 1, filteredUnifiedItems.length)}-{Math.min((page + 1) * rowsPerPage, filteredUnifiedItems.length)} de {filteredUnifiedItems.length} elementos
+                        </Typography>
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="caption" sx={{ color: '#64748b' }}>
+                            Página {page + 1} de {Math.ceil(filteredUnifiedItems.length / rowsPerPage)}
+                          </Typography>
+                          <Chip 
+                            label={`${rowsPerPage} por página`} 
+                            size="small" 
+                            sx={{ 
+                              bgcolor: 'rgba(80, 27, 54, 0.1)', 
+                              color: '#501b36',
+                              fontSize: '0.7rem'
+                            }} 
+                          />
+                        </Box>
+                      </Box>
+                    )}
+
+                    <TableContainer component={Paper} sx={{ 
+                      borderRadius: 3,
+                      border: '1px solid #e2e8f0',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                      overflow: 'hidden'
+                    }}>
                     <Table stickyHeader>
                       <TableHead>
                         <TableRow sx={{ 
@@ -1068,7 +1166,7 @@ export const Traffic: React.FC = () => {
                               },
                             }}
                             onClick={() => item.itemType === 'folder' 
-                              ? handleFolderClick(item.id) 
+                              ? handleFolderClick(item.name) 
                               : handleOpenFile(item as TrafficFile)
                             }
                           >
@@ -1169,7 +1267,7 @@ export const Traffic: React.FC = () => {
                                   onClick={(e) => {
                                     e.stopPropagation();
                                     item.itemType === 'folder' 
-                                      ? handleFolderClick(item.id)
+                                      ? handleFolderClick(item.name)
                                       : handleOpenFile(item as TrafficFile);
                                   }}
                                   sx={{
@@ -1202,7 +1300,7 @@ export const Traffic: React.FC = () => {
                                       size="small"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleFolderClick(item.id);
+                                        handleFolderClick(item.name);
                                         setCreateFolderModal(true);
                                       }}
                                       sx={{
@@ -1217,7 +1315,7 @@ export const Traffic: React.FC = () => {
                                       size="small"
                                       onClick={(e) => {
                                         e.stopPropagation();
-                                        handleFolderClick(item.id);
+                                        handleFolderClick(item.name);
                                         setUploadModal(true);
                                       }}
                                       sx={{
@@ -1236,29 +1334,103 @@ export const Traffic: React.FC = () => {
                       </TableBody>
                     </Table>
                     
-                    {filteredUnifiedItems.length > rowsPerPage && (
+                    {/* Paginación mejorada */}
+                    {filteredUnifiedItems.length > 0 && (
                       <TablePagination
-                        rowsPerPageOptions={[5, 10, 25, 50]}
+                        rowsPerPageOptions={[5, 10, 25, 50, 100]}
                         component="div"
                         count={filteredUnifiedItems.length}
                         rowsPerPage={rowsPerPage}
                         page={page}
                         onPageChange={handleChangePage}
                         onRowsPerPageChange={handleChangeRowsPerPage}
-                        labelRowsPerPage="Filas por página:"
+                        labelRowsPerPage="Elementos por página:"
                         labelDisplayedRows={({ from, to, count }) =>
-                          `${from}-${to} de ${count !== -1 ? count : `más de ${to}`}`
+                          `${from}-${to} de ${count !== -1 ? count : `más de ${to}`} elementos`
                         }
                         sx={{
                           borderTop: '1px solid #e2e8f0',
                           bgcolor: '#f8fafc',
                           '& .MuiTablePagination-toolbar': {
-                            px: 3,
+                            px: 2,
+                            py: 1.5,
+                            minHeight: '56px',
+                          },
+                          '& .MuiTablePagination-selectLabel': {
+                            fontWeight: 600,
+                            color: '#374151',
+                          },
+                          '& .MuiTablePagination-displayedRows': {
+                            fontWeight: 600,
+                            color: '#501b36',
+                          },
+                          '& .MuiTablePagination-select': {
+                            borderRadius: 2,
+                            border: '1px solid #d1d5db',
+                            px: 2,
+                            py: 0.5,
+                            '&:focus': {
+                              borderColor: '#501b36',
+                            },
+                          },
+                          '& .MuiTablePagination-actions': {
+                            '& .MuiIconButton-root': {
+                              borderRadius: 2,
+                              border: '1px solid #d1d5db',
+                              color: '#501b36',
+                              '&:hover': {
+                                bgcolor: 'rgba(80, 27, 54, 0.1)',
+                                borderColor: '#501b36',
+                              },
+                              '&.Mui-disabled': {
+                                color: '#9ca3af',
+                                borderColor: '#e5e7eb',
+                              },
+                            },
                           },
                         }}
                       />
                     )}
+                    
+                    {/* Mensaje cuando no hay elementos */}
+                    {filteredUnifiedItems.length === 0 && (
+                      <Box sx={{ 
+                        p: 6, 
+                        textAlign: 'center', 
+                        bgcolor: '#f8fafc',
+                        borderTop: '1px solid #e2e8f0'
+                      }}>
+                        <Box
+                          sx={{
+                            p: 3,
+                            borderRadius: '50%',
+                            bgcolor: 'rgba(80, 27, 54, 0.1)',
+                            display: 'inline-flex',
+                            mb: 2,
+                          }}
+                        >
+                          <InsertDriveFile sx={{ fontSize: 48, color: '#501b36' }} />
+                        </Box>
+                        <Typography variant="h6" sx={{ fontWeight: 700, color: 'text.primary', mb: 1 }}>
+                          {searchTerm 
+                            ? 'No se encontraron elementos' 
+                            : currentPath !== '/' 
+                              ? 'Carpeta vacía'
+                              : 'No hay elementos para mostrar'
+                          }
+                        </Typography>
+                        <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                          {searchTerm 
+                            ? `No hay carpetas ni archivos que coincidan con "${searchTerm}"`
+                            : currentPath !== '/'
+                              ? 'Esta carpeta está vacía. El contenido de subcarpetas se mostrará cuando el backend esté completamente implementado.'
+                              : 'Esta ubicación está vacía. Puedes crear carpetas o subir archivos.'
+                          }
+                        </Typography>
+                      </Box>
+                    )}
                   </TableContainer>
+                  </Box>
                 )
               )}
             </Box>
@@ -1285,13 +1457,18 @@ export const Traffic: React.FC = () => {
           </Alert>
         </Snackbar>
 
-        {/* TODO: Modales modernos se implementarán después */}
-        {createFolderModal && (
-          <Box sx={{ display: 'none' }}>Modal de crear carpeta (implementar con ModernModal)</Box>
-        )}
-        {uploadModal && (
-          <Box sx={{ display: 'none' }}>Modal de subir archivos (implementar con ModernModal)</Box>
-        )}
+        {/* Modales */}
+        <CreateFolderModal
+          open={createFolderModal}
+          onClose={() => setCreateFolderModal(false)}
+          onConfirm={handleCreateFolder}
+        />
+        
+        <UploadModal
+          open={uploadModal}
+          onClose={() => setUploadModal(false)}
+          onConfirm={handleUploadFiles}
+        />
       </Box>
     </>
   );
@@ -1318,46 +1495,49 @@ const StatsCard: React.FC<StatsCardProps> = ({
   <Paper
     elevation={0}
     sx={{
-      p: 3,
-      borderRadius: 3,
+      p: 2,
+      borderRadius: 2,
       border: '1px solid #e2e8f0',
       background: '#ffffff',
       height: '100%',
+      minHeight: '100px',
       transition: 'all 0.3s ease',
       boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
       '&:hover': {
-        boxShadow: `0 8px 25px ${alpha(color, 0.12)}`,
-        transform: 'translateY(-2px)',
+        boxShadow: `0 4px 12px ${alpha(color, 0.12)}`,
+        transform: 'translateY(-1px)',
         borderColor: alpha(color, 0.3),
       },
     }}
   >
     {loading ? (
       <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-        <CircularProgress size={28} sx={{ color }} />
+        <CircularProgress size={20} sx={{ color }} />
       </Box>
     ) : (
       <Fade in timeout={600}>
         <Box sx={{ textAlign: 'center' }}>
           <Box
             sx={{
-              p: 2,
-              borderRadius: 3,
+              p: 1,
+              borderRadius: 2,
               backgroundColor: alpha(color, 0.1),
               color: color,
-              mb: 2,
+              mb: 1.5,
               display: 'inline-flex',
               border: `1px solid ${alpha(color, 0.2)}`,
             }}
           >
-            {icon}
+            <Box sx={{ fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {icon}
+            </Box>
           </Box>
           
-          <Typography variant="h4" sx={{ fontWeight: 800, color: 'text.primary', mb: 1 }}>
+          <Typography variant="h5" sx={{ fontWeight: 800, color: 'text.primary', mb: 0.5 }}>
             {isSize ? value : typeof value === 'number' ? value.toLocaleString() : value}
           </Typography>
           
-          <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 600 }}>
+          <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, fontSize: '0.7rem' }}>
             {title}
           </Typography>
         </Box>
@@ -1365,5 +1545,166 @@ const StatsCard: React.FC<StatsCardProps> = ({
     )}
   </Paper>
 );
+
+// Modal para crear carpeta
+const CreateFolderModal: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  onConfirm: (folderName: string) => void;
+}> = ({ open, onClose, onConfirm }) => {
+  const [folderName, setFolderName] = useState('');
+
+  const handleSubmit = () => {
+    if (folderName.trim()) {
+      onConfirm(folderName.trim());
+      setFolderName('');
+    }
+  };
+
+  return (
+    <Box
+      sx={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        bgcolor: 'rgba(0, 0, 0, 0.5)',
+        display: open ? 'flex' : 'none',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1300,
+      }}
+    >
+      <Paper
+        sx={{
+          p: 3,
+          borderRadius: 2,
+          width: '90%',
+          maxWidth: '400px',
+        }}
+      >
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          Nueva Carpeta
+        </Typography>
+        
+        <TextField
+          fullWidth
+          label="Nombre de la carpeta"
+          value={folderName}
+          onChange={(e) => setFolderName(e.target.value)}
+          onKeyPress={(e) => e.key === 'Enter' && handleSubmit()}
+          sx={{ mb: 2 }}
+        />
+        
+        <Stack direction="row" spacing={2} justifyContent="flex-end">
+          <Button onClick={onClose} variant="outlined">
+            Cancelar
+          </Button>
+          <Button 
+            onClick={handleSubmit} 
+            variant="contained"
+            disabled={!folderName.trim()}
+          >
+            Crear
+          </Button>
+        </Stack>
+      </Paper>
+    </Box>
+  );
+};
+
+// Modal para subir archivos
+const UploadModal: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  onConfirm: (files: File[]) => void;
+}> = ({ open, onClose, onConfirm }) => {
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files) {
+      setSelectedFiles(Array.from(event.target.files));
+    }
+  };
+
+  const handleSubmit = () => {
+    if (selectedFiles.length > 0) {
+      onConfirm(selectedFiles);
+      setSelectedFiles([]);
+    }
+  };
+
+  return (
+    <Box
+      sx={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        width: '100%',
+        height: '100%',
+        bgcolor: 'rgba(0, 0, 0, 0.5)',
+        display: open ? 'flex' : 'none',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1300,
+      }}
+    >
+      <Paper
+        sx={{
+          p: 3,
+          borderRadius: 2,
+          width: '90%',
+          maxWidth: '500px',
+        }}
+      >
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          Subir Archivos
+        </Typography>
+        
+        <Button
+          variant="outlined"
+          component="label"
+          startIcon={<Upload />}
+          sx={{ mb: 2, width: '100%' }}
+        >
+          Seleccionar Archivos
+          <input
+            type="file"
+            hidden
+            multiple
+            onChange={handleFileChange}
+          />
+        </Button>
+
+        {selectedFiles.length > 0 && (
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body2" sx={{ mb: 1 }}>
+              Archivos seleccionados ({selectedFiles.length}):
+            </Typography>
+            {selectedFiles.map((file, index) => (
+              <Typography key={index} variant="caption" sx={{ display: 'block' }}>
+                {file.name}
+              </Typography>
+            ))}
+          </Box>
+        )}
+        
+        <Stack direction="row" spacing={2} justifyContent="flex-end">
+          <Button onClick={onClose} variant="outlined">
+            Cancelar
+          </Button>
+          <Button 
+            onClick={handleSubmit} 
+            variant="contained"
+            disabled={selectedFiles.length === 0}
+          >
+            Subir
+          </Button>
+        </Stack>
+      </Paper>
+    </Box>
+  );
+};
 
 export default Traffic;
