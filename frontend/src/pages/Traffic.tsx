@@ -31,6 +31,7 @@ import {
   TableHead,
   TableRow,
   TablePagination,
+  MenuItem,
 } from '@mui/material';
 import { AuthContext } from '../contexts/AuthContext';
 import { alpha } from '@mui/material/styles';
@@ -586,27 +587,13 @@ export const Traffic: React.FC = () => {
           <Box sx={{ 
             display: 'grid', 
             gridTemplateColumns: { 
-              xs: 'repeat(2, 1fr)', 
-              sm: 'repeat(3, 1fr)', 
-              md: 'repeat(5, 1fr)' 
+              xs: 'repeat(1, 1fr)', 
+              sm: 'repeat(2, 1fr)', 
+              md: 'repeat(3, 1fr)' 
             }, 
             gap: 2, 
             mb: 3 
           }}>
-            <StatsCard
-              title="Empresas"
-              value={folders.filter(f => f.type === 'company').length}
-              icon={<Business />}
-              color="#501b36"
-              loading={loading}
-            />
-            <StatsCard
-              title="Tipos Vehículo"
-              value={folders.filter(f => f.type === 'vehicle_type').length}
-              icon={<LocalShipping />}
-              color="#43A047"
-              loading={loading}
-            />
             <StatsCard
               title="Total Carpetas"
               value={stats.totalFolders}
@@ -1256,38 +1243,6 @@ export const Traffic: React.FC = () => {
                 ) : (
                   // Vista de Lista Unificada
                   <Box>
-                    {/* Header de información */}
-                    {filteredUnifiedItems.length > 0 && (
-                      <Box sx={{ 
-                        mb: 2, 
-                        p: 2, 
-                        bgcolor: 'rgba(80, 27, 54, 0.05)',
-                        borderRadius: 2,
-                        border: '1px solid rgba(80, 27, 54, 0.1)',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                      }}>
-                        <Typography variant="body2" sx={{ color: '#501b36', fontWeight: 600 }}>
-                          Mostrando {Math.min((page * rowsPerPage) + 1, filteredUnifiedItems.length)}-{Math.min((page + 1) * rowsPerPage, filteredUnifiedItems.length)} de {filteredUnifiedItems.length} elementos
-                        </Typography>
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          <Typography variant="caption" sx={{ color: '#64748b' }}>
-                            Página {page + 1} de {Math.ceil(filteredUnifiedItems.length / rowsPerPage)}
-                          </Typography>
-                          <Chip 
-                            label={`${rowsPerPage} por página`} 
-                            size="small" 
-                            sx={{ 
-                              bgcolor: 'rgba(80, 27, 54, 0.1)', 
-                              color: '#501b36',
-                              fontSize: '0.7rem'
-                            }} 
-                          />
-                        </Box>
-                      </Box>
-                    )}
-
                     <TableContainer component={Paper} sx={{ 
                       borderRadius: 3,
                       border: '1px solid #e2e8f0',
@@ -1583,62 +1538,209 @@ export const Traffic: React.FC = () => {
                       </TableBody>
                     </Table>
                     
-                    {/* Paginación mejorada */}
+                    {/* Paginación moderna y elegante */}
                     {filteredUnifiedItems.length > 0 && (
-                      <TablePagination
-                        rowsPerPageOptions={[5, 10, 25, 50, 100]}
-                        component="div"
-                        count={filteredUnifiedItems.length}
-                        rowsPerPage={rowsPerPage}
-                        page={page}
-                        onPageChange={handleChangePage}
-                        onRowsPerPageChange={handleChangeRowsPerPage}
-                        labelRowsPerPage="Elementos por página:"
-                        labelDisplayedRows={({ from, to, count }) =>
-                          `${from}-${to} de ${count !== -1 ? count : `más de ${to}`} elementos`
-                        }
-                        sx={{
-                          borderTop: '1px solid #e2e8f0',
-                          bgcolor: '#f8fafc',
-                          '& .MuiTablePagination-toolbar': {
-                            px: 2,
-                            py: 1.5,
-                            minHeight: '56px',
-                          },
-                          '& .MuiTablePagination-selectLabel': {
-                            fontWeight: 600,
-                            color: '#374151',
-                          },
-                          '& .MuiTablePagination-displayedRows': {
-                            fontWeight: 600,
-                            color: '#501b36',
-                          },
-                          '& .MuiTablePagination-select': {
-                            borderRadius: 2,
-                            border: '1px solid #d1d5db',
-                            px: 2,
-                            py: 0.5,
-                            '&:focus': {
-                              borderColor: '#501b36',
-                            },
-                          },
-                          '& .MuiTablePagination-actions': {
-                            '& .MuiIconButton-root': {
+                      <Box sx={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        p: 3,
+                        borderTop: '1px solid #e2e8f0',
+                        bgcolor: '#ffffff',
+                      }}>
+                        {/* Info de elementos */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                          <Typography variant="body2" sx={{ 
+                            color: '#64748b', 
+                            fontWeight: 500,
+                            fontSize: '0.875rem' 
+                          }}>
+                            Mostrando {Math.min((page * rowsPerPage) + 1, filteredUnifiedItems.length)}-{Math.min((page + 1) * rowsPerPage, filteredUnifiedItems.length)} de {filteredUnifiedItems.length} elementos
+                          </Typography>
+                          
+                          {/* Selector de elementos por página */}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            <Typography variant="body2" sx={{ 
+                              color: '#64748b', 
+                              fontWeight: 500,
+                              fontSize: '0.875rem',
+                              whiteSpace: 'nowrap'
+                            }}>
+                              Ver:
+                            </Typography>
+                            <TextField
+                              select
+                              size="small"
+                              value={rowsPerPage}
+                              onChange={(e) => setRowsPerPage(parseInt(e.target.value))}
+                              sx={{
+                                minWidth: '70px',
+                                '& .MuiOutlinedInput-root': {
+                                  borderRadius: 2,
+                                  height: '36px',
+                                  fontSize: '0.875rem',
+                                  fontWeight: 500,
+                                  bgcolor: '#f8fafc',
+                                  border: '1.5px solid #e2e8f0',
+                                  '&:hover': {
+                                    borderColor: '#501b36',
+                                  },
+                                  '&.Mui-focused': {
+                                    borderColor: '#501b36',
+                                    boxShadow: '0 0 0 3px rgba(80, 27, 54, 0.1)',
+                                  },
+                                  '& fieldset': {
+                                    border: 'none',
+                                  },
+                                },
+                                '& .MuiSelect-select': {
+                                  py: 1,
+                                },
+                              }}
+                            >
+                              {[5, 10, 25, 50, 100].map((option) => (
+                                <MenuItem key={option} value={option}>
+                                  {option}
+                                </MenuItem>
+                              ))}
+                            </TextField>
+                          </Box>
+                        </Box>
+
+                        {/* Controles de navegación */}
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                          {/* Páginas */}
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {/* Botón primera página */}
+                            <IconButton
+                              onClick={() => setPage(0)}
+                              disabled={page === 0}
+                              sx={{
+                                width: 40,
+                                height: 40,
+                                borderRadius: 2,
+                                border: '1.5px solid #e2e8f0',
+                                bgcolor: '#f8fafc',
+                                color: '#501b36',
+                                transition: 'all 0.2s ease-in-out',
+                                '&:hover:not(:disabled)': {
+                                  bgcolor: 'rgba(80, 27, 54, 0.1)',
+                                  borderColor: '#501b36',
+                                  transform: 'translateY(-1px)',
+                                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                },
+                                '&:disabled': {
+                                  color: '#9ca3af',
+                                  borderColor: '#e5e7eb',
+                                  bgcolor: '#f3f4f6',
+                                },
+                              }}
+                            >
+                              <ArrowBack sx={{ fontSize: '1.1rem' }} />
+                            </IconButton>
+
+                            {/* Botón página anterior */}
+                            <IconButton
+                              onClick={() => setPage(page - 1)}
+                              disabled={page === 0}
+                              sx={{
+                                width: 40,
+                                height: 40,
+                                borderRadius: 2,
+                                border: '1.5px solid #e2e8f0',
+                                bgcolor: '#f8fafc',
+                                color: '#501b36',
+                                transition: 'all 0.2s ease-in-out',
+                                '&:hover:not(:disabled)': {
+                                  bgcolor: 'rgba(80, 27, 54, 0.1)',
+                                  borderColor: '#501b36',
+                                  transform: 'translateY(-1px)',
+                                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                },
+                                '&:disabled': {
+                                  color: '#9ca3af',
+                                  borderColor: '#e5e7eb',
+                                  bgcolor: '#f3f4f6',
+                                },
+                              }}
+                            >
+                              <NavigateNext sx={{ fontSize: '1.1rem', transform: 'rotate(180deg)' }} />
+                            </IconButton>
+
+                            {/* Información de página actual */}
+                            <Box sx={{
+                              px: 3,
+                              py: 1,
                               borderRadius: 2,
-                              border: '1px solid #d1d5db',
-                              color: '#501b36',
-                              '&:hover': {
-                                bgcolor: 'rgba(80, 27, 54, 0.1)',
-                                borderColor: '#501b36',
-                              },
-                              '&.Mui-disabled': {
-                                color: '#9ca3af',
-                                borderColor: '#e5e7eb',
-                              },
-                            },
-                          },
-                        }}
-                      />
+                              bgcolor: '#501b36',
+                              color: 'white',
+                              minWidth: '80px',
+                              textAlign: 'center',
+                              fontWeight: 600,
+                              fontSize: '0.875rem',
+                              border: '1.5px solid #501b36',
+                            }}>
+                              {page + 1} de {Math.ceil(filteredUnifiedItems.length / rowsPerPage)}
+                            </Box>
+
+                            {/* Botón página siguiente */}
+                            <IconButton
+                              onClick={() => setPage(page + 1)}
+                              disabled={page >= Math.ceil(filteredUnifiedItems.length / rowsPerPage) - 1}
+                              sx={{
+                                width: 40,
+                                height: 40,
+                                borderRadius: 2,
+                                border: '1.5px solid #e2e8f0',
+                                bgcolor: '#f8fafc',
+                                color: '#501b36',
+                                transition: 'all 0.2s ease-in-out',
+                                '&:hover:not(:disabled)': {
+                                  bgcolor: 'rgba(80, 27, 54, 0.1)',
+                                  borderColor: '#501b36',
+                                  transform: 'translateY(-1px)',
+                                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                },
+                                '&:disabled': {
+                                  color: '#9ca3af',
+                                  borderColor: '#e5e7eb',
+                                  bgcolor: '#f3f4f6',
+                                },
+                              }}
+                            >
+                              <NavigateNext sx={{ fontSize: '1.1rem' }} />
+                            </IconButton>
+
+                            {/* Botón última página */}
+                            <IconButton
+                              onClick={() => setPage(Math.ceil(filteredUnifiedItems.length / rowsPerPage) - 1)}
+                              disabled={page >= Math.ceil(filteredUnifiedItems.length / rowsPerPage) - 1}
+                              sx={{
+                                width: 40,
+                                height: 40,
+                                borderRadius: 2,
+                                border: '1.5px solid #e2e8f0',
+                                bgcolor: '#f8fafc',
+                                color: '#501b36',
+                                transition: 'all 0.2s ease-in-out',
+                                '&:hover:not(:disabled)': {
+                                  bgcolor: 'rgba(80, 27, 54, 0.1)',
+                                  borderColor: '#501b36',
+                                  transform: 'translateY(-1px)',
+                                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                },
+                                '&:disabled': {
+                                  color: '#9ca3af',
+                                  borderColor: '#e5e7eb',
+                                  bgcolor: '#f3f4f6',
+                                },
+                              }}
+                            >
+                              <NavigateNext sx={{ fontSize: '1.1rem' }} />
+                            </IconButton>
+                          </Box>
+                        </Box>
+                      </Box>
                     )}
                     
                     {/* Mensaje cuando no hay elementos */}
