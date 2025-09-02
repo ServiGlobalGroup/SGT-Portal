@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
-import { Box, Typography, Paper, TextField, Button, Fade, GlobalStyles, Alert, Switch, FormControlLabel, Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Stack, IconButton, Tooltip, ToggleButtonGroup, ToggleButton } from '@mui/material';
+import React, { useState, useEffect, useRef } from 'react';
+import { Box, Typography, Paper, TextField, Button, Fade, GlobalStyles, Alert, Switch, FormControlLabel, Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Stack, IconButton, Tooltip, ToggleButtonGroup, ToggleButton, Pagination, Autocomplete, CircularProgress } from '@mui/material';
 import { WorkOutline, DeleteOutline } from '@mui/icons-material';
 import { useAuth } from '../hooks/useAuth';
 import { hasPermission, Permission } from '../utils/permissions';
+import { tripsAPI, type TripRecord } from '../services/api';
 
 interface PernoctaEntry { id: string; orderNumber: string; pernocta: boolean; festivo: boolean; nota: string; createdAt: string; eventDate: string; userName: string; }
 
@@ -15,20 +16,132 @@ export const Trips: React.FC = () => {
   const [nota, setNota] = useState('');
   const [eventDate, setEventDate] = useState<string>(new Date().toISOString().slice(0,10)); // YYYY-MM-DD
   const [entries, setEntries] = useState<PernoctaEntry[]>([]);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [tab, setTab] = useState(0);
+  const [page, setPage] = useState(1);
+  const [pageSize] = useState(25);
+  const [total, setTotal] = useState(0);
+  // Filtros admin
+  const [filterUserId, setFilterUserId] = useState<string>('');
+  const [filterStart, setFilterStart] = useState<string>('');
+  const [filterEnd, setFilterEnd] = useState<string>('');
+  // Autocomplete usuarios
+  const [userSearch, setUserSearch] = useState('');
+  const [userOptions, setUserOptions] = useState<{ id:number; label:string; role?:string; }[]>([]);
+  const [selectedUser, setSelectedUser] = useState<{ id:number; label:string; role?:string; } | null>(null);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const searchTimeoutRef = useRef<number | null>(null);
+  const lastQueryRef = useRef<string>('');
 
-  const handleAdd = () => {
+  // Cargar registros iniciales (mis viajes o todos si admin)
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    if (isAdmin) {
+      tripsAPI.listAll({
+        user_id: filterUserId ? Number(filterUserId) : undefined,
+        start: filterStart || undefined,
+        end: filterEnd || undefined,
+        page,
+        page_size: pageSize
+      }).then(data => {
+        if (!active) return;
+        setTotal(data.total);
+        const mapped: PernoctaEntry[] = data.items.map((t: TripRecord) => ({
+          id: String(t.id),
+          orderNumber: t.order_number,
+          pernocta: t.pernocta,
+          festivo: t.festivo,
+          nota: t.note || '',
+            createdAt: t.created_at,
+          eventDate: t.event_date,
+          userName: t.user_name || '—'
+        }));
+        setEntries(mapped);
+      }).catch(err => { if(active) setError(err?.response?.data?.detail || 'Error cargando registros'); }).finally(()=> active && setLoading(false));
+    } else {
+      tripsAPI.listMine().then(data => {
+        if (!active) return;
+        const mapped: PernoctaEntry[] = data.map((t: TripRecord) => ({
+          id: String(t.id),
+          orderNumber: t.order_number,
+          pernocta: t.pernocta,
+          festivo: t.festivo,
+          nota: t.note || '',
+          createdAt: t.created_at,
+          eventDate: t.event_date,
+          userName: t.user_name || '—'
+        }));
+        setEntries(mapped);
+      }).catch(err => { if(active) setError(err?.response?.data?.detail || 'Error cargando registros'); }).finally(()=> active && setLoading(false));
+    }
+    return () => { active = false; };
+  }, [isAdmin, page, filterUserId, filterStart, filterEnd, pageSize]);
+
+  const handleAdd = async () => {
     if (!orderNumber.trim()) { setError('El número de Albarán / OC es obligatorio'); return; }
     if (!eventDate) { setError('La fecha del evento es obligatoria'); return; }
-    const newEntry: PernoctaEntry = { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, orderNumber: orderNumber.trim(), pernocta, festivo, nota: nota.trim(), createdAt: new Date().toISOString(), eventDate, userName: user?.full_name || `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || user?.username || '—' };
-    setEntries(p => [newEntry, ...p]);
-    setOrderNumber(''); setPernocta(false); setFestivo(false); setNota(''); setEventDate(new Date().toISOString().slice(0,10)); setError(null); setSuccess('Registro guardado'); setTimeout(() => setSuccess(null), 3000);
+    setError(null);
+    try {
+      const created = await tripsAPI.create({
+        order_number: orderNumber.trim(),
+        pernocta,
+        festivo,
+        event_date: eventDate,
+        note: nota.trim() || undefined
+      } as any); // simple cast
+      const entry: PernoctaEntry = {
+        id: String(created.id),
+        orderNumber: created.order_number,
+        pernocta: created.pernocta,
+        festivo: created.festivo,
+        nota: created.note || '',
+        createdAt: created.created_at,
+        eventDate: created.event_date,
+        userName: created.user_name || user?.full_name || '—'
+      };
+      setEntries(p => [entry, ...p]);
+      setOrderNumber(''); setPernocta(false); setFestivo(false); setNota(''); setEventDate(new Date().toISOString().slice(0,10)); setSuccess('Registro guardado'); setTimeout(() => setSuccess(null), 3000);
+    } catch (e: any) {
+      setError(e?.response?.data?.detail || 'Error guardando');
+    }
   };
   const handleClear = () => { setOrderNumber(''); setPernocta(false); setFestivo(false); setNota(''); setEventDate(new Date().toISOString().slice(0,10)); setError(null); };
-  const handleDelete = (id: string) => setEntries(p => p.filter(e => e.id !== id));
+  const handleDelete = async (id: string) => {
+    const prev = entries;
+    setEntries(p => p.filter(e => e.id !== id));
+    try {
+      await tripsAPI.remove(Number(id));
+    } catch (e) {
+      setEntries(prev); // revertir
+      setError('No se pudo eliminar');
+    }
+  };
   const handleChangeTab = (_: React.SyntheticEvent, v: number) => { if(v!==null) setTab(v); };
+
+  // Cargar opciones de usuario para filtro
+  useEffect(() => {
+    if (!isAdmin) return;
+    const term = userSearch.trim();
+    if (searchTimeoutRef.current) window.clearTimeout(searchTimeoutRef.current);
+    if (term.length < 2) { setUserOptions([]); setLoadingUsers(false); lastQueryRef.current=''; return; }
+    searchTimeoutRef.current = window.setTimeout(async () => {
+      if (lastQueryRef.current === term) return;
+      lastQueryRef.current = term;
+      setLoadingUsers(true);
+      try {
+        const res = await tripsAPI.userSuggestions(term);
+        setUserOptions(res.map(u => ({ id: u.id, label: `${u.label} (${u.role})`, role: u.role })));
+      } catch {
+        setUserOptions([]);
+      } finally {
+        setLoadingUsers(false);
+      }
+    }, 300);
+    return () => { if (searchTimeoutRef.current) window.clearTimeout(searchTimeoutRef.current); };
+  }, [userSearch, isAdmin]);
 
   return (<>
     <GlobalStyles styles={{ body: { paddingRight: '0px !important', overflow: 'auto !important', overflowX: 'hidden !important' } }} />
@@ -101,7 +214,7 @@ export const Trips: React.FC = () => {
             }}
           >
             <ToggleButton value={0}>Nuevo Registro</ToggleButton>
-            {isAdmin && <ToggleButton value={1}>{`Registros (${entries.length})`}</ToggleButton>}
+            {isAdmin && <ToggleButton value={1}>{`Registros (${total})`}</ToggleButton>}
           </ToggleButtonGroup>
         </Box>
       </Box>
@@ -129,6 +242,52 @@ export const Trips: React.FC = () => {
       {isAdmin && tab === 1 && (
         <Fade in timeout={600}>
           <Paper elevation={0} sx={{ p:2, mb:3, borderRadius:2, border:'1px solid #e0e0e0', background:'#ffffff' }}>
+            {/* Filtros */}
+            <Stack direction={{ xs:'column', sm:'row' }} spacing={2} sx={{ mb:2 }}>
+              <Autocomplete
+                sx={{ minWidth: 260 }}
+                size="small"
+                options={userOptions}
+                loading={loadingUsers}
+                value={selectedUser}
+                onChange={(_, val) => { setSelectedUser(val); setFilterUserId(val ? String(val.id) : ''); setPage(1); }}
+                onInputChange={(_, val, reason) => {
+                  if (reason === 'input') setUserSearch(val);
+                  if (!val) { setSelectedUser(null); setFilterUserId(''); setPage(1); }
+                }}
+                filterOptions={(opts) => opts} /* no filtrado adicional en cliente */
+                isOptionEqualToValue={(o,v)=> o.id===v.id }
+                getOptionLabel={(o)=> o.label }
+                renderOption={(props, option) => (
+                  <li {...props} key={option.id}>
+                    <Box sx={{ display:'flex', flexDirection:'column' }}>
+                      <Typography variant="body2" fontWeight={600}>{option.label}</Typography>
+                    </Box>
+                  </li>
+                )}
+                renderInput={(params) => (
+                  <TextField
+                    {...params}
+                    label="Conductor"
+                    placeholder="Nombre o apellidos"
+                    InputProps={{
+                      ...params.InputProps,
+                      endAdornment: (
+                        <>
+                          {loadingUsers ? <CircularProgress color="inherit" size={16} sx={{ mr:1 }} /> : null}
+                          {params.InputProps.endAdornment}
+                        </>
+                      )
+                    }}
+                  />
+                )}
+                noOptionsText={userSearch.length < 2 ? 'Teclee 2+ letras' : 'Sin resultados'}
+                clearText="Limpiar"
+              />
+              <TextField label="Desde" type="date" size="small" value={filterStart} onChange={e=>{ setPage(1); setFilterStart(e.target.value); }} InputLabelProps={{ shrink:true }} />
+              <TextField label="Hasta" type="date" size="small" value={filterEnd} onChange={e=>{ setPage(1); setFilterEnd(e.target.value); }} InputLabelProps={{ shrink:true }} />
+              <Button variant="outlined" size="small" onClick={()=>{ setSelectedUser(null); setUserSearch(''); setFilterUserId(''); setFilterStart(''); setFilterEnd(''); setPage(1); }}>Limpiar</Button>
+            </Stack>
             <TableContainer sx={{ border:'1px solid #e0e0e0', borderRadius:2 }}>
               <Table size="small">
                 <TableHead>
@@ -174,9 +333,16 @@ export const Trips: React.FC = () => {
                 </TableBody>
               </Table>
             </TableContainer>
+            {total > pageSize && (
+              <Box sx={{ display:'flex', justifyContent:'center', mt:2 }}>
+                <Pagination count={Math.ceil(total / pageSize)} page={page} onChange={(_,v)=> setPage(v)} size="small" />
+              </Box>
+            )}
           </Paper>
         </Fade>
       )}
+      {/* Mostrar indicador simple */}
+      {loading && <Box sx={{ position:'fixed', top:70, right:20, zIndex:2000, background:'#501b36', color:'#fff', px:2, py:1, borderRadius:2, boxShadow:3 }}>Cargando...</Box>}
     </Box>
   </>);
 };

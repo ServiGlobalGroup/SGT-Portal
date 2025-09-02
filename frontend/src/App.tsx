@@ -13,7 +13,7 @@ const Traffic = lazy(() => import('./pages/Traffic').then(m => ({ default: m.Tra
 const Vacations = lazy(() => import('./pages/Vacations').then(m => ({ default: m.Vacations })));
 const Documents = lazy(() => import('./pages/Documents').then(m => ({ default: m.Documents })));
 const Dietas = lazy(() => import('./pages/Dietas').then(m => ({ default: m.Dietas })));
-const Trips = lazy(() => import('./pages/Orders').then(m => ({ default: m.Trips })));
+const Trips = lazy(() => import('./pages/Trips').then(m => ({ default: m.Trips })));
 const Users = lazy(() => import('./pages/Users'));
 const DocumentationPanel = lazy(() => import('./pages/DocumentationPanel'));
 const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })));

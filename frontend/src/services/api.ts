@@ -610,3 +610,35 @@ export const userFilesAPI = {
       api.get(`/api/user-files/admin/user/${dniNie}/documents`).then(res => res.data),
   }
 };
+
+export interface TripRecord {
+  id: number;
+  order_number: string;
+  pernocta: boolean;
+  festivo: boolean;
+  event_date: string; // YYYY-MM-DD
+  note?: string;
+  created_at: string;
+  user_id: number;
+  user_name?: string;
+}
+
+export interface TripPage { total: number; page: number; page_size: number; items: TripRecord[] }
+
+export const tripsAPI = {
+  create: (data: { order_number: string; pernocta: boolean; festivo: boolean; event_date: string; note?: string; }): Promise<TripRecord> =>
+    api.post('/api/trips/', data).then(r=>r.data),
+  listAll: (params?: { user_id?: number; start?: string; end?: string; page?: number; page_size?: number; }): Promise<TripPage> => {
+    const sp = new URLSearchParams();
+    if (params?.user_id) sp.append('user_id', String(params.user_id));
+    if (params?.start) sp.append('start', params.start);
+    if (params?.end) sp.append('end', params.end);
+    if (params?.page) sp.append('page', String(params.page));
+    if (params?.page_size) sp.append('page_size', String(params.page_size));
+    return api.get(`/api/trips/?${sp.toString()}`).then(r=>r.data as TripPage);
+  },
+  listMine: (): Promise<TripRecord[]> => api.get('/api/trips/mine').then(r=>r.data),
+  remove: (id: number) => api.delete(`/api/trips/${id}`).then(r=>r.data),
+  userSuggestions: (q: string): Promise<{ id:number; label:string; role:string; }[]> =>
+    api.get('/api/trips/user-suggestions', { params: { q } }).then(r=>r.data)
+};
