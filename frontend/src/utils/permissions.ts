@@ -11,8 +11,8 @@ export enum Permission {
   MANAGE_DOCUMENTS = 'manage_documents',
   
   // Módulo Órdenes
-  VIEW_ORDERS = 'view_orders',
-  MANAGE_ORDERS = 'manage_orders',
+  VIEW_TRIPS = 'view_trips',
+  MANAGE_TRIPS = 'manage_trips',
   
   // Módulo Vacaciones
   VIEW_VACATIONS = 'view_vacations',
@@ -48,8 +48,8 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     Permission.VIEW_DOCUMENTS,
     Permission.UPLOAD_DOCUMENTS,
     Permission.MANAGE_DOCUMENTS,
-    Permission.VIEW_ORDERS,
-    Permission.MANAGE_ORDERS,
+  Permission.VIEW_TRIPS,
+  Permission.MANAGE_TRIPS,
     Permission.VIEW_VACATIONS,
     Permission.MANAGE_VACATIONS,
   Permission.VIEW_DIETAS,
@@ -65,7 +65,7 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   TRABAJADOR: [
     Permission.VIEW_DOCUMENTS,
     Permission.UPLOAD_DOCUMENTS,
-    Permission.VIEW_ORDERS, // Solo los trabajadores (conductores) ven las órdenes
+  Permission.VIEW_TRIPS, // Conductores ven viajes
     Permission.VIEW_VACATIONS,
   ],
   TRAFICO: [
@@ -81,8 +81,9 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     Permission.VIEW_DOCUMENTS,
     Permission.UPLOAD_DOCUMENTS,
     Permission.MANAGE_DOCUMENTS,
-    // Permission.VIEW_ORDERS - REMOVIDO: Administradores no ven órdenes
-    // Permission.MANAGE_ORDERS - REMOVIDO: Administradores no gestionan órdenes
+  // Órdenes habilitado nuevamente para administradores:
+  Permission.VIEW_TRIPS,
+  Permission.MANAGE_TRIPS,
     Permission.VIEW_VACATIONS,
     Permission.MANAGE_VACATIONS,
   Permission.VIEW_DIETAS,
@@ -132,8 +133,8 @@ export const canAccessRoute = (user: User | null, route: string): boolean => {
       return hasPermission(user, Permission.MASS_UPLOAD);
     case '/documents':
       return hasPermission(user, Permission.VIEW_DOCUMENTS);
-    case '/orders':
-      return hasPermission(user, Permission.VIEW_ORDERS);
+    case '/trips':
+      return hasPermission(user, Permission.VIEW_TRIPS);
     case '/vacations':
       return hasPermission(user, Permission.VIEW_VACATIONS);
     case '/traffic':
@@ -176,7 +177,7 @@ export const getDefaultRoute = (user: User | null): string => {
   // Verificar rutas en orden de prioridad
   if (hasPermission(user, Permission.VIEW_DASHBOARD)) return '/dashboard';
   if (hasPermission(user, Permission.VIEW_DOCUMENTS)) return '/';
-  if (hasPermission(user, Permission.VIEW_ORDERS)) return '/orders';
+  if (hasPermission(user, Permission.VIEW_TRIPS)) return '/trips';
   if (hasPermission(user, Permission.VIEW_VACATIONS)) return '/vacations';
   if (hasPermission(user, Permission.VIEW_TRAFFIC)) return '/traffic';
   if (hasPermission(user, Permission.VIEW_USERS)) return '/users';

@@ -1,980 +1,182 @@
-import React, { useState, useEffect } from 'react';
-import { DevelopmentModal } from '../components/DevelopmentModal';
-import {
-  Box,
-  Typography,
-  Paper,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Chip,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  TextField,
-  IconButton,
-  Menu,
-  MenuItem as MenuItemComponent,
-  Alert,
-  Button,
-  Tooltip,
-  Badge,
-  CircularProgress,
-  Stack,
-  Fade,
-  GlobalStyles,
-} from '@mui/material';
-import { alpha } from '@mui/material/styles';
-import {
-  Assignment,
-  Search,
-  MoreVert,
-  Visibility,
-  Business,
-  Schedule,
-  PriorityHigh,
-  CheckCircle,
-  Pending,
-  Cancel,
-  HourglassTop,
-  AttachFile,
-  Refresh,
-  MailOutline,
-  ListAlt,
-  WorkOutline,
-} from '@mui/icons-material';
-import { PdfPreview } from '../components/PdfPreview';
-import { ordersAPI } from '../services/api';
-import type { Order, OrderDocument } from '../types';
+import React, { useState } from 'react';
+import { Box, Typography, Paper, TextField, Button, Fade, GlobalStyles, Alert, Switch, FormControlLabel, Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Stack, IconButton, Tooltip, ToggleButtonGroup, ToggleButton } from '@mui/material';
+import { WorkOutline, DeleteOutline } from '@mui/icons-material';
+import { useAuth } from '../hooks/useAuth';
+import { hasPermission, Permission } from '../utils/permissions';
 
-export const Orders: React.FC = () => {
-  // Estados principales
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [orderDocuments, setOrderDocuments] = useState<OrderDocument[]>([]);
-  const [loading, setLoading] = useState(true);
+interface PernoctaEntry { id: string; orderNumber: string; pernocta: boolean; festivo: boolean; nota: string; createdAt: string; eventDate: string; userName: string; }
+
+export const Trips: React.FC = () => {
+  const { user } = useAuth();
+  const isAdmin = !!user && hasPermission(user, Permission.MANAGE_TRIPS);
+  const [orderNumber, setOrderNumber] = useState('');
+  const [pernocta, setPernocta] = useState(false);
+  const [festivo, setFestivo] = useState(false);
+  const [nota, setNota] = useState('');
+  const [eventDate, setEventDate] = useState<string>(new Date().toISOString().slice(0,10)); // YYYY-MM-DD
+  const [entries, setEntries] = useState<PernoctaEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [tab, setTab] = useState(0);
 
-  // Estados de filtros
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'processing' | 'completed' | 'cancelled'>('all');
-  const [filterPriority, setFilterPriority] = useState<'all' | 'low' | 'normal' | 'high' | 'urgent'>('all');
-
-  // Estados UI
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [showDevelopmentModal, setShowDevelopmentModal] = useState(true);
-  const [pdfPreview, setPdfPreview] = useState<{ open: boolean; fileUrl: string; fileName: string }>({
-    open: false,
-    fileUrl: '',
-    fileName: ''
-  });
-
-  // Cargar datos
-  useEffect(() => {
-    loadOrders();
-  }, []);
-
-  // Auto-hide alerts
-  useEffect(() => {
-    if (error) {
-      const timer = setTimeout(() => setError(null), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [error]);
-
-  useEffect(() => {
-    if (success) {
-      const timer = setTimeout(() => setSuccess(null), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [success]);
-
-  const loadOrders = async () => {
-    try {
-      setLoading(true);
-      const ordersData = await ordersAPI.getOrders();
-      setOrders(ordersData);
-      
-      // Cargar documentos para cada orden
-      const allDocuments: OrderDocument[] = [];
-      for (const order of ordersData) {
-        const orderDocs = await ordersAPI.getOrderDocuments(order.id!);
-        allDocuments.push(...orderDocs);
-      }
-      setOrderDocuments(allDocuments);
-    } catch {
-      setError('Error al cargar las órdenes');
-    } finally {
-      setLoading(false);
-    }
+  const handleAdd = () => {
+    if (!orderNumber.trim()) { setError('El número de Albarán / OC es obligatorio'); return; }
+    if (!eventDate) { setError('La fecha del evento es obligatoria'); return; }
+    const newEntry: PernoctaEntry = { id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, orderNumber: orderNumber.trim(), pernocta, festivo, nota: nota.trim(), createdAt: new Date().toISOString(), eventDate, userName: user?.full_name || `${user?.first_name || ''} ${user?.last_name || ''}`.trim() || user?.username || '—' };
+    setEntries(p => [newEntry, ...p]);
+    setOrderNumber(''); setPernocta(false); setFestivo(false); setNota(''); setEventDate(new Date().toISOString().slice(0,10)); setError(null); setSuccess('Registro guardado'); setTimeout(() => setSuccess(null), 3000);
   };
+  const handleClear = () => { setOrderNumber(''); setPernocta(false); setFestivo(false); setNota(''); setEventDate(new Date().toISOString().slice(0,10)); setError(null); };
+  const handleDelete = (id: string) => setEntries(p => p.filter(e => e.id !== id));
+  const handleChangeTab = (_: React.SyntheticEvent, v: number) => { if(v!==null) setTab(v); };
 
-  const simulateNewEmail = async () => {
-    try {
-      setLoading(true);
-      const result = await ordersAPI.simulateEmail();
-      setSuccess(`Nueva orden recibida: ${result.order.order_number} de ${result.order.company_name}`);
-      await loadOrders();
-    } catch {
-      setError('Error al simular correo electrónico');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Funciones auxiliares
-  const formatDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('es-ES', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-  };
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'pending': return <Pending sx={{ color: '#ed6c02' }} />;
-      case 'processing': return <HourglassTop sx={{ color: '#501b36' }} />;
-      case 'completed': return <CheckCircle sx={{ color: '#2e7d32' }} />;
-      case 'cancelled': return <Cancel sx={{ color: '#d32f2f' }} />;
-      default: return <Pending sx={{ color: '#757575' }} />;
-    }
-  };
-
-  const getStatusColor = (status: string): 'error' | 'warning' | 'info' | 'success' | 'default' => {
-    switch (status) {
-      case 'pending': return 'warning';
-      case 'processing': return 'info';
-      case 'completed': return 'success';
-      case 'cancelled': return 'error';
-      default: return 'default';
-    }
-  };
-
-  const getPriorityColor = (priority: string): 'error' | 'warning' | 'info' | 'success' | 'default' => {
-    switch (priority) {
-      case 'urgent': return 'error';
-      case 'high': return 'warning';
-      case 'normal': return 'info';
-      case 'low': return 'success';
-      default: return 'default';
-    }
-  };
-
-  const getPriorityIcon = (priority: string) => {
-    switch (priority) {
-      case 'urgent':
-      case 'high':
-        return <PriorityHigh sx={{ fontSize: 16 }} />;
-      default:
-        return null;
-    }
-  };
-
-  // Handlers
-  const handleMenuClick = (event: React.MouseEvent<HTMLElement>, order: Order) => {
-    setAnchorEl(event.currentTarget);
-    setSelectedOrder(order);
-  };
-
-  const handleMenuClose = () => {
-    setAnchorEl(null);
-    setSelectedOrder(null);
-  };
-
-  const handleViewDocuments = async () => {
-    if (selectedOrder) {
-      const docs = orderDocuments.filter(doc => doc.order_id === selectedOrder.id);
-      if (docs.length > 0) {
-        try {
-          const blob = await ordersAPI.viewDocument(docs[0].id!);
-          const url = URL.createObjectURL(blob);
-          setPdfPreview({
-            open: true,
-            fileUrl: url,
-            fileName: docs[0].file_name
-          });
-        } catch {
-          setError('Error al cargar el documento');
-        }
-      }
-    }
-    handleMenuClose();
-  };
-
-  const handleUpdateStatus = async (orderId: number, newStatus: string) => {
-    try {
-      await ordersAPI.updateOrderStatus(orderId, newStatus);
-      setOrders(orders.map(order => 
-        order.id === orderId ? { ...order, status: newStatus as Order['status'] } : order
-      ));
-      setSuccess(`Estado actualizado a "${newStatus}"`);
-    } catch {
-      setError('Error al actualizar el estado');
-    }
-    handleMenuClose();
-  };
-
-  const getOrderDocumentsCount = (orderId: number): number => {
-    return orderDocuments.filter(doc => doc.order_id === orderId).length;
-  };
-
-  // Filtrar órdenes
-  const filteredOrders = orders.filter(order => {
-    const matchesSearch = order.order_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         order.company_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         order.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         order.email_received_from.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesStatus = filterStatus === 'all' || order.status === filterStatus;
-    const matchesPriority = filterPriority === 'all' || order.priority === filterPriority;
-    
-    return matchesSearch && matchesStatus && matchesPriority;
-  });
-
-  return (
-    <>
-      <GlobalStyles
-        styles={{
-          body: {
-            paddingRight: '0px !important',
-            overflow: 'auto !important',
-            overflowX: 'hidden !important',
-          },
-          '.MuiModal-root': {
-            paddingRight: '0px !important',
-          },
-          '.MuiPopover-root': {
-            paddingRight: '0px !important',
-          },
-          '.MuiTableContainer-root': {
-            overflowX: 'hidden !important',
-          },
-          '.MuiTable-root': {
-            overflowX: 'hidden !important',
-          },
-        }}
-      />
-      <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: '100%', bgcolor: '#f5f5f5', minHeight: '100vh' }}>
-        {/* Header Principal */}
-        <Box sx={{ mb: 4 }}>
-          <Fade in timeout={800}>
-            <Paper 
-              elevation={0}
-              sx={{
-                p: { xs: 3, sm: 4 },
-                background: 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 50%, #d4a574 100%)',
-                color: 'white',
-                borderRadius: 3,
-                position: 'relative',
-                overflow: 'hidden',
-                '&::before': {
-                  content: '""',
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  backgroundImage: 'url("data:image/svg+xml,%3Csvg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="none" fill-rule="evenodd"%3E%3Cg fill="%23ffffff" fill-opacity="0.1"%3E%3Cpath d="m36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
-                },
-              }}
-            >
-              <Box sx={{ position: 'relative', zIndex: 1 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2 }}>
-                  <Box
-                    sx={{
-                      p: 2,
-                      bgcolor: 'rgba(255, 255, 255, 0.2)',
-                      borderRadius: 2,
-                      backdropFilter: 'blur(10px)',
-                    }}
-                  >
-                    <WorkOutline sx={{ fontSize: 32 }} />
-                  </Box>
-                  <Box>
-                    <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
-                      Gestión de Órdenes
-                    </Typography>
-                    <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400 }}>
-                      Administra y procesa las órdenes recibidas por correo electrónico
-                    </Typography>
-                  </Box>
-                </Box>
-              </Box>
-            </Paper>
-          </Fade>
-        </Box>
-
-        {/* Alertas */}
-        {error && (
-          <Fade in timeout={400}>
-            <Alert 
-              severity="error" 
-              sx={{ 
-                mb: 3,
-                borderRadius: 2,
-                '& .MuiAlert-icon': {
-                  fontSize: 24
-                }
-              }} 
-              onClose={() => setError(null)}
-            >
-              {error}
-            </Alert>
-          </Fade>
-        )}
-
-        {success && (
-          <Fade in timeout={400}>
-            <Alert 
-              severity="success" 
-              sx={{ 
-                mb: 3,
-                borderRadius: 2,
-                '& .MuiAlert-icon': {
-                  fontSize: 24
-                }
-              }} 
-              onClose={() => setSuccess(null)}
-            >
-              {success}
-            </Alert>
-          </Fade>
-        )}
-
-        {/* Panel de Control */}
-        <Fade in timeout={1000}>
-          <Paper
-            elevation={0}
-            sx={{
-              p: 3,
-              mb: 3,
-              borderRadius: 2,
-              border: '1px solid #e0e0e0',
-              background: '#ffffff',
-            }}
-          >
-            <Box sx={{ 
-              display: 'flex', 
-              gap: 2, 
-              alignItems: 'center',
-              flexDirection: { xs: 'column', lg: 'row' },
-              justifyContent: 'space-between'
-            }}>
-              <Box sx={{ 
-                display: 'flex', 
-                alignItems: { xs: 'stretch', sm: 'center' }, 
-                gap: 2, 
-                flexDirection: { xs: 'column', sm: 'row' },
-                flexWrap: 'wrap',
-                width: { xs: '100%', lg: 'auto' }
-              }}>
-                <TextField
-                  placeholder="Buscar por número, empresa, asunto o email..."
-                  variant="outlined"
-                  size="small"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  InputProps={{
-                    startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />,
-                  }}
-                  sx={{ 
-                    minWidth: { xs: '100%', sm: 300 },
-                    flex: { xs: 1, sm: 0 },
-                    '& .MuiOutlinedInput-root': {
-                      borderRadius: 2,
-                      '&:hover': {
-                        '& .MuiOutlinedInput-notchedOutline': {
-                          borderColor: '#501b36',
-                        },
-                      },
-                    },
-                  }}
-                />
-                
-                <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 150 } }}>
-                  <InputLabel sx={{ 
-                    '&.Mui-focused': { 
-                      color: '#501b36' 
-                    } 
-                  }}>
-                    Estado
-                  </InputLabel>
-                  <Select
-                    value={filterStatus}
-                    label="Estado"
-                    onChange={(e) => setFilterStatus(e.target.value as typeof filterStatus)}
-                    sx={{
-                      borderRadius: 2,
-                      '&:hover': {
-                        '& .MuiOutlinedInput-notchedOutline': {
-                          borderColor: '#501b36',
-                        },
-                      },
-                      '&.Mui-focused': {
-                        '& .MuiOutlinedInput-notchedOutline': {
-                          borderColor: '#501b36',
-                        },
-                      },
-                      '& .MuiSelect-select:focus': {
-                        backgroundColor: 'transparent',
-                      },
-                    }}
-                    MenuProps={{
-                      PaperProps: {
-                        sx: {
-                          borderRadius: 2,
-                          mt: 0.5,
-                          '& .MuiMenuItem-root': {
-                            '&:hover': {
-                              backgroundColor: alpha('#501b36', 0.08),
-                              color: '#501b36',
-                            },
-                            '&.Mui-selected': {
-                              backgroundColor: alpha('#501b36', 0.12),
-                              color: '#501b36',
-                              '&:hover': {
-                                backgroundColor: alpha('#501b36', 0.16),
-                              },
-                            },
-                          },
-                        },
-                      },
-                    }}
-                  >
-                    <MenuItem value="all">Todos</MenuItem>
-                    <MenuItem value="pending">Pendientes</MenuItem>
-                    <MenuItem value="processing">En Proceso</MenuItem>
-                    <MenuItem value="completed">Completadas</MenuItem>
-                    <MenuItem value="cancelled">Canceladas</MenuItem>
-                  </Select>
-                </FormControl>
-
-                <FormControl size="small" sx={{ minWidth: { xs: '100%', sm: 150 } }}>
-                  <InputLabel sx={{ 
-                    '&.Mui-focused': { 
-                      color: '#501b36' 
-                    } 
-                  }}>
-                    Prioridad
-                  </InputLabel>
-                  <Select
-                    value={filterPriority}
-                    label="Prioridad"
-                    onChange={(e) => setFilterPriority(e.target.value as typeof filterPriority)}
-                    sx={{
-                      borderRadius: 2,
-                      '&:hover': {
-                        '& .MuiOutlinedInput-notchedOutline': {
-                          borderColor: '#501b36',
-                        },
-                      },
-                      '&.Mui-focused': {
-                        '& .MuiOutlinedInput-notchedOutline': {
-                          borderColor: '#501b36',
-                        },
-                      },
-                      '& .MuiSelect-select:focus': {
-                        backgroundColor: 'transparent',
-                      },
-                    }}
-                    MenuProps={{
-                      PaperProps: {
-                        sx: {
-                          borderRadius: 2,
-                          mt: 0.5,
-                          '& .MuiMenuItem-root': {
-                            '&:hover': {
-                              backgroundColor: alpha('#501b36', 0.08),
-                              color: '#501b36',
-                            },
-                            '&.Mui-selected': {
-                              backgroundColor: alpha('#501b36', 0.12),
-                              color: '#501b36',
-                              '&:hover': {
-                                backgroundColor: alpha('#501b36', 0.16),
-                              },
-                            },
-                          },
-                        },
-                      },
-                    }}
-                  >
-                    <MenuItem value="all">Todas</MenuItem>
-                    <MenuItem value="urgent">Urgente</MenuItem>
-                    <MenuItem value="high">Alta</MenuItem>
-                    <MenuItem value="normal">Normal</MenuItem>
-                    <MenuItem value="low">Baja</MenuItem>
-                  </Select>
-                </FormControl>
-              </Box>
-
-              <Stack direction="row" spacing={1}>
-                <Button
-                  variant="outlined"
-                  startIcon={<Refresh />}
-                  onClick={loadOrders}
-                  disabled={loading}
-                  sx={{
-                    borderRadius: 2,
-                    px: 3,
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    borderColor: '#501b36',
-                    color: '#501b36',
-                    '&:hover': {
-                      borderColor: '#3d1429',
-                      bgcolor: alpha('#501b36', 0.04),
-                    },
-                  }}
-                >
-                  {loading ? 'Actualizando...' : 'Actualizar'}
-                </Button>
-
-                <Button
-                  variant="contained"
-                  startIcon={<MailOutline />}
-                  onClick={simulateNewEmail}
-                  disabled={loading}
-                  sx={{
-                    borderRadius: 2,
-                    px: 3,
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    backgroundColor: '#501b36',
-                    '&:hover': {
-                      backgroundColor: '#3d1429',
-                    },
-                  }}
-                >
-                  Simular Nuevo Correo
-                </Button>
-              </Stack>
-            </Box>
-          </Paper>
-        </Fade>
-
-        {/* Contenido Principal */}
-        <Fade in timeout={1200}>
-          <Paper
-            elevation={0}
-            sx={{
-              borderRadius: 2,
-              overflow: 'hidden',
-              border: '1px solid #e0e0e0',
-              background: '#ffffff',
-            }}
-          >
-            {/* Header de la tabla */}
-            <Box sx={{ 
-              p: 3, 
-              borderBottom: 1, 
-              borderColor: 'divider',
-              background: alpha('#501b36', 0.02),
-            }}>
+  return (<>
+    <GlobalStyles styles={{ body: { paddingRight: '0px !important', overflow: 'auto !important', overflowX: 'hidden !important' } }} />
+    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: '100%', bgcolor: '#f5f5f5', minHeight: '100vh' }}>
+      <Box sx={{ mb: 4 }}>
+        <Fade in timeout={700}>
+          <Paper elevation={0} sx={{ p: { xs: 3, sm: 4 }, background: 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 55%, #d4a574 100%)', color: 'white', borderRadius: 3, position: 'relative', overflow: 'hidden', '&::before': { content: '""', position: 'absolute', inset: 0, backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\\"60\\" height=\\"60\\" viewBox=\\"0 0 60 60\\" xmlns=\\"http://www.w3.org/2000/svg\\"%3E%3Cg fill=\\"none\\" fill-rule=\\"evenodd\\"%3E%3Cg fill=\\"%23ffffff\\" fill-opacity=\\"0.08\\"%3E%3Cpath d=\\"m36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\\"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")' } }}>
+            <Box sx={{ position: 'relative', zIndex: 1 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                <ListAlt sx={{ color: '#501b36', fontSize: 28 }} />
+                <Box sx={{ p: 2, bgcolor: 'rgba(255,255,255,0.18)', borderRadius: 2, backdropFilter: 'blur(8px)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <WorkOutline sx={{ fontSize: 32, color: '#ffffff' }} />
+                </Box>
                 <Box>
-                  <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36' }}>
-                    Órdenes Recibidas por Correo
-                  </Typography>
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    {filteredOrders.length} orden{filteredOrders.length !== 1 ? 'es' : ''} encontrada{filteredOrders.length !== 1 ? 's' : ''}
-                  </Typography>
+                  <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>Registro de Viajes (Pernocta / Festivo)</Typography>
+                  <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400, fontSize: { xs: '1rem', sm: '1.1rem' } }}>Indica si una orden tuvo pernocta y/o fue en día festivo</Typography>
                 </Box>
               </Box>
             </Box>
-
-            {/* Contenido de órdenes */}
-            {loading ? (
-              <Box sx={{ 
-                display: 'flex', 
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                p: 6,
-                gap: 2
-              }}>
-                <CircularProgress size={48} sx={{ color: '#501b36' }} />
-                <Typography variant="h6" sx={{ color: 'text.secondary' }}>
-                  Cargando órdenes...
-                </Typography>
-              </Box>
-            ) : filteredOrders.length === 0 ? (
-              <Box sx={{ 
-                p: 6, 
-                textAlign: 'center',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: 2
-              }}>
-                <Box
-                  sx={{
-                    p: 3,
-                    borderRadius: '50%',
-                    bgcolor: alpha('#501b36', 0.1),
-                    mb: 2,
-                  }}
-                >
-                  <Assignment sx={{ fontSize: 48, color: '#501b36' }} />
-                </Box>
-                <Typography variant="h5" sx={{ fontWeight: 600, color: 'text.secondary', mb: 1 }}>
-                  No hay órdenes disponibles
-                </Typography>
-                <Typography variant="body1" sx={{ color: 'text.secondary', mb: 3, maxWidth: 400 }}>
-                  {searchTerm || filterStatus !== 'all' || filterPriority !== 'all'
-                    ? 'No se encontraron órdenes que coincidan con los filtros aplicados'
-                    : 'Las órdenes aparecerán aquí cuando se reciban por correo electrónico'
-                  }
-                </Typography>
-                <Button
-                  variant="contained"
-                  startIcon={<MailOutline />}
-                  onClick={simulateNewEmail}
-                  disabled={loading}
-                  sx={{
-                    borderRadius: 2,
-                    px: 4,
-                    py: 1.5,
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    backgroundColor: '#501b36',
-                    '&:hover': {
-                      backgroundColor: '#3d1429',
-                    },
-                  }}
-                >
-                  Simular Nueva Orden
-                </Button>
-              </Box>
-            ) : (
-              <TableContainer
-                sx={{
-                  overflowX: 'hidden !important',
-                  '&::-webkit-scrollbar': {
-                    display: 'none',
-                  },
-                  '-ms-overflow-style': 'none',
-                  'scrollbar-width': 'none',
-                }}
-              >
-                <Table>
-                  <TableHead>
-                    <TableRow 
-                      sx={{ 
-                        bgcolor: alpha('#501b36', 0.02),
-                        '& .MuiTableCell-head': {
-                          fontWeight: 700,
-                          color: '#501b36',
-                          borderBottom: `2px solid ${alpha('#501b36', 0.1)}`,
-                          py: 2,
-                        }
-                      }}
-                    >
-                      <TableCell>Número de Orden</TableCell>
-                      <TableCell>Empresa</TableCell>
-                      <TableCell>Asunto</TableCell>
-                      <TableCell>Fecha Recibida</TableCell>
-                      <TableCell>Estado</TableCell>
-                      <TableCell>Prioridad</TableCell>
-                      <TableCell>Documentos</TableCell>
-                      <TableCell align="center">Acciones</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {filteredOrders.map((order) => (
-                      <TableRow 
-                        key={order.id} 
-                        hover
-                        sx={{
-                          transition: 'all 0.2s ease',
-                          '&:hover': {
-                            bgcolor: alpha('#501b36', 0.02),
-                            transform: 'translateX(4px)',
-                          },
-                          '& .MuiTableCell-root': {
-                            borderBottom: `1px solid ${alpha('#501b36', 0.06)}`,
-                            py: 2,
-                          }
-                        }}
-                      >
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <Box
-                              sx={{
-                                p: 1.5,
-                                borderRadius: 2,
-                                bgcolor: alpha('#501b36', 0.1),
-                              }}
-                            >
-                              <Assignment sx={{ color: '#501b36' }} />
-                            </Box>
-                            <Box>
-                              <Typography variant="body1" sx={{ fontWeight: 600, mb: 0.5 }}>
-                                {order.order_number}
-                              </Typography>
-                              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                Orden de trabajo
-                              </Typography>
-                            </Box>
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                            <Box
-                              sx={{
-                                p: 1.5,
-                                borderRadius: 2,
-                                bgcolor: alpha('#501b36', 0.1),
-                              }}
-                            >
-                              <Business sx={{ color: '#501b36' }} />
-                            </Box>
-                            <Box>
-                              <Typography variant="body1" sx={{ fontWeight: 600, mb: 0.5 }}>
-                                {order.company_name}
-                              </Typography>
-                              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                {order.email_received_from}
-                              </Typography>
-                            </Box>
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Tooltip title={order.subject}>
-                            <Typography variant="body2" sx={{ 
-                              maxWidth: 200, 
-                              overflow: 'hidden', 
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              fontWeight: 500
-                            }}>
-                              {order.subject}
-                            </Typography>
-                          </Tooltip>
-                        </TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Schedule sx={{ color: '#757575', fontSize: 16 }} />
-                            <Box>
-                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                {formatDate(order.received_date)}
-                              </Typography>
-                              <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                                Fecha de recepción
-                              </Typography>
-                            </Box>
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            {getStatusIcon(order.status)}
-                            <Chip
-                              label={order.status.charAt(0).toUpperCase() + order.status.slice(1)}
-                              size="small"
-                              color={getStatusColor(order.status)}
-                              sx={{
-                                borderRadius: 2,
-                                fontWeight: 600,
-                                fontSize: '0.75rem',
-                              }}
-                            />
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                            {getPriorityIcon(order.priority)}
-                            <Chip
-                              label={order.priority.charAt(0).toUpperCase() + order.priority.slice(1)}
-                              size="small"
-                              variant="outlined"
-                              color={getPriorityColor(order.priority)}
-                              sx={{
-                                borderRadius: 2,
-                                fontWeight: 600,
-                                fontSize: '0.75rem',
-                              }}
-                            />
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Badge 
-                            badgeContent={getOrderDocumentsCount(order.id)} 
-                            color="primary"
-                            sx={{
-                              '& .MuiBadge-badge': {
-                                borderRadius: 2,
-                                fontWeight: 600,
-                              }
-                            }}
-                          >
-                            <Box
-                              sx={{
-                                p: 1,
-                                borderRadius: 2,
-                                bgcolor: alpha('#501b36', 0.1),
-                              }}
-                            >
-                              <AttachFile sx={{ color: '#501b36' }} />
-                            </Box>
-                          </Badge>
-                        </TableCell>
-                        <TableCell align="center">
-                          <IconButton 
-                            size="small"
-                            onClick={(e) => handleMenuClick(e, order)}
-                            sx={{
-                              borderRadius: 2,
-                              bgcolor: alpha('#501b36', 0.08),
-                              color: '#501b36',
-                              '&:hover': {
-                                bgcolor: alpha('#501b36', 0.12),
-                              },
-                            }}
-                          >
-                            <MoreVert />
-                          </IconButton>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            )}
           </Paper>
         </Fade>
-
-        {/* Menú contextual mejorado */}
-        <Menu
-          anchorEl={anchorEl}
-          open={Boolean(anchorEl)}
-          onClose={handleMenuClose}
-          PaperProps={{
-            sx: {
-              borderRadius: 2,
-              boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
-              border: '1px solid #e0e0e0',
-              mt: 1,
-              minWidth: 180,
-            }
+      </Box>
+      {error && <Fade in timeout={300}><Alert severity="error" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setError(null)}>{error}</Alert></Fade>}
+      {success && <Fade in timeout={300}><Alert severity="success" sx={{ mb: 2, borderRadius: 2 }} onClose={() => setSuccess(null)}>{success}</Alert></Fade>}
+      {/* Selector estilo Dietas */}
+      <Box sx={{ mb:3, display:'flex', justifyContent:'flex-start' }}>
+        <Box
+          sx={{
+            p:0.5,
+            borderRadius:3,
+            background:'linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%)',
+            border:'2px solid #e0e0e0',
+            boxShadow:'inset 0 1px 3px rgba(0,0,0,0.1)',
+            display:'inline-block'
           }}
         >
-          <MenuItemComponent 
-            onClick={handleViewDocuments}
+          <ToggleButtonGroup
+            value={tab}
+            exclusive
+            onChange={handleChangeTab}
+            size="small"
             sx={{
-              py: 1.5,
-              px: 2,
-              gap: 2,
-              '&:hover': {
-                bgcolor: alpha('#501b36', 0.08),
-                color: '#501b36',
+              '& .MuiToggleButtonGroup-grouped': {
+                border:'none',
+                '&:not(:first-of-type)': { borderRadius:3, marginLeft:'4px' },
+                '&:first-of-type': { borderRadius:3 }
               },
+              '& .MuiToggleButton-root': {
+                borderRadius:'20px !important',
+                px:2.5, py:1,
+                textTransform:'none',
+                fontSize:'0.8rem', fontWeight:700,
+                border:'none !important', minWidth:140,
+                transition:'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                position:'relative', overflow:'hidden',
+                '&::before': { content:'""', position:'absolute', inset:0, background:'linear-gradient(135deg, rgba(80,27,54,0.1) 0%, rgba(80,27,54,0.05) 100%)', opacity:0, transition:'opacity 0.3s ease' },
+                '&:hover::before': { opacity:1 },
+                '&.Mui-selected': {
+                  background:'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 70%, #501b36 100%)',
+                  color:'white',
+                  boxShadow:'0 4px 12px rgba(80,27,54,0.3), 0 2px 4px rgba(80,27,54,0.2)',
+                  transform:'translateY(-1px)',
+                  '&:hover': { background:'linear-gradient(135deg, #3d1429 0%, #5a1d3a 30%, #6b2545 70%, #3d1429 100%)', boxShadow:'0 6px 16px rgba(80,27,54,0.4), 0 2px 8px rgba(80,27,54,0.3)' },
+                  '&::before': { opacity:0 }
+                },
+                '&:not(.Mui-selected)': {
+                  color:'#501b36', backgroundColor:'rgba(255,255,255,0.8)', backdropFilter:'blur(10px)',
+                  '&:hover': { backgroundColor:'rgba(255,255,255,0.95)', transform:'translateY(-0.5px)', boxShadow:'0 2px 8px rgba(0,0,0,0.1)' }
+                }
+              }
             }}
           >
-            <Visibility sx={{ fontSize: 20 }} />
-            <Typography variant="body2" sx={{ fontWeight: 500 }}>
-              Ver Documentos
-            </Typography>
-          </MenuItemComponent>
-          
-          {selectedOrder?.status === 'pending' && (
-            <MenuItemComponent 
-              onClick={() => selectedOrder && handleUpdateStatus(selectedOrder.id, 'processing')}
-              sx={{
-                py: 1.5,
-                px: 2,
-                gap: 2,
-                '&:hover': {
-                  bgcolor: alpha('#2196f3', 0.08),
-                  color: '#2196f3',
-                },
-              }}
-            >
-              <HourglassTop sx={{ fontSize: 20 }} />
-              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                Marcar en Proceso
-              </Typography>
-            </MenuItemComponent>
-          )}
-          
-          {selectedOrder?.status === 'processing' && (
-            <MenuItemComponent 
-              onClick={() => selectedOrder && handleUpdateStatus(selectedOrder.id, 'completed')}
-              sx={{
-                py: 1.5,
-                px: 2,
-                gap: 2,
-                '&:hover': {
-                  bgcolor: alpha('#4caf50', 0.08),
-                  color: '#4caf50',
-                },
-              }}
-            >
-              <CheckCircle sx={{ fontSize: 20 }} />
-              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                Marcar Completada
-              </Typography>
-            </MenuItemComponent>
-          )}
-          
-          {(selectedOrder?.status === 'pending' || selectedOrder?.status === 'processing') && (
-            <MenuItemComponent 
-              onClick={() => selectedOrder && handleUpdateStatus(selectedOrder.id, 'cancelled')}
-              sx={{
-                py: 1.5,
-                px: 2,
-                gap: 2,
-                '&:hover': {
-                  bgcolor: alpha('#f44336', 0.08),
-                  color: '#f44336',
-                },
-              }}
-            >
-              <Cancel sx={{ fontSize: 20 }} />
-              <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                Cancelar Orden
-              </Typography>
-            </MenuItemComponent>
-          )}
-        </Menu>
-
-        {/* Preview de PDF mejorado */}
-        <PdfPreview
-          open={pdfPreview.open}
-          onClose={() => setPdfPreview({ open: false, fileUrl: '', fileName: '' })}
-          fileUrl={pdfPreview.fileUrl}
-          fileName={pdfPreview.fileName}
-          title="Documento de Orden"
-        />
-
-        {/* Modal de desarrollo */}
-        <DevelopmentModal
-          open={showDevelopmentModal}
-          onClose={() => setShowDevelopmentModal(false)}
-          pageTitle="Gestión de Órdenes"
-          description="Esta funcionalidad está siendo desarrollada para administrar y procesar las órdenes recibidas por correo electrónico."
-          features={[
-            'Recepción automática de órdenes por email',
-            'Clasificación automática por empresa',
-            'Gestión de estados y prioridades',
-            'Sistema de notificaciones',
-            'Historial completo de órdenes',
-            'Exportación de reportes'
-          ]}
-          estimatedCompletion="Septiembre 2025"
-          progressValue={70}
-          corporateColor="#501b36"
-        />
+            <ToggleButton value={0}>Nuevo Registro</ToggleButton>
+            {isAdmin && <ToggleButton value={1}>{`Registros (${entries.length})`}</ToggleButton>}
+          </ToggleButtonGroup>
+        </Box>
       </Box>
-    </>
-  );
+
+      {tab === 0 && (
+        <Fade in timeout={600}>
+          <Paper elevation={0} sx={{ p:3, mb:3, borderRadius:2, border:'1px solid #e0e0e0', background:'#ffffff', width:'100%', maxWidth:900 }}>
+            <Stack spacing={2} sx={{ width:'100%' }}>
+              <TextField fullWidth label="Albarán / OC" value={orderNumber} onChange={e => setOrderNumber(e.target.value)} required size="small" helperText={!orderNumber.trim() ? 'Obligatorio' : ' '} error={!orderNumber.trim() && !!orderNumber} />
+              <TextField fullWidth label="Fecha pernocta / festivo" type="date" value={eventDate} onChange={e => setEventDate(e.target.value)} size="small" InputLabelProps={{ shrink:true }} required />
+              <Box sx={{ display:'flex', flexWrap:'wrap', gap:3 }}>
+                <FormControlLabel control={<Switch checked={pernocta} onChange={e => setPernocta(e.target.checked)} />} label="Pernocta" />
+                <FormControlLabel control={<Switch checked={festivo} onChange={e => setFestivo(e.target.checked)} />} label="Festivo" />
+              </Box>
+              <TextField fullWidth label="Nota (opcional)" value={nota} onChange={e => setNota(e.target.value)} multiline minRows={2} size="small" inputProps={{ maxLength:300 }} helperText={`${nota.length}/300`} />
+              <Box sx={{ display:'flex', flexWrap:'wrap', gap:2 }}>
+                <Button variant="contained" onClick={handleAdd} disabled={!orderNumber.trim() || !eventDate} sx={{ fontWeight:600 }}>Guardar</Button>
+                <Button variant="outlined" onClick={handleClear}>Limpiar</Button>
+              </Box>
+            </Stack>
+          </Paper>
+        </Fade>
+      )}
+
+      {isAdmin && tab === 1 && (
+        <Fade in timeout={600}>
+          <Paper elevation={0} sx={{ p:2, mb:3, borderRadius:2, border:'1px solid #e0e0e0', background:'#ffffff' }}>
+            <TableContainer sx={{ border:'1px solid #e0e0e0', borderRadius:2 }}>
+              <Table size="small">
+                <TableHead>
+                  <TableRow sx={{ background:'linear-gradient(180deg,#fafafa,#f0f0f0)', '& th': { fontWeight:600 } }}>
+                    <TableCell>Conductor</TableCell>
+                    <TableCell>Albarán / OC</TableCell>
+                    <TableCell>Pernocta</TableCell>
+                    <TableCell>Festivo</TableCell>
+                    <TableCell>Fecha Evento</TableCell>
+                    <TableCell>Fecha Registro</TableCell>
+                    <TableCell>Nota</TableCell>
+                    <TableCell align="right">Acciones</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {entries.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={8} align="center" sx={{ py:6 }}>
+                        <Typography variant="body2" sx={{ opacity:0.7 }}>Sin registros todavía</Typography>
+                      </TableCell>
+                    </TableRow>
+                  )}
+                  {entries.map(e => (
+                    <TableRow key={e.id} hover>
+                      <TableCell sx={{ fontWeight:500 }}>{e.userName || '—'}</TableCell>
+                      <TableCell sx={{ fontWeight:600 }}>{e.orderNumber}</TableCell>
+                      <TableCell>{e.pernocta ? 'Sí' : 'No'}</TableCell>
+                      <TableCell>{e.festivo ? 'Sí' : 'No'}</TableCell>
+                      <TableCell>{new Date(e.eventDate + 'T00:00:00').toLocaleDateString('es-ES', { day:'2-digit', month:'2-digit', year:'2-digit' })}</TableCell>
+                      <TableCell>{new Date(e.createdAt).toLocaleString('es-ES', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' })}</TableCell>
+                      <TableCell>
+                        <Tooltip title={e.nota || ''} disableInteractive placement="top-start">
+                          <Typography variant="body2" sx={{ maxWidth:200, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{e.nota || '-'}</Typography>
+                        </Tooltip>
+                      </TableCell>
+                      <TableCell align="right">
+                        <IconButton size="small" onClick={() => handleDelete(e.id)}>
+                          <DeleteOutline fontSize="small" />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+        </Fade>
+      )}
+    </Box>
+  </>);
 };
