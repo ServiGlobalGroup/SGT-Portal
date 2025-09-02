@@ -1,14 +1,13 @@
 from fastapi import APIRouter, HTTPException, Depends
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
-from typing import List, Dict, Any
-import os
-import json
+from typing import List
 import mimetypes
 from pathlib import Path
 from datetime import datetime
 from app.database.connection import get_db
 from sqlalchemy import text
+from app.config import settings  # Usar configuración centralizada
 
 router = APIRouter()
 
@@ -18,8 +17,8 @@ async def get_documentation_users(db: Session = Depends(get_db)):
     Obtiene todos los usuarios con sus carpetas de documentos desde el sistema de archivos
     """
     try:
-        # Ruta base de user_files
-        user_files_path = Path("../user_files")
+        # Usar la ruta unificada configurada en settings (files/users)
+        user_files_path = Path(settings.user_files_base_path)
         
         if not user_files_path.exists():
             return []
@@ -85,7 +84,8 @@ async def get_documentation_users(db: Session = Depends(get_db)):
                                         'size': file_size,
                                         'folder': folder_name,
                                         'created_date': datetime.fromtimestamp(file_stat.st_ctime).strftime('%Y-%m-%d'),
-                                        'path': str(file_path.relative_to(Path("../"))),
+                                        # Ruta relativa a la carpeta base de usuarios
+                                        'path': str(file_path.relative_to(user_files_path.parent)),
                                         'user_dni': dni_nie
                                     })
                                 except Exception as e:
@@ -119,7 +119,7 @@ async def get_user_folders(dni: str):
     Obtiene las carpetas de un usuario específico
     """
     try:
-        user_path = Path(f"../user_files/{dni}")
+        user_path = Path(settings.user_files_base_path) / dni
         
         if not user_path.exists():
             raise HTTPException(status_code=404, detail="Usuario no encontrado")
@@ -147,7 +147,7 @@ async def download_document(user_dni: str, folder: str, filename: str):
     """
     try:
         # Construir la ruta al archivo
-        user_files_path = Path("../user_files")
+        user_files_path = Path(settings.user_files_base_path)
         file_path = user_files_path / user_dni / folder / filename
         
         # Verificar que el archivo existe
@@ -186,7 +186,7 @@ async def preview_document(user_dni: str, folder: str, filename: str):
     """
     try:
         # Construir la ruta al archivo
-        user_files_path = Path("../user_files")
+        user_files_path = Path(settings.user_files_base_path)
         file_path = user_files_path / user_dni / folder / filename
         
         # Verificar que el archivo existe
