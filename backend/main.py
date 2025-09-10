@@ -15,7 +15,7 @@ BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
-from app.api import dashboard, traffic, vacations, documents, payroll, orders, profile, settings, users, auth, user_files, documentation, activity, dietas, distancieros, folder_management, trips
+from app.api import dashboard, traffic, vacations, documents, payroll, profile, settings, users, auth, user_files, documentation, activity, dietas, distancieros, folder_management, trips
 from app.database.connection import check_database_connection
 from app.middleware.maintenance import MaintenanceMiddleware
 from app.config import settings as app_settings
@@ -76,7 +76,7 @@ app.include_router(traffic.router, prefix="/api/traffic", tags=["traffic"])
 app.include_router(vacations.router, prefix="/api/vacations", tags=["vacations"])
 app.include_router(documents.router, prefix="/api/documents", tags=["documents"])
 app.include_router(payroll.router, prefix="/api/payroll", tags=["payroll"])
-app.include_router(orders.router, tags=["orders"])  # Legacy
+# Orders deshabilitado (legacy, no usado)
 app.include_router(trips.router, tags=["trips"])   # New trips module
 app.include_router(profile.router, prefix="/api", tags=["profile"])
 app.include_router(settings.router, prefix="/api", tags=["settings"])

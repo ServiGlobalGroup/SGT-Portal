@@ -304,52 +304,7 @@ export const payrollAPI = {
   }
 };
 
-export const ordersAPI = {
-  // Obtener todas las órdenes
-  getOrders: () => 
-    api.get('/api/orders/').then(res => res.data),
-  
-  // Obtener orden específica
-  getOrder: (id: number) => 
-    api.get(`/api/orders/${id}`).then(res => res.data),
-  
-  // Obtener documentos de una orden
-  getOrderDocuments: (orderId: number) => 
-    api.get(`/api/orders/${orderId}/documents`).then(res => res.data),
-  
-  // Actualizar estado de orden
-  updateOrderStatus: (orderId: number, status: string) => 
-    api.put(`/api/orders/${orderId}/status`, null, { params: { status } }).then(res => res.data),
-  
-  // Obtener estadísticas
-  getStats: () => 
-    api.get('/api/orders/stats/summary').then(res => res.data),
-  
-  // Simular recepción de correo electrónico
-  simulateEmail: () => 
-    api.post('/api/orders/simulate-email').then(res => res.data),
-  
-  // Procesar correo electrónico con archivos
-  processEmail: (senderEmail: string, subject: string, companyName: string, priority: string, files: File[]) => {
-    const formData = new FormData();
-    formData.append('sender_email', senderEmail);
-    formData.append('subject', subject);
-    formData.append('company_name', companyName);
-    formData.append('priority', priority);
-    files.forEach(file => formData.append('files', file));
-    return api.post('/api/orders/process-email', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    }).then(res => res.data);
-  },
-  
-  // Ver documento PDF
-  viewDocument: (documentId: number): Promise<Blob> => 
-    api.get(`/api/orders/documents/${documentId}/view`, { responseType: 'blob' }).then(res => res.data),
-  
-  // Descargar documento
-  downloadDocument: (documentId: number) => 
-    api.get(`/api/orders/documents/download/${documentId}`).then(res => res.data),
-};
+// Nota: ordersAPI eliminado porque los endpoints de órdenes fueron retirados del backend
 
 export const settingsAPI = {
   // Obtener todas las configuraciones
