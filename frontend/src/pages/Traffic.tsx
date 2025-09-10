@@ -798,20 +798,6 @@ export const Traffic: React.FC = () => {
               />
               
               <Stack direction="row" spacing={1}>
-                <Tooltip title="Cambiar vista">
-                  <IconButton
-                    onClick={() => setViewMode(viewMode === 'grid' ? 'list' : 'grid')}
-                    sx={{
-                      color: '#501b36',
-                      '&:hover': {
-                        bgcolor: alpha('#501b36', 0.08),
-                      },
-                    }}
-                  >
-                    {viewMode === 'grid' ? <ViewList /> : <GridView />}
-                  </IconButton>
-                </Tooltip>
-                
                 <Button
                   variant="outlined"
                   startIcon={<Refresh />}
