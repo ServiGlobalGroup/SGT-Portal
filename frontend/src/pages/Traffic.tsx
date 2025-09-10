@@ -7,8 +7,6 @@ import {
   Button,
   Paper,
   TextField,
-  Breadcrumbs,
-  Link,
   Chip,
   Alert,
   CircularProgress,
@@ -18,19 +16,12 @@ import {
   IconButton,
   Tooltip,
   Snackbar,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  LinearProgress,
-  Pagination,
   Table,
   TableBody,
   TableCell,
   TableContainer,
   TableHead,
   TableRow,
-  TablePagination,
   MenuItem,
 } from '@mui/material';
 import { AuthContext } from '../contexts/AuthContext';
@@ -57,7 +48,6 @@ import {
   AccountTree,
   GridView,
   ViewList,
-  Warning,
   PictureAsPdf,
   Image,
   Delete,
@@ -107,7 +97,10 @@ export const Traffic: React.FC = () => {
   const [files, setFiles] = useState<TrafficFile[]>([]);
 
   // Estados de UI
+  // loading: para acciones (crear, subir, borrar, actualizar manual)
+  // listLoading: para navegación entre carpetas sin "recargar" toda la página
   const [loading, setLoading] = useState(false);
+  const [listLoading, setListLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   
@@ -141,10 +134,11 @@ export const Traffic: React.FC = () => {
   };
 
   // Función para cargar carpetas desde la API
-  const loadFolders = async (path?: string) => {
+  const loadFolders = async (path?: string, opts?: { list?: boolean }) => {
     try {
       console.log('🔄 Loading folders for path:', path || 'root');
-      setLoading(true);
+      const useListLoading = opts?.list === true;
+      useListLoading ? setListLoading(true) : setLoading(true);
       
       const foldersData = await trafficFilesAPI.getFolders(path);
       console.log('📁 Folders loaded:', foldersData);
@@ -175,9 +169,10 @@ export const Traffic: React.FC = () => {
     } catch (error) {
       console.error('Error loading folders:', error);
       showSnackbar('Error al cargar las carpetas', 'error');
-      setFolders([]);
+  setFolders([]);
     } finally {
-      setLoading(false);
+  const useListLoading = opts?.list === true;
+  useListLoading ? setListLoading(false) : setLoading(false);
     }
   };
 
@@ -196,22 +191,12 @@ export const Traffic: React.FC = () => {
     }
   };
 
-  // Cargar datos iniciales
+  // Cargar/recargar datos cuando cambie la carpeta actual (incluye la carga inicial)
   useEffect(() => {
-    loadFolders();
-    loadFiles();
-  }, []);
-
-  // Cargar datos iniciales
-  useEffect(() => {
-    loadFolders(currentPath === '/' ? undefined : currentPath);
-    loadFiles(currentPath === '/' ? undefined : currentPath);
-  }, []);
-
-  // Recargar datos cuando cambie la carpeta actual
-  useEffect(() => {
-    loadFolders(currentPath === '/' ? undefined : currentPath);
-    loadFiles(currentPath === '/' ? undefined : currentPath);
+    const path = currentPath === '/' ? undefined : currentPath;
+    // Para navegación entre carpetas, usar loading de listado únicamente
+    loadFolders(path, { list: true });
+    loadFiles(path);
   }, [currentPath]);
 
   // Crear elementos unificados para vista lista
@@ -410,14 +395,7 @@ export const Traffic: React.FC = () => {
     page * rowsPerPage + rowsPerPage
   );
 
-  const handleChangePage = (event: unknown, newPage: number) => {
-    setPage(newPage);
-  };
-
-  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
+  // Paginación controlada mediante setPage/setRowsPerPage directamente en los controles UI
 
   // Función para manejar la apertura de archivos
   const handleOpenFile = (file: TrafficFile) => {
@@ -931,6 +909,12 @@ export const Traffic: React.FC = () => {
                     {getCurrentFolders().length} carpeta{getCurrentFolders().length !== 1 ? 's' : ''} • {filteredFiles.length} archivo{filteredFiles.length !== 1 ? 's' : ''}
                   </Typography>
                 </Box>
+                {listLoading && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CircularProgress size={16} sx={{ color: '#501b36' }} />
+                    <Typography variant="caption" color="text.secondary">Cargando…</Typography>
+                  </Box>
+                )}
                 
                 <Chip
                   label={`${getCurrentFolders().length + filteredFiles.length} elementos`}
