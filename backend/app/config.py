@@ -31,8 +31,8 @@ class Settings(BaseSettings):
     maintenance_message: str = "Sistema en mantenimiento. Por favor, intente más tarde."
     
     # File Storage - Unified structure
-    files_base_path: str = os.getenv("FILES_BASE_PATH", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "files")))
-    user_files_base_path: str = os.getenv("USER_FILES_BASE_PATH", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "files", "users")))
+    files_base_path: str = os.getenv("FILES_BASE_PATH", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "files")))
+    user_files_base_path: str = os.getenv("USER_FILES_BASE_PATH", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "files", "users")))
     traffic_files_base_path: str = os.getenv("TRAFFIC_FILES_BASE_PATH", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "files", "traffic")))
     documents_files_base_path: str = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "files", "documents"))
     payroll_files_base_path: str = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "files", "payroll"))

@@ -9,6 +9,7 @@ import shutil
 from pathlib import Path
 from app.api.auth import get_current_user
 from app.models.user import User
+from app.config import settings
 
 router = APIRouter()
 
@@ -108,7 +109,7 @@ async def upload_general_documents(file: UploadFile = File(...), current_user: U
     
     try:
         # Crear directorio para documentos generales si no existe
-        upload_dir = Path("backend/files/general_documents")
+        upload_dir = Path(settings.documents_files_base_path)
         upload_dir.mkdir(parents=True, exist_ok=True)
         
         # Generar nombre único para evitar conflictos
