@@ -8,11 +8,13 @@ from datetime import datetime
 from app.database.connection import get_db
 from sqlalchemy import text
 from app.config import settings  # Usar configuración centralizada
+from app.api.auth import get_current_user
+from app.models.user import User
 
 router = APIRouter()
 
 @router.get("/users")
-async def get_documentation_users(db: Session = Depends(get_db)):
+async def get_documentation_users(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
     Obtiene todos los usuarios con sus carpetas de documentos desde el sistema de archivos
     """
@@ -114,7 +116,7 @@ async def get_documentation_users(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail=f"Error al cargar usuarios: {str(e)}")
 
 @router.get("/user/{dni}/folders")
-async def get_user_folders(dni: str):
+async def get_user_folders(dni: str, current_user: User = Depends(get_current_user)):
     """
     Obtiene las carpetas de un usuario específico
     """
@@ -141,7 +143,7 @@ async def get_user_folders(dni: str):
 
 
 @router.get("/download/{user_dni}/{folder}/{filename}")
-async def download_document(user_dni: str, folder: str, filename: str):
+async def download_document(user_dni: str, folder: str, filename: str, current_user: User = Depends(get_current_user)):
     """
     Descarga un documento específico de un usuario
     """
@@ -180,7 +182,7 @@ async def download_document(user_dni: str, folder: str, filename: str):
 
 
 @router.get("/preview/{user_dni}/{folder}/{filename}")
-async def preview_document(user_dni: str, folder: str, filename: str):
+async def preview_document(user_dni: str, folder: str, filename: str, current_user: User = Depends(get_current_user)):
     """
     Previsualiza un documento (especialmente PDFs) en el navegador
     """

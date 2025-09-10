@@ -7,6 +7,8 @@ import random
 import os
 import shutil
 from pathlib import Path
+from app.api.auth import get_current_user
+from app.models.user import User
 
 router = APIRouter()
 
@@ -42,11 +44,11 @@ documents = [
 ]
 
 @router.get("/", response_model=List[Document])
-async def get_documents():
+async def get_documents(current_user: User = Depends(get_current_user)):
     return documents
 
 @router.post("/", response_model=Document)
-async def create_document(document: Document):
+async def create_document(document: Document, current_user: User = Depends(get_current_user)):
     new_id = max([doc.id for doc in documents]) + 1
     document.id = new_id
     document.uploaded_date = datetime.now()
@@ -54,24 +56,24 @@ async def create_document(document: Document):
     return document
 
 @router.get("/{document_id}", response_model=Document)
-async def get_document(document_id: int):
+async def get_document(document_id: int, current_user: User = Depends(get_current_user)):
     for doc in documents:
         if doc.id == document_id:
             return doc
     return None
 
 @router.delete("/{document_id}")
-async def delete_document(document_id: int):
+async def delete_document(document_id: int, current_user: User = Depends(get_current_user)):
     global documents
     documents = [doc for doc in documents if doc.id != document_id]
     return {"message": "Document deleted successfully"}
 
 @router.get("/category/{category}")
-async def get_documents_by_category(category: str):
+async def get_documents_by_category(category: str, current_user: User = Depends(get_current_user)):
     return [doc for doc in documents if doc.category == category]
 
 @router.get("/stats/summary")
-async def get_document_stats():
+async def get_document_stats(current_user: User = Depends(get_current_user)):
     return {
         "total_documents": len(documents),
         "total_size": sum(doc.size for doc in documents),
@@ -83,7 +85,7 @@ async def get_document_stats():
     }
 
 @router.post("/upload-general-documents")
-async def upload_general_documents(file: UploadFile = File(...)):
+async def upload_general_documents(file: UploadFile = File(...), current_user: User = Depends(get_current_user)):
     """
     Endpoint para subir documentos generales que estarán disponibles para todos los trabajadores.
     Estos documentos se almacenan en la carpeta 'documentos' y son visibles por todos.
@@ -148,7 +150,7 @@ async def upload_general_documents(file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=f"Error al subir el documento: {str(e)}")
 
 @router.get("/download/general/{filename}")
-async def download_general_document(filename: str):
+async def download_general_document(filename: str, current_user: User = Depends(get_current_user)):
     """
     Endpoint para descargar documentos generales.
     """
@@ -164,7 +166,7 @@ async def download_general_document(filename: str):
     )
 
 @router.get("/preview/general/{filename}")
-async def preview_general_document(filename: str):
+async def preview_general_document(filename: str, current_user: User = Depends(get_current_user)):
     """
     Endpoint para previsualizar documentos generales en iframe.
     """

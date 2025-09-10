@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, Query
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, Query, status
 from fastapi.responses import JSONResponse
 from app.models.schemas import DashboardStats
 from app.services.payroll_pdf_service import PayrollPDFProcessor
@@ -11,12 +11,10 @@ from app.config import settings
 from datetime import datetime
 import tempfile
 import os
+from app.api.auth import get_current_user
+from app.utils.permissions import require_role
 
 router = APIRouter()
-
-def get_current_user():
-    """Simulación de obtener el usuario actual"""
-    return {"user_id": 1, "role": "admin"}  # Usuario admin para testing
 
 @router.get("/stats", response_model=DashboardStats)
 async def get_dashboard_stats():
@@ -108,10 +106,11 @@ async def get_available_workers(
     }
 
 @router.post("/process-payroll-pdf")
+@require_role(UserRole.ADMINISTRADOR, UserRole.MASTER_ADMIN)
 async def process_payroll_pdf_upload(
     file: UploadFile = File(...),
     month_year: str = Form(...),
-    current_user = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Endpoint del dashboard para procesar un PDF con múltiples nóminas.
@@ -123,11 +122,7 @@ async def process_payroll_pdf_upload(
         current_user: Usuario actual
     """
     # Verificar permisos de administrador
-    if current_user["role"] != "admin":
-        raise HTTPException(
-            status_code=403, 
-            detail="Acceso denegado: se requieren permisos de administrador"
-        )
+    # require_role ya valida el rol; no es necesario chequear aquí
     
     # Validar que el archivo sea PDF
     if not file.filename or not file.filename.lower().endswith('.pdf'):
@@ -204,13 +199,13 @@ async def process_payroll_pdf_upload(
         )
 
 @router.get("/payroll-folders-status")
-async def get_payroll_folders_status(current_user = Depends(get_current_user)):
+@require_role(UserRole.ADMINISTRADOR, UserRole.MASTER_ADMIN)
+async def get_payroll_folders_status(current_user: User = Depends(get_current_user)):
     """
     Verifica el estado de las carpetas de usuarios para mostrar información
     útil en el dashboard antes de procesar nóminas.
     """
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Acceso denegado")
+    # require_role ya valida el rol
     
     try:
         processor = PayrollPDFProcessor(settings.user_files_base_path)
@@ -249,17 +244,17 @@ async def get_payroll_folders_status(current_user = Depends(get_current_user)):
         )
 
 @router.post("/debug-pdf-text")
+@require_role(UserRole.ADMINISTRADOR, UserRole.MASTER_ADMIN)
 async def debug_pdf_text_extraction(
     file: UploadFile = File(...),
     page_number: int = Form(0),
-    current_user = Depends(get_current_user)
+    current_user: User = Depends(get_current_user)
 ):
     """
     Endpoint de debug para analizar el texto extraído de una página específica de un PDF.
     Útil para entender por qué no se detecta el DNI/NIE.
     """
-    if current_user["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Acceso denegado")
+    # require_role ya valida el rol
     
     if not file.filename or not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Solo se permiten archivos PDF")

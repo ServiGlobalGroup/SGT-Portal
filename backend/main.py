@@ -1,9 +1,14 @@
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Request, Response, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from fastapi.responses import JSONResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
+from fastapi.openapi.docs import get_swagger_ui_html
+from fastapi.openapi.utils import get_openapi
 import os
 import sys
+import secrets
 
 # Ensure the 'backend' directory is on sys.path so imports like 'from app...' resolve to 'backend/app'
 BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -16,7 +21,38 @@ from app.middleware.maintenance import MaintenanceMiddleware
 from app.config import settings as app_settings
 from app.services.folder_structure_service import FolderStructureService
 
-app = FastAPI(title="Portal API", version="1.0.0")
+# Desactivar rutas por defecto de documentación para protegerlas manualmente
+app = FastAPI(title="Portal API", version="1.0.0", docs_url=None, redoc_url=None, openapi_url=None)
+
+# --- Protección básica para Swagger/OpenAPI ---
+_docs_basic = HTTPBasic()
+
+def _authorize_docs(creds: HTTPBasicCredentials = Depends(_docs_basic)) -> None:
+    user_ok = secrets.compare_digest(creds.username, "admin")
+    pass_ok = secrets.compare_digest(creds.password, "3BnfchT7bYEr4m55iooyAF46GXVpCHmfERrMVpAzpaDjy9iR57fJd78VX3Yowk9x")
+    if not (user_ok and pass_ok):
+        # Forzar prompt de Basic Auth
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized", headers={"WWW-Authenticate": "Basic"})
+
+# Rutas de documentación protegidas
+@app.get("/docs", include_in_schema=False)
+def secured_swagger_ui(_: None = Depends(_authorize_docs)):
+    return get_swagger_ui_html(openapi_url="/openapi.json", title="Portal API - Docs")
+
+@app.get("/openapi.json", include_in_schema=False)
+def secured_openapi(_: None = Depends(_authorize_docs)):
+    schema = get_openapi(title=app.title, version=app.version, routes=app.routes)
+    # Añadir esquema de seguridad Bearer para reflejar protección en los endpoints
+    components = schema.setdefault("components", {})
+    security_schemes = components.setdefault("securitySchemes", {})
+    security_schemes.setdefault(
+        "bearerAuth",
+        {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"}
+    )
+    # Aplicar seguridad global por defecto (solo documental)
+    if not schema.get("security"):
+        schema["security"] = [{"bearerAuth": []}]
+    return JSONResponse(schema)
 
 # Agregar middleware de mantenimiento (debe ir antes que CORS)
 app.add_middleware(MaintenanceMiddleware)

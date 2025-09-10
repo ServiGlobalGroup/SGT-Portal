@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, status
 from fastapi.responses import FileResponse, StreamingResponse
 from typing import List, Optional
 from datetime import datetime, timedelta
@@ -9,6 +9,9 @@ import shutil
 from pathlib import Path
 import io
 from ..models.schemas import Order, OrderDocument
+from app.api.auth import get_current_user
+from app.models.user import User, UserRole
+from app.utils.permissions import require_role
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
@@ -22,12 +25,12 @@ orders_db = []
 order_documents_db = []
 
 @router.get("/", response_model=List[Order])
-async def get_orders():
+async def get_orders(current_user: User = Depends(get_current_user)):
     """Obtener todas las órdenes"""
     return orders_db
 
 @router.get("/{order_id}", response_model=Order)
-async def get_order(order_id: int):
+async def get_order(order_id: int, current_user: User = Depends(get_current_user)):
     """Obtener una orden específica"""
     order = next((order for order in orders_db if order.id == order_id), None)
     if not order:
@@ -36,13 +39,13 @@ async def get_order(order_id: int):
     return order
 
 @router.get("/{order_id}/documents", response_model=List[OrderDocument])
-async def get_order_documents(order_id: int):
+async def get_order_documents(order_id: int, current_user: User = Depends(get_current_user)):
     """Obtener documentos de una orden específica"""
     documents = [doc for doc in order_documents_db if doc.order_id == order_id]
     return documents
 
 @router.get("/documents/download/{document_id}")
-async def download_order_document(document_id: int):
+async def download_order_document(document_id: int, current_user: User = Depends(get_current_user)):
     """Descargar un documento específico de orden"""
     document = next((doc for doc in order_documents_db if doc.id == document_id), None)
     if not document:
@@ -53,7 +56,8 @@ async def download_order_document(document_id: int):
     return {"download_url": document.file_url, "filename": document.file_name}
 
 @router.put("/{order_id}/status")
-async def update_order_status(order_id: int, status: str):
+@require_role(UserRole.ADMINISTRADOR, UserRole.MASTER_ADMIN)
+async def update_order_status(order_id: int, status: str, current_user: User = Depends(get_current_user)):
     """Actualizar el estado de una orden"""
     order = next((order for order in orders_db if order.id == order_id), None)
     if not order:
@@ -69,7 +73,7 @@ async def update_order_status(order_id: int, status: str):
     return {"message": "Estado actualizado correctamente", "order": order}
 
 @router.get("/stats/summary")
-async def get_orders_stats():
+async def get_orders_stats(current_user: User = Depends(get_current_user)):
     """Obtener estadísticas de órdenes"""
     total_orders = len(orders_db)
     pending_orders = len([o for o in orders_db if o.status == "pending"])
@@ -97,12 +101,14 @@ async def get_orders_stats():
     }
 
 @router.post("/process-email")
+@require_role(UserRole.ADMINISTRADOR, UserRole.MASTER_ADMIN)
 async def process_email_order(
     sender_email: str = Form(...),
     subject: str = Form(...),
     company_name: str = Form(...),
     priority: str = Form("normal"),
-    files: List[UploadFile] = File(...)
+    files: List[UploadFile] = File(...),
+    current_user: User = Depends(get_current_user)
 ):
     """Procesar un correo electrónico con orden y adjuntos PDF"""
     if priority not in ["low", "normal", "high", "urgent"]:
@@ -168,7 +174,8 @@ async def process_email_order(
     }
 
 @router.post("/simulate-email")
-async def simulate_email_order():
+@require_role(UserRole.ADMINISTRADOR, UserRole.MASTER_ADMIN)
+async def simulate_email_order(current_user: User = Depends(get_current_user)):
     """Simular la recepción de un correo electrónico con orden"""
     
     # Datos simulados para el correo
@@ -220,7 +227,7 @@ async def simulate_email_order():
     }
 
 @router.get("/documents/{document_id}/view")
-async def view_order_document(document_id: int):
+async def view_order_document(document_id: int, current_user: User = Depends(get_current_user)):
     """Ver un documento PDF de orden en el navegador"""
     document = next((doc for doc in order_documents_db if doc.id == document_id), None)
     if not document:
