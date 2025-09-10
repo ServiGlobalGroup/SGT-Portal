@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Dialog,
   DialogTitle,
@@ -24,6 +24,8 @@ import {
   PictureAsPdf,
   Refresh,
   Fullscreen,
+  ZoomIn,
+  ZoomOut,
 } from '@mui/icons-material';
 
 interface PdfPreviewProps {
@@ -46,6 +48,7 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const isSmall = useMediaQuery(theme.breakpoints.down('sm'));
+  const [zoomLevel, setZoomLevel] = useState(50);
 
   const handleLoad = () => {
     setLoading(false);
@@ -99,10 +102,30 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
     }
   };
 
-  const getPdfUrl = () => {
-    if (!fileUrl) return '';
-    return fileUrl;
+  const handleZoomIn = () => {
+    setZoomLevel(prev => Math.min(prev + 25, 200));
   };
+
+  const handleZoomOut = () => {
+    setZoomLevel(prev => Math.max(prev - 25, 25));
+  };
+
+  const handleZoomReset = () => {
+    setZoomLevel(isMobile ? 50 : 100);
+  };
+
+  const getPdfUrl = useCallback(() => {
+    if (!fileUrl) return '';
+    
+    // Para móviles, añadir parámetros de zoom para mejor visualización
+    if (isMobile) {
+      // Si la URL ya tiene parámetros, añadir con &, si no, añadir con ?
+      const separator = fileUrl.includes('?') ? '&' : '?';
+      return `${fileUrl}${separator}zoom=${zoomLevel}&view=FitH`;
+    }
+    
+    return fileUrl;
+  }, [fileUrl, isMobile, zoomLevel]);
 
   const resetState = () => {
     setLoading(true);
@@ -114,6 +137,20 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
       resetState();
     }
   }, [open]);
+
+  // Recargar iframe cuando cambie el zoom en móvil
+  useEffect(() => {
+    if (open && isMobile && fileUrl) {
+      const iframe = document.querySelector('#pdf-preview-iframe') as HTMLIFrameElement;
+      if (iframe) {
+        const newSrc = getPdfUrl();
+        if (iframe.src !== newSrc) {
+          setLoading(true);
+          iframe.src = newSrc;
+        }
+      }
+    }
+  }, [zoomLevel, isMobile, open, fileUrl, getPdfUrl]);
 
   return (
     <Dialog
@@ -140,6 +177,14 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
         sx: {
           height: isMobile ? '100vh' : '95vh',
           maxHeight: isMobile ? '100vh' : '95vh',
+          // Permitir zoom y gestos táctiles en móvil
+          touchAction: isMobile ? 'pinch-zoom' : 'auto',
+          userSelect: isMobile ? 'none' : 'auto',
+          // Prevenir el zoom del viewport pero permitir zoom interno
+          ...(isMobile && {
+            WebkitTouchCallout: 'none',
+            WebkitUserSelect: 'none',
+          }),
           display: 'flex',
           flexDirection: 'column',
           m: isMobile ? 0 : 2,
@@ -263,7 +308,7 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
             alignItems: 'center',
             gap: 1.5,
             flexWrap: isSmall ? 'wrap' : 'nowrap',
-            justifyContent: isSmall ? 'center' : 'flex-start',
+            justifyContent: 'center',
           }}
         >
           <Tooltip title="Descargar PDF">
@@ -389,6 +434,108 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
               {!isSmall && 'Nueva ventana'}
             </Button>
           </Tooltip>
+
+          {/* Controles de zoom para móvil */}
+          {isMobile && (
+            <>
+              <Tooltip title="Zoom Out">
+                <Button
+                  startIcon={<ZoomOut />}
+                  size="medium"
+                  onClick={handleZoomOut}
+                  variant="outlined"
+                  disabled={!fileUrl || zoomLevel <= 25}
+                  sx={{
+                    borderColor: '#501b36',
+                    color: '#501b36',
+                    fontWeight: 600,
+                    px: 2,
+                    py: 1,
+                    borderRadius: 2.5,
+                    textTransform: 'none',
+                    minWidth: 40,
+                    '&:hover': {
+                      backgroundColor: alpha('#501b36', 0.08),
+                      borderColor: '#501b36dd',
+                      transform: 'translateY(-1px)',
+                    },
+                    '&:active': {
+                      transform: 'translateY(0)',
+                    },
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                </Button>
+              </Tooltip>
+
+              <Typography 
+                variant="caption" 
+                sx={{ 
+                  color: '#501b36', 
+                  fontWeight: 600, 
+                  minWidth: 40, 
+                  textAlign: 'center',
+                  fontSize: '0.75rem'
+                }}
+              >
+                {zoomLevel}%
+              </Typography>
+
+              <Tooltip title="Zoom In">
+                <Button
+                  startIcon={<ZoomIn />}
+                  size="medium"
+                  onClick={handleZoomIn}
+                  variant="outlined"
+                  disabled={!fileUrl || zoomLevel >= 200}
+                  sx={{
+                    borderColor: '#501b36',
+                    color: '#501b36',
+                    fontWeight: 600,
+                    px: 2,
+                    py: 1,
+                    borderRadius: 2.5,
+                    textTransform: 'none',
+                    minWidth: 40,
+                    '&:hover': {
+                      backgroundColor: alpha('#501b36', 0.08),
+                      borderColor: '#501b36dd',
+                      transform: 'translateY(-1px)',
+                    },
+                    '&:active': {
+                      transform: 'translateY(0)',
+                    },
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                </Button>
+              </Tooltip>
+
+              <Tooltip title="Restablecer zoom">
+                <Button
+                  size="medium"
+                  onClick={handleZoomReset}
+                  variant="text"
+                  disabled={!fileUrl}
+                  sx={{
+                    color: '#501b36',
+                    fontWeight: 600,
+                    px: 1,
+                    py: 1,
+                    borderRadius: 2.5,
+                    textTransform: 'none',
+                    minWidth: 30,
+                    fontSize: '0.7rem',
+                    '&:hover': {
+                      backgroundColor: alpha('#501b36', 0.08),
+                    },
+                  }}
+                >
+                  Reset
+                </Button>
+              </Tooltip>
+            </>
+          )}
         </Box>
       </Box>
 
@@ -538,6 +685,8 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
                 boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08), 0 4px 16px rgba(0, 0, 0, 0.04)',
                 overflow: 'hidden',
                 border: '1px solid rgba(0, 0, 0, 0.08)',
+                // Permitir zoom con gestos en móvil
+                touchAction: isMobile ? 'pinch-zoom' : 'auto',
               }}
             >
               <iframe
@@ -548,6 +697,8 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
                 style={{
                   border: 'none',
                   display: 'block',
+                  // Permitir zoom en móvil
+                  touchAction: isMobile ? 'pinch-zoom' : 'auto',
                 }}
                 title={fileName}
                 onLoad={handleLoad}

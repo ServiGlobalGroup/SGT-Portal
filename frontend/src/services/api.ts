@@ -546,6 +546,15 @@ export const userFilesAPI = {
 
     return response.blob();
   },
+
+  // Obtener URL de preview con token para archivos PDF
+  getPreviewUrl: (dniNie: string, folderType: string, filename: string): string => {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
+      throw new Error('Token de autenticación no encontrado');
+    }
+    return `${API_BASE_URL}/api/user-files/preview/${dniNie}/${folderType}/${filename}?token=${token}`;
+  },
     
   // Subir un archivo
   uploadFile: (folderType: string, file: File) => {

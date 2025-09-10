@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import { usePagination } from '../../hooks/usePagination';
 import {
   Box,
@@ -27,6 +27,7 @@ import { MobilePagination } from '../../components/mobile/MobilePagination';
 import { MobileLoading } from '../../components/mobile/MobileLoading';
 import { MobileTabs } from '../../components/mobile/MobileTabs';
 import { userFilesAPI } from '../../services/api';
+import { AuthContext } from '../../contexts/AuthContext';
 
 // Interfaces
 interface UserDocument {
@@ -56,6 +57,13 @@ interface AlertState {
 }
 
 export const MobileMisDocumentos: React.FC = () => {
+  // Contexto de autenticación
+  const authContext = useContext(AuthContext);
+  if (!authContext) {
+    throw new Error('MobileMisDocumentos must be used within an AuthProvider');
+  }
+  const { user: currentUser } = authContext;
+
   // Estados principales
   const [userDocuments, setUserDocuments] = useState<UserDocuments>({
     nominas: [],
@@ -232,13 +240,69 @@ export const MobileMisDocumentos: React.FC = () => {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const handleView = (document: UserDocument) => {
-    setPdfPreview({
-      open: true,
-      fileUrl: document.download_url,
-      fileName: document.name,
-      title: `${document.name} - ${getFolderDisplayName(currentFolder)}`
-    });
+  const handleView = async (document: UserDocument) => {
+    try {
+      if (document.type === '.pdf' || document.type === 'pdf') {
+        // Para PDFs, verificar si el usuario tiene DNI/NIE
+        if (!currentUser?.dni_nie) {
+          setSnackbar({
+            open: true,
+            message: 'No se pudo obtener la información del usuario',
+            severity: 'error'
+          });
+          return;
+        }
+
+        // Para nóminas y dietas, usar el endpoint de preview específico
+        if (currentFolder === 'nominas' || currentFolder === 'dietas') {
+          try {
+            const previewUrl = userFilesAPI.getPreviewUrl(
+              currentUser.dni_nie, 
+              currentFolder, 
+              document.name
+            );
+            
+            setPdfPreview({
+              open: true,
+              fileUrl: previewUrl,
+              fileName: document.name,
+              title: `${document.name} - ${getFolderDisplayName(currentFolder)}`
+            });
+          } catch (error) {
+            console.error('Error generando URL de preview:', error);
+            setSnackbar({
+              open: true,
+              message: 'Error al preparar la previsualización',
+              severity: 'error'
+            });
+          }
+        } else {
+          // Para otras carpetas (documentos, etc.), usar la URL de descarga directa
+          // pero solo mostrar una advertencia ya que no podemos previsualizar
+          setSnackbar({
+            open: true,
+            message: 'La previsualización no está disponible para esta carpeta. El archivo se descargará.',
+            severity: 'info'
+          });
+          await handleDownload(document);
+        }
+      } else {
+        // Para otros tipos de archivo, hacer descarga directa
+        await handleDownload(document);
+        setSnackbar({
+          open: true,
+          message: `El archivo "${document.name}" no es un PDF. Se ha descargado automáticamente.`,
+          severity: 'info'
+        });
+      }
+    } catch (error) {
+      console.error('Error al previsualizar documento:', error);
+      setSnackbar({
+        open: true,
+        message: 'Error al previsualizar el documento',
+        severity: 'error'
+      });
+    }
   };
 
   const handleDownload = async (document: UserDocument) => {

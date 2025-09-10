@@ -9,13 +9,13 @@ import {
   alpha,
   Stack,
   Avatar,
-  ButtonBase,
 } from '@mui/material';
 import {
   PictureAsPdf,
   Description,
   CloudDownload,
   FilePresent,
+  Visibility,
 } from '@mui/icons-material';
 
 interface UserDocument {
@@ -70,16 +70,8 @@ export const MobileDocumentCard: React.FC<MobileDocumentCardProps> = ({
     });
   };
 
-  const handleCardClick = () => {
-    if (onView) {
-      onView(document);
-    }
-  };
-
   return (
     <Card
-      component={ButtonBase}
-      onClick={handleCardClick}
       elevation={0}
       sx={{
         width: '100%',
@@ -88,15 +80,10 @@ export const MobileDocumentCard: React.FC<MobileDocumentCardProps> = ({
         overflow: 'hidden',
         background: 'linear-gradient(135deg, #ffffff 0%, #f8f9fa 100%)',
         transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-        cursor: 'pointer',
-        textAlign: 'left',
         '&:hover': {
           borderColor: corporateColor,
           transform: 'translateY(-2px)',
           boxShadow: `0 8px 25px ${alpha(corporateColor, 0.15)}`,
-        },
-        '&:active': {
-          transform: 'translateY(0)',
         },
       }}
     >
@@ -198,28 +185,52 @@ export const MobileDocumentCard: React.FC<MobileDocumentCardProps> = ({
           </Typography>
         </Box>
 
-        {/* Botón de descarga */}
-        <IconButton
-          onClick={(e) => {
-            e.stopPropagation();
-            if (onDownload) onDownload(document);
-          }}
-          sx={{
-            width: 40,
-            height: 40,
-            bgcolor: alpha('#4caf50', 0.1),
-            color: '#4caf50',
-            border: `1px solid ${alpha('#4caf50', 0.2)}`,
-            flexShrink: 0,
-            '&:hover': {
-              bgcolor: alpha('#4caf50', 0.2),
-              transform: 'scale(1.1)',
-            },
-            transition: 'all 0.2s ease',
-          }}
-        >
-          <CloudDownload sx={{ fontSize: 20 }} />
-        </IconButton>
+        {/* Botones de acción */}
+        <Stack direction="row" spacing={1} sx={{ flexShrink: 0 }}>
+          {/* Botón de previsualización */}
+          <IconButton
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onView) onView(document);
+            }}
+            sx={{
+              width: 40,
+              height: 40,
+              bgcolor: alpha(corporateColor, 0.1),
+              color: corporateColor,
+              border: `1px solid ${alpha(corporateColor, 0.2)}`,
+              '&:hover': {
+                bgcolor: alpha(corporateColor, 0.2),
+                transform: 'scale(1.1)',
+              },
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <Visibility sx={{ fontSize: 20 }} />
+          </IconButton>
+
+          {/* Botón de descarga */}
+          <IconButton
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onDownload) onDownload(document);
+            }}
+            sx={{
+              width: 40,
+              height: 40,
+              bgcolor: alpha('#4caf50', 0.1),
+              color: '#4caf50',
+              border: `1px solid ${alpha('#4caf50', 0.2)}`,
+              '&:hover': {
+                bgcolor: alpha('#4caf50', 0.2),
+                transform: 'scale(1.1)',
+              },
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <CloudDownload sx={{ fontSize: 20 }} />
+          </IconButton>
+        </Stack>
       </CardContent>
     </Card>
   );
