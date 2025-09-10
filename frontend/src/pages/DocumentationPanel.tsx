@@ -53,6 +53,7 @@ import {
   AttachMoneyRounded,
 } from '@mui/icons-material';
 import { PdfPreview } from '../components/PdfPreview';
+import { documentationAPI } from '../services/api';
 
 // Interfaces
 interface User {
@@ -145,13 +146,8 @@ const DocumentationPanel: React.FC = () => {
   const loadUsers = async () => {
     setLoading(true);
     try {
-      // Cargar usuarios reales desde las carpetas del sistema
-      const response = await fetch('/api/documentation/users');
-      if (!response.ok) {
-        throw new Error('Error al cargar usuarios');
-      }
-      
-      const userData = await response.json();
+      // Cargar usuarios reales desde las carpetas del sistema usando API autenticada
+      const userData = await documentationAPI.getUsers();
       setUsers(userData);
 
       setAlert({
@@ -223,22 +219,15 @@ const DocumentationPanel: React.FC = () => {
     try {
       setLoadingActions(prev => ({ ...prev, [documentFile.id]: 'downloading' }));
       
-      const response = await fetch(`/api/documentation/download/${documentFile.user_dni}/${documentFile.folder}/${documentFile.name}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
+      // Usar la API autenticada
+      const blob = await documentationAPI.downloadDocument(
+        documentFile.user_dni, 
+        documentFile.folder, 
+        documentFile.name
+      );
 
-      if (!response.ok) {
-        throw new Error('Error al descargar el documento');
-      }
-
-      // Crear un blob del archivo
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      
       // Crear enlace temporal para descarga
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = documentFile.name;
@@ -291,20 +280,14 @@ const DocumentationPanel: React.FC = () => {
       setLoadingActions(prev => ({ ...prev, [documentFile.id]: 'previewing' }));
       
       if (documentFile.type === '.pdf') {
-        // Para PDFs, obtener el archivo como blob y crear URL temporal
-        const response = await fetch(`/api/documentation/preview/${documentFile.user_dni}/${documentFile.folder}/${documentFile.name}`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error('Error al obtener el archivo para preview');
-        }
+        // Para PDFs, obtener el archivo como blob usando la API autenticada
+        const blob = await documentationAPI.previewDocument(
+          documentFile.user_dni,
+          documentFile.folder,
+          documentFile.name
+        );
 
         // Crear blob URL para mostrar en el iframe
-        const blob = await response.blob();
         const blobUrl = window.URL.createObjectURL(blob);
         
         console.log('Blob URL creada:', blobUrl);

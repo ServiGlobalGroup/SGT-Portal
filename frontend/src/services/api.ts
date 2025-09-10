@@ -635,3 +635,22 @@ export const tripsAPI = {
   userSuggestions: (q: string): Promise<{ id:number; label:string; role:string; }[]> =>
     api.get('/api/trips/user-suggestions', { params: { q } }).then(r=>r.data)
 };
+
+// API de documentación
+export const documentationAPI = {
+  // Obtener todos los usuarios con sus documentos
+  getUsers: () => 
+    api.get('/api/documentation/users').then(res => res.data),
+  
+  // Obtener carpetas de un usuario específico
+  getUserFolders: (dni: string) => 
+    api.get(`/api/documentation/user/${dni}/folders`).then(res => res.data),
+  
+  // Descargar documento
+  downloadDocument: (userDni: string, folder: string, filename: string): Promise<Blob> => 
+    api.get(`/api/documentation/download/${userDni}/${folder}/${filename}`, { responseType: 'blob' }).then(res => res.data),
+  
+  // Previsualizar documento
+  previewDocument: (userDni: string, folder: string, filename: string): Promise<Blob> => 
+    api.get(`/api/documentation/preview/${userDni}/${folder}/${filename}`, { responseType: 'blob' }).then(res => res.data),
+};
