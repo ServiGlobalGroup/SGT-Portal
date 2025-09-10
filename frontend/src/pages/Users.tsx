@@ -1887,7 +1887,7 @@ export const Users: React.FC = () => {
                   fullWidth
                   label="Departamento"
                   value={editUserData.department}
-                  onChange={(e) => setEditUserData(prev => ({ ...prev, department: e.target.value }))}
+                  onChange={(e) => setEditUserData(prev => ({ ...prev, department: e.target.value.toUpperCase() }))}
                   disabled={editUserLoading}
                   sx={{
                     '& .MuiOutlinedInput-root': {
@@ -1916,7 +1916,7 @@ export const Users: React.FC = () => {
                   fullWidth
                   label="Cargo"
                   value={editUserData.position}
-                  onChange={(e) => setEditUserData(prev => ({ ...prev, position: e.target.value }))}
+                  onChange={(e) => setEditUserData(prev => ({ ...prev, position: e.target.value.toUpperCase() }))}
                   disabled={editUserLoading}
                   sx={{
                     '& .MuiOutlinedInput-root': {
@@ -2093,7 +2093,7 @@ export const Users: React.FC = () => {
             <ModernField
               label="Departamento"
               value={createUserData.department}
-              onChange={(value) => setCreateUserData(prev => ({ ...prev, department: String(value) }))}
+              onChange={(value) => setCreateUserData(prev => ({ ...prev, department: String(value).toUpperCase() }))}
               required
               startIcon={<Business />}
               placeholder="IT, RRHH, Administración..."
@@ -2113,6 +2113,17 @@ export const Users: React.FC = () => {
                 { value: 'ADMINISTRADOR', label: 'Administrador' },
               ]}
               helperText="Nivel de acceso del usuario"
+            />
+          </Box>
+          {/* Campo Cargo (nuevo) */}
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 3 }}>
+            <ModernField
+              label="Cargo"
+              value={createUserData.position}
+              onChange={(value) => setCreateUserData(prev => ({ ...prev, position: String(value).toUpperCase() }))}
+              startIcon={<Badge />}
+              placeholder="Puesto/Cargo del empleado"
+              helperText="Se guardará siempre en MAYÚSCULAS"
             />
           </Box>
           {createUserData.role === 'TRABAJADOR' && (

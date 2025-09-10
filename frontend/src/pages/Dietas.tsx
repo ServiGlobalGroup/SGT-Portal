@@ -57,8 +57,20 @@ export const Dietas: React.FC = () => {
   const { user, token } = useAuth();
   const canView = !!user && hasPermission(user, Permission.VIEW_DIETAS);
 
-  // Estado pestañas
-  const [tab, setTab] = useState<number>(0);
+  // Estado pestañas con persistencia en localStorage para recordar la última pestaña usada
+  const TAB_STORAGE_KEY = 'dietas:lastTab';
+  const [tab, setTab] = useState<number>(() => {
+    try {
+      const raw = localStorage.getItem(TAB_STORAGE_KEY);
+      const n = raw != null ? parseInt(raw, 10) : 0;
+      return Number.isFinite(n) && n >= 0 && n <= 3 ? n : 0;
+    } catch {
+      return 0;
+    }
+  });
+  useEffect(() => {
+    try { localStorage.setItem(TAB_STORAGE_KEY, String(tab)); } catch {}
+  }, [tab]);
 
   // Distancieros
   const [distGrouped, setDistGrouped] = useState<{ client_name:string; total_routes:number; active_routes:number; min_km:number; max_km:number; }[]>([]);
