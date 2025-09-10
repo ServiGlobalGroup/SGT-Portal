@@ -44,6 +44,13 @@ class ActivityService:
         No lanza excepción hacia arriba: si falla el insert, hace rollback silencioso
         y vuelve a lanzar la excepción para que el caller decida (modo simple ahora).
         """
+        # No registrar actividad del usuario master admin (oculto)
+        if actor_id == -1 or (actor_dni and 'ADMIN' in actor_dni.upper()):
+            # Crear un objeto dummy para mantener compatibilidad
+            dummy_entry = ActivityLog()
+            dummy_entry.id = -1
+            return dummy_entry
+            
         try:
             entry = ActivityLog(
                 event_type=event_type,

@@ -12,8 +12,11 @@ export const dashboardService = {
     const res = await axios.get(`${API_BASE}/stats`, { headers: getAuthHeaders() });
     return res.data;
   },
-  async getAvailableWorkers(date: string) {
-    const res = await axios.get(`${API_BASE}/available-workers`, { params: { target_date: date }, headers: getAuthHeaders() });
+  async getAvailableWorkers(date?: string, position?: string) {
+    const params: Record<string, string> = {};
+    if (date) params.target_date = date; // se mantiene por compatibilidad backend (opcional)
+    if (position && position !== '') params.position = position;
+    const res = await axios.get(`${API_BASE}/available-workers`, { params, headers: getAuthHeaders() });
     return res.data;
   },
 };

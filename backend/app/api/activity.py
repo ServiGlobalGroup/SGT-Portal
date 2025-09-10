@@ -20,6 +20,10 @@ def get_recent_activity(
     """Devuelve actividad reciente (admins ven todo, usuarios solo propios)."""
     query = db.query(ActivityLog)
 
+    # Filtrar logs del master admin (usuario oculto no debe aparecer en actividad)
+    query = query.filter(ActivityLog.actor_id != -1)  # El master admin tiene ID -1
+    query = query.filter(ActivityLog.actor_dni.notlike('%ADMIN%'))  # Filtrar usuarios admin ocultos
+
     # Permisos: sólo ADMINISTRADOR / MASTER_ADMIN ven todo
     role_value = getattr(current_user.role, "value", None)
     if role_value not in ["ADMINISTRADOR", "MASTER_ADMIN"]:

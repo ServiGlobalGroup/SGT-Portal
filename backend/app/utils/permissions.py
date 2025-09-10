@@ -81,6 +81,22 @@ ROLE_PERMISSIONS: Dict[UserRole, Set[Permission]] = {
         Permission.UPLOAD_TRAFFIC_DOCUMENTS,
     },
     
+    # Nuevo rol: ADMINISTRACION (backoffice limitado)
+    # Puede acceder a módulos de gestor docs, vacaciones, dietas (solo lectura si el endpoint lo soporta),
+    # tráfico (solo ver), y viajes. No tiene permisos de gestión global ni de usuarios.
+    UserRole.ADMINISTRACION: {
+        Permission.VIEW_DOCUMENTS,
+        Permission.VIEW_ORDERS,
+        Permission.VIEW_VACATIONS,
+        Permission.VIEW_PROFILE,
+        Permission.EDIT_PROFILE,
+        Permission.UPLOAD_DOCUMENTS,
+        # tráfico solo ver
+        Permission.VIEW_TRAFFIC,
+        # viajes (módulo orders/trips en este contexto)
+        # Nota: la capacidad de ver todos los viajes está restringida a ADMINISTRADOR/MASTER_ADMIN en los endpoints
+    },
+    
     UserRole.ADMINISTRADOR: {
         # Acceso completo a todo el sistema
         Permission.VIEW_DOCUMENTS,

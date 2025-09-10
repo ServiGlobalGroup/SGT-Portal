@@ -85,13 +85,15 @@ def list_folders(parent_path: Optional[str] = Query(None, description="Ruta rela
     for entry in sorted(target.iterdir()):
         if entry.is_dir():
             stat = entry.stat()
+            relative_path = str(entry.relative_to(BASE_PATH)).replace('\\', '/')
             items.append(TrafficFolderInfo(
                 name=entry.name,
-                relative_path=str(entry.relative_to(BASE_PATH)).replace('\\\\', '/'),
+                relative_path=relative_path,
                 created_at=datetime.fromtimestamp(stat.st_ctime),
                 updated_at=datetime.fromtimestamp(stat.st_mtime),
                 type="folder"
             ))
+    
     return items
 
 
@@ -111,7 +113,7 @@ def create_folder(payload: TrafficFolderCreate):
     stat = new_dir.stat()
     return TrafficFolderInfo(
         name=new_dir.name,
-        relative_path=str(new_dir.relative_to(BASE_PATH)).replace('\\\\', '/'),
+    relative_path=new_dir.relative_to(BASE_PATH).as_posix(),
         created_at=datetime.fromtimestamp(stat.st_ctime),
         updated_at=datetime.fromtimestamp(stat.st_mtime),
         type="folder"
@@ -147,10 +149,13 @@ def list_files(path: Optional[str] = Query(None, description="Ruta relativa de l
     files: List[TrafficFileInfo] = []
     for entry in sorted(target.iterdir()):
         if entry.is_file():
+            # Ignorar archivos de sistema de Windows que no aportan valor en la UI
+            if entry.name.lower() in {"thumbs.db", "desktop.ini"}:
+                continue
             stat = entry.stat()
             files.append(TrafficFileInfo(
                 name=entry.name,
-                relative_path=str(entry.relative_to(BASE_PATH)).replace('\\\\', '/'),
+                relative_path=entry.relative_to(BASE_PATH).as_posix(),
                 size=stat.st_size,
                 mime_type=None,  # Se podría inferir con mimetypes
                 created_at=datetime.fromtimestamp(stat.st_ctime),
@@ -185,7 +190,7 @@ def upload_files(target_path: Optional[str] = Form(None), files: List[UploadFile
         stat = destination.stat()
         saved.append(TrafficFileInfo(
             name=destination.name,
-            relative_path=str(destination.relative_to(BASE_PATH)).replace('\\\\', '/'),
+            relative_path=destination.relative_to(BASE_PATH).as_posix(),
             size=stat.st_size,
             mime_type=f.content_type,
             created_at=datetime.fromtimestamp(stat.st_ctime),

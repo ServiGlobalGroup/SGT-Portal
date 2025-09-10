@@ -75,6 +75,7 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     Permission.VIEW_VACATIONS,
     Permission.VIEW_TRAFFIC,
     Permission.MANAGE_TRAFFIC,
+  Permission.VIEW_DASHBOARD, // añadido para permitir acceso al dashboard
   ],
   ADMINISTRADOR: [
     Permission.VIEW_DASHBOARD,
@@ -95,6 +96,15 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     Permission.MASS_UPLOAD,
     // Permission.VIEW_SETTINGS - REMOVIDO: Solo MASTER_ADMIN puede ver configuración
     // Permission.MANAGE_SETTINGS - REMOVIDO: Solo MASTER_ADMIN puede gestionar configuración
+  ],
+  ADMINISTRACION: [
+    // Puede ver Documentos (propios), Viajes, Vacaciones, Dietas (vista), Tráfico (solo ver)
+    Permission.VIEW_DOCUMENTS,
+    Permission.UPLOAD_DOCUMENTS, // si aplica a sus propios documentos
+    Permission.VIEW_TRIPS,
+    Permission.VIEW_VACATIONS,
+    Permission.VIEW_DIETAS,
+    Permission.VIEW_TRAFFIC,
   ],
 };
 
@@ -161,6 +171,8 @@ export const getRoleText = (role: string): string => {
       return 'Admin Master';
     case 'ADMINISTRADOR':
       return 'Administrador';
+    case 'ADMINISTRACION':
+      return 'Administración';
     case 'TRAFICO':
       return 'Tráfico';
     case 'TRABAJADOR':
@@ -193,6 +205,8 @@ export const getRoleColor = (role: string): string => {
       return '#9c27b0'; // Púrpura para el usuario maestro
     case 'ADMINISTRADOR':
       return '#d32f2f'; // Rojo
+    case 'ADMINISTRACION':
+      return '#d4a574'; // Dorado suave para administración
     case 'TRAFICO':
       return '#1976d2'; // Azul
     case 'TRABAJADOR':

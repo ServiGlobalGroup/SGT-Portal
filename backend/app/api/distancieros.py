@@ -42,7 +42,7 @@ async def list_grouped_distancieros(
     # Permitir mismos roles que dietas (admin / master). Ajustar si se desea abrir más.
     role_value = getattr(current_user.role, 'value', current_user.role)
     # Lectura abierta a todos los roles autenticados (incluye TRABAJADOR)
-    if role_value not in ['ADMINISTRADOR', 'MASTER_ADMIN', 'TRAFICO', 'TRABAJADOR']:
+    if role_value not in ['ADMINISTRADOR', 'MASTER_ADMIN', 'TRAFICO', 'TRABAJADOR', 'ADMINISTRACION']:
         raise HTTPException(status_code=403, detail='No autorizado')
     rows = DistancieroService.list_grouped(db, active)
     result = []
@@ -78,7 +78,7 @@ async def list_routes(
     current_user: User = Depends(get_current_user)
 ):
     role_value = getattr(current_user.role, 'value', current_user.role)
-    if role_value not in ['ADMINISTRADOR', 'MASTER_ADMIN', 'TRAFICO', 'TRABAJADOR']:
+    if role_value not in ['ADMINISTRADOR', 'MASTER_ADMIN', 'TRAFICO', 'TRABAJADOR', 'ADMINISTRACION']:
         raise HTTPException(status_code=403, detail='No autorizado')
     data = DistancieroService.list_routes(db, client_name, only_active, q_text=q, limit=limit, offset=offset)
     return {
@@ -143,7 +143,7 @@ async def get_google_cached_route(
     current_user: User = Depends(get_current_user)
 ):
     role_value = getattr(current_user.role, 'value', current_user.role)
-    if role_value not in ['ADMINISTRADOR', 'MASTER_ADMIN', 'TRAFICO', 'TRABAJADOR']:
+    if role_value not in ['ADMINISTRADOR', 'MASTER_ADMIN', 'TRAFICO', 'TRABAJADOR', 'ADMINISTRACION']:
         raise HTTPException(status_code=403, detail='No autorizado')
     entity = DistancieroService.get_cached_route(db, origin, destination, mode, variant=variant)
     if not entity:
@@ -168,7 +168,7 @@ async def save_google_route(
 ):
     role_value = getattr(current_user.role, 'value', current_user.role)
     # Permitir a todos los roles autenticados para maximizar reutilización (ajustar si necesario)
-    if role_value not in ['ADMINISTRADOR', 'MASTER_ADMIN', 'TRAFICO', 'TRABAJADOR']:
+    if role_value not in ['ADMINISTRADOR', 'MASTER_ADMIN', 'TRAFICO', 'TRABAJADOR', 'ADMINISTRACION']:
         raise HTTPException(status_code=403, detail='No autorizado')
     entity = DistancieroService.save_google_route(
         db,

@@ -20,11 +20,11 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "60"))
     
     # Master Admin User (Hidden in code, not in database)
-    master_admin_username: str = "admin01"
+    master_admin_username: str = os.getenv("MASTER_ADMIN_USERNAME", "admin01")
     # En producción, establezca via variable de entorno MASTER_ADMIN_PASSWORD
-    master_admin_password: str = ""  # No hardcodear credenciales
-    master_admin_email: str = "sys@internal.local"
-    master_admin_name: str = "System Admin"
+    master_admin_password: str = os.getenv("MASTER_ADMIN_PASSWORD", "")
+    master_admin_email: str = os.getenv("MASTER_ADMIN_EMAIL", "sys@internal.local")
+    master_admin_name: str = os.getenv("MASTER_ADMIN_NAME", "System Admin")
     
     # System Maintenance Mode
     maintenance_mode: bool = False
@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     app_name: str = "Portal SGT"
     app_version: str = "1.0.0"
     debug: bool = False  # Producción por defecto
+    # Server (host / port configurables por entorno) - nombres alineados a variables .env
+    app_host: str = os.getenv("APP_HOST", "0.0.0.0")
+    app_port: int = int(os.getenv("APP_PORT", os.getenv("BACKEND_PORT", os.getenv("PORT", "8000"))))
 
     # CORS
     allowed_origins: List[str] = [
@@ -61,6 +64,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"  # Ignorar variables desconocidas en .env para flexibilidad
 
 # Instancia global de configuración
 settings = Settings()

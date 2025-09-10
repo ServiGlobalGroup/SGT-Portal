@@ -52,9 +52,9 @@ app.include_router(folder_management.router, prefix="/api", tags=["folder-manage
 # Inicializar sistema de carpetas al arrancar
 try:
     FolderStructureService.initialize_system_folders()
-    print("✅ Sistema de carpetas inicializado correctamente")
+    print("Sistema de carpetas inicializado correctamente")
 except Exception as e:
-    print(f"⚠️ Error inicializando sistema de carpetas: {str(e)}")
+    print(f"Error inicializando sistema de carpetas: {str(e)}")
 
 # Nota: la ruta raíz '/' será servida por el fallback de la SPA si existe el build
 
@@ -103,4 +103,41 @@ if os.path.isdir(FRONTEND_DIST):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    import os
+    import socket
+    from contextlib import closing
+    # Permitir sobreescribir host/port vía variables de entorno sin editar código
+    host = os.getenv("APP_HOST", os.getenv("HOST", app_settings.app_host))
+    port = int(os.getenv("APP_PORT", os.getenv("BACKEND_PORT", os.getenv("PORT", str(app_settings.app_port)))))
+    def port_in_use(p: int) -> bool:
+        """Return True if port is already bound on any interface.
+        Instead of connect (which fails for 0.0.0.0), try binding; if bind fails => in use.
+        """
+        test_host = host
+        if host == "0.0.0.0":  # bind test on 0.0.0.0 is correct for detecting use
+            test_host = "0.0.0.0"
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.bind((test_host, p))
+            return False  # Success bind => free
+        except OSError:
+            return True   # Bind failed => likely in use / permission
+        finally:
+            try:
+                s.close()
+            except Exception:
+                pass
+
+    original_port = port
+    if port_in_use(port):
+        print(f"Puerto {port} ocupado. Buscando puerto libre...")
+        for candidate in range(port + 1, port + 11):  # probar próximos 10 puertos
+            if not port_in_use(candidate):
+                print(f"Usando puerto alternativo {candidate} (original {original_port} ocupado)")
+                port = candidate
+                break
+        else:
+            print("No se encontró puerto libre en el rango. Aborta.")
+            raise SystemExit(1)
+    print(f"Iniciando servidor en {host}:{port}")
+    uvicorn.run(app, host=host, port=port)

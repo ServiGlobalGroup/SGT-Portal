@@ -37,7 +37,7 @@ async def get_vacation_requests(
         joinedload(VacationRequest.reviewer)
     )
     
-    # Si no es admin, solo puede ver sus propias solicitudes
+    # Si no es admin pleno, solo puede ver sus propias solicitudes
     if current_user.role.value not in ['ADMINISTRADOR', 'MASTER_ADMIN']:
         query = query.filter(VacationRequest.user_id == current_user.id)
     elif user_id:  # Los admins pueden filtrar por usuario específico
@@ -440,7 +440,7 @@ async def get_vacation_stats(
     # Base query
     query = db.query(VacationRequest)
     
-    # Si no es admin, solo sus propias solicitudes
+    # Si no es admin pleno, solo sus propias solicitudes
     if current_user.role.value not in ['ADMINISTRADOR', 'MASTER_ADMIN']:
         query = query.filter(VacationRequest.user_id == current_user.id)
     

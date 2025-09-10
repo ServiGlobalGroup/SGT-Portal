@@ -149,22 +149,28 @@ export const Traffic: React.FC = () => {
       const foldersData = await trafficFilesAPI.getFolders(path);
       console.log('📁 Folders loaded:', foldersData);
       
-      // Filtrar para evitar bucles: no mostrar la carpeta actual dentro de sí misma
+      // Filtrar para evitar bucles y navegación circular
       let filteredFolders = Array.isArray(foldersData) ? foldersData : [];
       
       if (path && path !== '/') {
-        const currentFolderName = path.split('/').pop();
-        console.log('🔍 Filtering out current folder:', currentFolderName);
+        // Obtener todos los segmentos de la ruta actual
+        const pathSegments = path.split('/').filter(p => p);
+        console.log('🔍 Current path segments:', pathSegments);
+        
+        // Filtrar carpetas que ya están en la ruta actual (evitar bucles)
         filteredFolders = filteredFolders.filter(folder => {
-          const shouldKeep = folder.name !== currentFolderName;
+          const isInCurrentPath = pathSegments.includes(folder.name);
+          const shouldKeep = !isInCurrentPath;
+          
           if (!shouldKeep) {
-            console.log('🚫 Filtered out self-reference:', folder.name);
+            console.log('🚫 Filtered out circular reference:', folder.name, 'from path:', pathSegments);
           }
+          
           return shouldKeep;
         });
       }
       
-      console.log('✅ Final filtered folders:', filteredFolders);
+      console.log('✅ Final filtered folders:', filteredFolders.map(f => f.name));
       setFolders(filteredFolders);
     } catch (error) {
       console.error('Error loading folders:', error);
@@ -292,9 +298,20 @@ export const Traffic: React.FC = () => {
 
   // Handlers
   const handleFolderClick = (folderName: string) => {
+    // Verificar si ya estamos en esta carpeta o si causaría un bucle
+    const pathSegments = currentPath.split('/').filter(p => p);
+    
+    // Evitar bucles: no navegar a una carpeta si ya estamos dentro de ella
+    if (pathSegments.includes(folderName)) {
+      console.warn('🚫 Preventing circular navigation to:', folderName, 'current path:', currentPath);
+      showSnackbar(`No se puede navegar a "${folderName}" - ya estás dentro de esta carpeta`, 'warning');
+      return;
+    }
+    
     const newPath = currentPath === '/' 
       ? `/${folderName}`
       : `${currentPath}/${folderName}`;
+    
     console.log('📂 Navigating from', currentPath, 'to', newPath);
     setCurrentPath(newPath);
   };
@@ -449,7 +466,8 @@ export const Traffic: React.FC = () => {
         const relativePath = currentPath === '/' 
           ? file.name 
           : `${currentPath.substring(1)}/${file.name}`;
-        fileUrl = `${API_BASE_URL}/api/traffic/download/${encodeURIComponent(relativePath)}`;
+  // El backend espera query param ?path=
+  fileUrl = `${API_BASE_URL}/api/traffic/download?path=${encodeURIComponent(relativePath)}`;
       }
       
       // Crear elemento a temporal para descargar
@@ -478,9 +496,19 @@ export const Traffic: React.FC = () => {
         let relativePath: string;
         
         if (file.url) {
-          // Extraer el path relativo desde la URL del archivo
-          relativePath = file.url.replace(`${API_BASE_URL}/api/traffic/download/`, '');
-          relativePath = decodeURIComponent(relativePath);
+          // Extraer el path relativo desde la URL del archivo (soporta formato con query ?path=)
+          try {
+            const urlObj = new URL(file.url, API_BASE_URL);
+            const qp = urlObj.searchParams.get('path');
+            if (qp) {
+              relativePath = decodeURIComponent(qp);
+            } else {
+              relativePath = decodeURIComponent(urlObj.pathname.replace('/api/traffic/download/', ''));
+            }
+          } catch {
+            relativePath = file.url.replace(`${API_BASE_URL}/api/traffic/download/`, '');
+            relativePath = decodeURIComponent(relativePath);
+          }
         } else {
           // Fallback: construir el path relativo manualmente
           relativePath = currentPath === '/' 

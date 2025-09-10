@@ -30,21 +30,33 @@ async def get_dashboard_stats():
 
 @router.get("/available-workers")
 async def get_available_workers(
-    target_date: str = Query(..., description="Fecha objetivo YYYY-MM-DD"),
+    target_date: str | None = Query(None, description="(Opcional) Fecha objetivo YYYY-MM-DD. Si se omite se usa hoy."),
+    position: str | None = Query(None, description="(Opcional) Filtrar por valor exacto de position"),
     db: Session = Depends(get_db)
 ):
-    """Devuelve trabajadores (rol TRABAJADOR) activos y no de vacaciones en la fecha dada.
+    """Devuelve trabajadores disponibles el día indicado (o hoy) con filtro opcional por *position*.
 
-    Formato de respuesta:
-    { "date": "YYYY-MM-DD", "available": [ {id, full_name, dni_nie} ] }
+    Respuesta extendida para soportar selector de puestos (positions):
+    {
+      "date": "YYYY-MM-DD",
+      "available": [{id, full_name, dni_nie, position}],
+      "positions": ["Conductor", "Carretillero", ...]
+    }
     """
-    # Validar fecha
-    from datetime import datetime
-    try:
-        day = datetime.strptime(target_date, "%Y-%m-%d").date()
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Formato de fecha inválido. Use YYYY-MM-DD")
+    from datetime import datetime, date as date_cls
 
+    # Resolver fecha (si no viene -> hoy en zona UTC naive)
+    day: datetime.date
+    if target_date:
+        try:
+            day = datetime.strptime(target_date, "%Y-%m-%d").date()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Formato de fecha inválido. Use YYYY-MM-DD")
+    else:
+        day = datetime.utcnow().date()
+        target_date = day.strftime("%Y-%m-%d")
+
+    # IDs de usuarios de vacaciones ese día
     vacation_user_ids = [
         uid for (uid,) in db.query(VacationRequest.user_id).filter(
             VacationRequest.status == VacationStatus.APPROVED,
@@ -53,20 +65,46 @@ async def get_available_workers(
         ).all()
     ]
 
-    query_workers = db.query(User).filter(
+    base_query = db.query(User).filter(
         User.role == UserRole.TRABAJADOR,
         User.is_active == True,  # noqa: E712
     )
     if vacation_user_ids:
-        query_workers = query_workers.filter(User.id.notin_(vacation_user_ids))
+        base_query = base_query.filter(User.id.notin_(vacation_user_ids))
+
+    # Obtener lista de posiciones únicas (sin None) para poblar el selector
+    # (se obtiene antes de aplicar filtro especifico para que el usuario vea todas las opciones)
+    # Obtener posiciones (todas las de trabajadores activos, independientemente de vacaciones o filtro position)
+    raw_positions = db.query(User.position).filter(
+        User.role == UserRole.TRABAJADOR,
+        User.is_active == True,  # noqa: E712
+        User.position.isnot(None),
+        User.position != ''
+    ).all()
+    # Normalizar en Python para evitar issues de DISTINCT + ORDER BY en algunos motores
+    norm_positions_set = {}
+    for (pos,) in raw_positions:
+        if pos is None:
+            continue
+        key = pos.strip()
+        if not key:
+            continue
+        norm_positions_set[key] = True
+    distinct_positions = sorted(norm_positions_set.keys(), key=lambda x: x.lower())
+
+    query_workers = base_query
+    if position:
+        query_workers = query_workers.filter(User.position == position)
+
     workers = query_workers.order_by(User.last_name.asc(), User.first_name.asc()).all()
 
     return {
         "date": target_date,
         "available": [
-            {"id": u.id, "full_name": u.full_name, "dni_nie": u.dni_nie}
+            {"id": u.id, "full_name": u.full_name, "dni_nie": u.dni_nie, "position": u.position}
             for u in workers
         ],
+        "positions": distinct_positions,
     }
 
 @router.post("/process-payroll-pdf")

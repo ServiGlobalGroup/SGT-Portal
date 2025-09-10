@@ -491,8 +491,8 @@ export const Gestor: React.FC = () => {
                   
                   <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                     <Chip
-                      label={user.role === 'ADMIN' ? 'Administrador' : 'Usuario'}
-                      color={user.role === 'ADMIN' ? 'warning' : 'default'}
+                      label={user.role === 'ADMINISTRADOR' ? 'Administrador' : user.role === 'ADMINISTRACION' ? 'Administración' : 'Usuario'}
+                      color={user.role === 'ADMINISTRADOR' ? 'warning' : user.role === 'ADMINISTRACION' ? 'warning' : 'default'}
                       size="small"
                     />
                     <Chip

@@ -29,7 +29,8 @@ payroll_documents_db = []
 def _is_admin(current_user: User) -> bool:
     try:
         role_value = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
-        return role_value in ("ADMINISTRADOR", "ADMIN")
+        # Considerar admin pleno solo ADMINISTRADOR y MASTER_ADMIN
+        return role_value in ("ADMINISTRADOR", "MASTER_ADMIN")
     except Exception:
         return False
 

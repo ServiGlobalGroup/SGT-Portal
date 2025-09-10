@@ -7,6 +7,7 @@ alembic
 psycopg2-binary
 python-jose[cryptography]
 passlib[bcrypt]
+bcrypt==4.1.3
 python-dotenv
 pydantic-settings
-PyMuPDF==1.23.26
+# PyMuPDF==1.23.26  # Temporalmente desactivado para permitir instalación (Python 3.13 sin wheel)

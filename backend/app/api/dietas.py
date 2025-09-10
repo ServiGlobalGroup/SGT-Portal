@@ -82,9 +82,9 @@ async def list_dietas(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Trabajadores solo ven sus registros
+    # Trabajadores y rol ADMINISTRACION solo ven sus registros
     role_value = str(getattr(current_user.role, 'value', current_user.role))
-    if role_value == 'TRABAJADOR':
+    if role_value in ('TRABAJADOR', 'ADMINISTRACION'):
         user_id = getattr(current_user, 'id')
     records = DietaService.list(db, user_id, start_date, end_date, worker_type, order_number)
     resp_list: List[DietaRecordResponse] = []

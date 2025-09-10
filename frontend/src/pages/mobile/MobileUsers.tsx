@@ -18,7 +18,7 @@ import { MobilePagination } from '../../components/mobile/MobilePagination';
 import { MobileStatsCard } from '../../components/mobile/MobileStatsCard';
 import { MobileLoading } from '../../components/mobile/MobileLoading';
 
-type Role = 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR' | string;
+type Role = 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR' | string;
 
 interface User {
   id: number;

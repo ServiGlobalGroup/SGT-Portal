@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -15,13 +15,14 @@ import {
   ListItem,
   ListItemText,
   MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
   LinearProgress,
   Skeleton,
   Tooltip,
 } from '@mui/material';
-import { DatePicker, LocalizationProvider } from '@mui/x-date-pickers';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { es as esLocale } from 'date-fns/locale';
+// Eliminado DatePicker: ahora siempre se muestra día actual, se filtra por position
 import { alpha } from '@mui/material/styles';
 import { LocalShipping as TruckIcon } from '@mui/icons-material';
 import {
@@ -65,13 +66,16 @@ export const Dashboard: React.FC = () => {
     | null
   >(null);
   const [availableLoading, setAvailableLoading] = useState<boolean>(false);
-  const [selectedDate, setSelectedDate] = useState<string>(() => {
+  // Filtro de puesto (position). '' => todos
+  const [selectedPosition, setSelectedPosition] = useState<string>('');
+  // Fecha de hoy fija (como antes pero sin permitir cambiarla)
+  const todayDate = useMemo(() => {
     const now = new Date();
     const y = now.getFullYear();
     const m = String(now.getMonth() + 1).padStart(2, '0');
     const d = String(now.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
-  });
+  }, []);
   const [showAvailableDialog, setShowAvailableDialog] = useState(false);
   const [exportAnchor, setExportAnchor] = useState<null | HTMLElement>(null);
   const exportBtnAnchorRef = useRef<HTMLDivElement | null>(null);
@@ -129,7 +133,7 @@ export const Dashboard: React.FC = () => {
   dashboardService.getStats(),
         vacationService.getVacationStats().catch(() => null),
         usersAPI.getUserStats().catch(() => null),
-  dashboardService.getAvailableWorkers(selectedDate).catch(() => null),
+  dashboardService.getAvailableWorkers(todayDate, selectedPosition).catch(() => null),
       ]);
 
   setStats(statsRes);
@@ -151,7 +155,7 @@ export const Dashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.role, selectedDate]);
+  }, [user?.role, selectedPosition, todayDate]);
 
   useEffect(() => {
     loadDashboardData();
@@ -181,18 +185,17 @@ export const Dashboard: React.FC = () => {
     };
   }, [user?.role]);
 
-  // Refrescar sólo la lista de disponibles cuando cambia la fecha
+  // Refrescar sólo la lista de disponibles cuando cambia el filtro de posición
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
-      if (!selectedDate) return;
       try {
         setAvailableLoading(true);
-  const res = await dashboardService.getAvailableWorkers(selectedDate);
+  const res = await dashboardService.getAvailableWorkers(todayDate, selectedPosition);
         if (!cancelled) setAvailableWorkers(res);
       } catch (e) {
         console.error('Error cargando disponibles:', e);
-        if (!cancelled) setAvailableWorkers({ date: selectedDate, available: [] });
+  if (!cancelled) setAvailableWorkers({ date: todayDate, available: [] });
       } finally {
         if (!cancelled) setAvailableLoading(false);
       }
@@ -201,7 +204,7 @@ export const Dashboard: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedDate]);
+  }, [selectedPosition, todayDate]);
 
   return (
     <>
@@ -468,81 +471,27 @@ export const Dashboard: React.FC = () => {
                   </Typography>
                 </Box>
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }} sx={{ width: { xs: '100%', sm: 'auto' } }}>
-                  <Box
-                    sx={{
-                      '& .MuiInputAdornment-root .MuiIconButton-root': {
-                        backgroundColor: 'transparent !important',
-                        boxShadow: 'none !important',
-                        border: 'none !important',
-                      },
-                      '& .MuiInputAdornment-root .MuiIconButton-root:hover': {
-                        backgroundColor: 'transparent !important',
-                        boxShadow: 'none !important',
-                      },
-                      '& .MuiInputAdornment-root .MuiIconButton-root:active': {
-                        backgroundColor: 'transparent !important',
-                        boxShadow: 'none !important',
-                      },
-                      '& .MuiInputAdornment-root .MuiIconButton-root:focus, & .MuiInputAdornment-root .MuiIconButton-root:focus-visible': {
-                        outline: 'none !important',
-                        boxShadow: 'none !important',
-                        backgroundColor: 'transparent !important',
-                      },
-                      '& .MuiInputAdornment-root .MuiIconButton-root .MuiTouchRipple-root': {
-                        display: 'none !important',
-                      },
-                    }}
-                  >
-                    <LocalizationProvider dateAdapter={AdapterDateFns} adapterLocale={esLocale}>
-                      <DatePicker
-                        format="dd/MM/yyyy"
-                        value={selectedDate ? new Date(selectedDate) : null}
-                        onChange={(val) => {
-                          if (!val || isNaN(val.getTime())) return;
-                          const y = val.getFullYear();
-                          const m = String(val.getMonth() + 1).padStart(2, '0');
-                          const d = String(val.getDate()).padStart(2, '0');
-                          setSelectedDate(`${y}-${m}-${d}`);
-                        }}
-                        slotProps={{
-                          textField: {
-                            size: 'small',
-                            fullWidth: isXs,
-                            sx: {
-                              minWidth: { xs: '100%', sm: 160 },
-                              '& .MuiIconButton-root': {
-                                backgroundColor: 'transparent !important',
-                                boxShadow: 'none',
-                                border: 'none',
-                                '&:hover': {
-                                  backgroundColor: 'transparent !important',
-                                  boxShadow: 'none',
-                                },
-                                '& .MuiTouchRipple-root': { display: 'none' },
-                                '&:focus': { outline: 'none' },
-                              },
-                            },
-                          },
-                          openPickerButton: {
-                            disableRipple: true,
-                            disableFocusRipple: true,
-                            disableTouchRipple: true,
-                            sx: {
-                              backgroundColor: 'transparent !important',
-                              boxShadow: 'none',
-                              border: 'none',
-                              '&:hover': {
-                                backgroundColor: 'transparent !important',
-                                boxShadow: 'none',
-                              },
-                              '& .MuiTouchRipple-root': { display: 'none' },
-                              '&:focus': { outline: 'none' },
-                            },
-                          },
-                        }}
-                      />
-                    </LocalizationProvider>
-                  </Box>
+                  {/* Selector de puesto */}
+                  <FormControl size="small" sx={{ minWidth: isXs ? '100%' : 180 }}>
+                    <InputLabel id="position-filter-label">Puesto</InputLabel>
+                    <Select
+                      labelId="position-filter-label"
+                      label="Puesto"
+                      value={selectedPosition}
+                      onChange={(e) => setSelectedPosition(e.target.value)}
+                    >
+                      <MenuItem value="">
+                        <em>Todos</em>
+                      </MenuItem>
+                      {(availableWorkers?.positions && availableWorkers.positions.length > 0
+                        ? availableWorkers.positions
+                        : Array.from(new Set((availableWorkers?.available || []).map(a => a.position).filter(Boolean as any)))
+                        ).map((raw) => {
+                          const p = String(raw);
+                          return <MenuItem key={p} value={p}>{p}</MenuItem>;
+                        })}
+                    </Select>
+                  </FormControl>
                   <ModernButton
                     size="small"
                     startIcon={<ListAlt />}
@@ -575,12 +524,14 @@ export const Dashboard: React.FC = () => {
                     {availableWorkers.available.length === 0 ? (
                       <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
                         <TruckIcon sx={{ fontSize: 48, opacity: 0.25, mb: 1 }} />
-                        <Typography variant="body2" sx={{ mb: 1 }}>No hay trabajadores disponibles</Typography>
-                        <Button size="small" variant="outlined" onClick={() => {
-                          // abre el date picker via foco
-                          const el = document.querySelector('#available-workers-panel input');
-                          if (el instanceof HTMLElement) el.focus();
-                        }}>Cambiar fecha</Button>
+                        <Typography variant="body2" sx={{ mb: 1 }}>
+                          {selectedPosition
+                            ? 'No hay trabajadores disponibles con el filtro seleccionado'
+                            : 'No hay trabajadores disponibles hoy'}
+                        </Typography>
+                        {selectedPosition && (
+                          <Button size="small" variant="outlined" onClick={() => setSelectedPosition('')}>Quitar filtro</Button>
+                        )}
                       </Box>
                     ) : (
                       availableWorkers.available.map((u) => (
@@ -589,7 +540,7 @@ export const Dashboard: React.FC = () => {
                             {u.full_name}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
-                            {u.dni_nie}
+              {u.dni_nie}{u.position ? ` · ${u.position}` : ''}
                           </Typography>
                         </Box>
                       ))
@@ -794,7 +745,7 @@ export const Dashboard: React.FC = () => {
               <ListItem key={u.id} divider>
                 <ListItemText
                   primary={<Typography sx={{ fontWeight: 600 }}>{u.full_name}</Typography>}
-                  secondary={<Typography variant="caption" color="text.secondary">{u.dni_nie}</Typography>}
+                  secondary={<Typography variant="caption" color="text.secondary">{u.dni_nie}{u.position ? ` · ${u.position}` : ''}</Typography>}
                 />
               </ListItem>
             ))}

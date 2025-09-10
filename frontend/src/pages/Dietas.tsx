@@ -44,6 +44,16 @@ const ExcelIcon: React.FC<{ size?: number }> = ({ size=20 }) => (
 );
 
 export const Dietas: React.FC = () => {
+  // Fallback seguro para entornos donde crypto.randomUUID no esté disponible (ej. navegadores viejos, WebViews)
+  const safeRandomId = React.useCallback((): string => {
+    try {
+      if (typeof crypto !== 'undefined' && typeof (crypto as any).randomUUID === 'function') {
+        return (crypto as any).randomUUID();
+      }
+    } catch { /* ignore */ }
+    // Polyfill simple (suficiente para keys temporales en UI, no para seguridad)
+    return 'tmp-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
+  }, []);
   const { user, token } = useAuth();
   const canView = !!user && hasPermission(user, Permission.VIEW_DIETAS);
 
@@ -502,7 +512,7 @@ export const Dietas: React.FC = () => {
       if (isNaN(percentNum)) return;
       code = `extraPct:${name}:${percentNum}:${extraPercentBase}`;
     }
-    setRows(prev => [...prev, { tempId: crypto.randomUUID(), code, quantity: 1 }]);
+  setRows(prev => [...prev, { tempId: safeRandomId(), code, quantity: 1 }]);
     setOpenExtraDialog(false);
     setExtraName('');
     setExtraAmount('');
@@ -1288,7 +1298,7 @@ export const Dietas: React.FC = () => {
   }, [routeStats, disabledLegs]);
 
   const handleAddRow = () => {
-    setRows(prev => [...prev, { tempId: crypto.randomUUID(), code: availableRates[0]?.code || '', quantity: 1 }]);
+  setRows(prev => [...prev, { tempId: safeRandomId(), code: availableRates[0]?.code || '', quantity: 1 }]);
   };
 
   const handleChangeRow = (tempId: string, patch: Partial<ConceptRow>) => {

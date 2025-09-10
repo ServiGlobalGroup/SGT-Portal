@@ -66,7 +66,7 @@ interface User {
   last_name: string;
   email: string;
   phone?: string;
-  role: 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR';
+  role: 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR';
   department: string;
   position?: string;
   worker_type?: 'antiguo' | 'nuevo';
@@ -108,7 +108,7 @@ export const Users: React.FC = () => {
   // Estados para filtros
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
-  const [roleFilter, setRoleFilter] = useState<'all' | 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR'>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR'>('all');
   
   // Estados para modal de creación de usuario
   const [openCreateModal, setOpenCreateModal] = useState(false);
@@ -118,7 +118,7 @@ export const Users: React.FC = () => {
     last_name: '',
     email: '',
     phone: '',
-    role: 'TRABAJADOR' as 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR',
+  role: 'TRABAJADOR' as 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR',
     department: '',
     position: '',
   worker_type: 'antiguo' as 'antiguo' | 'nuevo',
@@ -160,7 +160,7 @@ export const Users: React.FC = () => {
     last_name: '',
     email: '',
     phone: '',
-    role: 'TRABAJADOR' as 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR',
+  role: 'TRABAJADOR' as 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR',
     department: '',
   position: '',
   worker_type: 'antiguo' as 'antiguo' | 'nuevo'
@@ -171,8 +171,12 @@ export const Users: React.FC = () => {
   const loadUsers = useCallback(async () => {
     setLoading(true);
     try {
+      // Solicitar más usuarios al backend (por defecto entrega 10). Usamos per_page=100 (límite backend)
+      // para disponer de todos en memoria y aplicar la paginación local existente sin reestructurar.
       const response = await usersAPI.getUsers({
-        active_only: false // Mostrar TODOS los usuarios (activos e inactivos)
+        page: 1,
+        per_page: 100, // máximo soportado por el endpoint (ge=1, le=100)
+        active_only: false // Incluir activos e inactivos; filtrado se hace en el cliente
       });
       setUsers(response.users || []);
     } catch (error) {
@@ -672,7 +676,8 @@ export const Users: React.FC = () => {
   // Funciones auxiliares
   const getRoleColor = (role: string): 'error' | 'warning' | 'info' | 'default' => {
     switch (role) {
-      case 'ADMINISTRADOR': return 'error';
+  case 'ADMINISTRADOR': return 'error';
+  case 'ADMINISTRACION': return 'warning';
       case 'TRAFICO': return 'warning';
       case 'TRABAJADOR': return 'info';
       default: return 'default';
@@ -681,7 +686,8 @@ export const Users: React.FC = () => {
 
   const getRoleText = (role: string) => {
     switch (role) {
-      case 'ADMINISTRADOR': return 'Administrador';
+  case 'ADMINISTRADOR': return 'Administrador';
+  case 'ADMINISTRACION': return 'Administración';
       case 'TRAFICO': return 'Tráfico';
       case 'TRABAJADOR': return 'Trabajador';
       default: return role;
@@ -909,7 +915,7 @@ export const Users: React.FC = () => {
                   <Select
                     value={roleFilter}
                     label="Rol"
-                    onChange={(e: SelectChangeEvent) => setRoleFilter(e.target.value as 'all' | 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR')}
+                    onChange={(e: SelectChangeEvent) => setRoleFilter(e.target.value as 'all' | 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR')}
                     sx={{
                       borderRadius: 2,
                       '&:hover': {
@@ -926,6 +932,7 @@ export const Users: React.FC = () => {
                   >
                     <MenuItem value="all">Todos los roles</MenuItem>
                     <MenuItem value="ADMINISTRADOR">Administrador</MenuItem>
+                    <MenuItem value="ADMINISTRACION">Administración</MenuItem>
                     <MenuItem value="TRAFICO">Tráfico</MenuItem>
                     <MenuItem value="TRABAJADOR">Trabajador</MenuItem>
                   </Select>
@@ -1831,6 +1838,12 @@ export const Users: React.FC = () => {
                         Administrador
                       </Box>
                     </MenuItem>
+                    <MenuItem value="ADMINISTRACION">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Business fontSize="small" sx={{ color: '#d4a574' }} />
+                        Administración
+                      </Box>
+                    </MenuItem>
                     <MenuItem value="TRAFICO">
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Badge fontSize="small" sx={{ color: '#ed6c02' }} />
@@ -2091,11 +2104,12 @@ export const Users: React.FC = () => {
               label="Rol"
               type="select"
               value={createUserData.role}
-              onChange={(value) => setCreateUserData(prev => ({ ...prev, role: value as 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR' }))}
+              onChange={(value) => setCreateUserData(prev => ({ ...prev, role: value as 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR' }))}
               required
               options={[
                 { value: 'TRABAJADOR', label: 'Trabajador' },
                 { value: 'TRAFICO', label: 'Tráfico' },
+                { value: 'ADMINISTRACION', label: 'Administración' },
                 { value: 'ADMINISTRADOR', label: 'Administrador' },
               ]}
               helperText="Nivel de acceso del usuario"
@@ -2277,8 +2291,9 @@ export const Users: React.FC = () => {
                 {
                   icon: <Badge sx={{ fontSize: 16 }} />,
                   label: "Rol asignado",
-                  value: createUserData.role === 'ADMINISTRADOR' ? 'Administrador' : 
-                        createUserData.role === 'TRAFICO' ? 'Tráfico' : 'Trabajador'
+      value: createUserData.role === 'ADMINISTRADOR' ? 'Administrador' : 
+        createUserData.role === 'ADMINISTRACION' ? 'Administración' :
+        createUserData.role === 'TRAFICO' ? 'Tráfico' : 'Trabajador'
                 }
                 ,
                 ...(createUserData.role === 'TRABAJADOR' ? [{

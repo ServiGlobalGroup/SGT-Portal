@@ -130,18 +130,19 @@ export const trafficAPI = {
 export const trafficFilesAPI = {
   // Obtener carpetas
   getFolders: (path?: string) => {
-    const queryParams = path ? `?path=${encodeURIComponent(path)}` : '';
+    const queryParams = path ? `?parent_path=${encodeURIComponent(path)}` : '';
     return api.get(`/api/traffic/folders${queryParams}`).then(res => res.data);
   },
   
   // Crear carpeta
   createFolder: (name: string, path?: string) => {
-    return api.post('/api/traffic/folders', { name, path }).then(res => res.data);
+    return api.post('/api/traffic/folders', { name, parent_path: path }).then(res => res.data);
   },
   
   // Obtener archivos
   getFiles: (path?: string) => {
-    const queryParams = path ? `?path=${encodeURIComponent(path)}` : '';
+  // Backend espera el parámetro 'path' para listar archivos
+  const queryParams = path ? `?path=${encodeURIComponent(path)}` : '';
     return api.get(`/api/traffic/files${queryParams}`).then(res => res.data);
   },
   
@@ -159,7 +160,7 @@ export const trafficFilesAPI = {
   
   // Descargar archivo
   downloadFile: (relativePath: string) => {
-    return api.get(`/api/traffic/download/${encodeURIComponent(relativePath)}`, {
+  return api.get(`/api/traffic/download?path=${encodeURIComponent(relativePath)}`, {
       responseType: 'blob'
     });
   },
@@ -417,7 +418,7 @@ export const usersAPI = {
     last_name: string;
     email: string;
     phone?: string;
-    role: 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR';
+  role: 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR';
     department: string;
     position?: string;
   worker_type?: 'antiguo' | 'nuevo';

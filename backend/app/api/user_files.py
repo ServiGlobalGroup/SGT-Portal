@@ -52,6 +52,8 @@ async def get_user_documents(
     try:
         for file_path in user_folder.iterdir():
             if file_path.is_file():
+                if file_path.name.lower() in {"thumbs.db", "desktop.ini"}:
+                    continue
                 file_stat = file_path.stat()
                 file_size = file_stat.st_size
                 total_size += file_size
@@ -87,9 +89,9 @@ async def download_file(
     Solo permite descargar archivos del propio usuario o si es admin.
     """
     
-    # Verificar permisos
+    # Verificar permisos: solo el propio usuario o administradores plenos pueden descargar
     user_role = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
-    if user_role != "ADMINISTRADOR" and current_user.dni_nie != dni_nie:
+    if user_role not in ("ADMINISTRADOR", "MASTER_ADMIN") and current_user.dni_nie != dni_nie:
         raise HTTPException(status_code=403, detail="No tienes permisos para acceder a estos archivos")
     
     # Validar tipo de carpeta - solo nóminas y dietas
@@ -468,13 +470,102 @@ async def get_all_users_documents(
         # Verificar permisos de administrador de manera más robusta
         is_admin = False
         if hasattr(current_user.role, 'value'):
-            is_admin = current_user.role.value == "ADMINISTRADOR"
+            is_admin = current_user.role.value in ("ADMINISTRADOR", "MASTER_ADMIN")
         else:
-            is_admin = str(current_user.role) == "ADMINISTRADOR"
+            is_admin = str(current_user.role) in ("ADMINISTRADOR", "MASTER_ADMIN")
         
         print(f"Is admin: {is_admin}")
         
         if not is_admin:
+            # Permitir al rol ADMINISTRACION usar este endpoint pero devolviendo SOLO sus documentos
+            role_value = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+            if role_value == "ADMINISTRACION":
+                user_files_path = Path(settings.user_files_base_path)
+                dni_nie = current_user.dni_nie
+                user_folder = user_files_path / dni_nie
+                users_with_documents = []
+                total_documents = 0
+                total_size = 0
+
+                # Buscar información del usuario en la base de datos
+                user = db.query(User).filter(User.dni_nie == dni_nie).first()
+                if user:
+                    user_data = {
+                        "id": user.id,
+                        "name": user.full_name,
+                        "email": user.email,
+                        "dni_nie": user.dni_nie,
+                        "role": user.role.value if hasattr(user.role, 'value') else str(user.role),
+                        "department": getattr(user, 'department', 'General'),
+                        "is_active": user.is_active,
+                        "documents": {
+                            "nominas": [],
+                            "dietas": []
+                        },
+                        "total_documents": 0,
+                        "total_size": 0
+                    }
+                else:
+                    user_data = {
+                        "id": f"file_{dni_nie}",
+                        "name": f"Usuario {dni_nie}",
+                        "email": "No disponible",
+                        "dni_nie": dni_nie,
+                        "role": "UNKNOWN",
+                        "department": "No asignado",
+                        "is_active": False,
+                        "documents": {
+                            "nominas": [],
+                            "dietas": []
+                        },
+                        "total_documents": 0,
+                        "total_size": 0
+                    }
+
+                # Leer carpetas del propio usuario
+                for folder_type in ["nominas", "dietas"]:
+                    folder_path = user_folder / folder_type
+                    if folder_path.exists() and folder_path.is_dir():
+                        documents = []
+                        try:
+                            for file_path in folder_path.iterdir():
+                                if file_path.is_file():
+                                    if file_path.name.lower() in {"thumbs.db", "desktop.ini"}:
+                                        continue
+                                    file_stat = file_path.stat()
+                                    file_size = file_stat.st_size
+                                    document = {
+                                        "id": f"{dni_nie}_{folder_type}_{len(documents) + 1}",
+                                        "name": file_path.name,
+                                        "size": file_size,
+                                        "type": file_path.suffix.lower(),
+                                        "created_date": datetime.fromtimestamp(file_stat.st_ctime).isoformat(),
+                                        "modified_date": datetime.fromtimestamp(file_stat.st_mtime).isoformat(),
+                                        "download_url": f"/api/user-files/download/{dni_nie}/{folder_type}/{file_path.name}"
+                                    }
+                                    documents.append(document)
+                                    user_data["total_size"] += file_size
+                                    total_size += file_size
+                        except Exception:
+                            # Si hay error leyendo la carpeta, continuar con la siguiente
+                            pass
+                        user_data["documents"][folder_type] = documents
+                        user_data["total_documents"] += len(documents)
+                        total_documents += len(documents)
+
+                users_with_documents.append(user_data)
+                return {
+                    "users": users_with_documents,
+                    "statistics": {
+                        "total_users": len(users_with_documents),
+                        "active_users": len([u for u in users_with_documents if u["is_active"]]),
+                        "total_documents": total_documents,
+                        "users_with_documents": len([u for u in users_with_documents if u["total_documents"] > 0]),
+                        "total_size": total_size
+                    }
+                }
+
+            # Otros roles no tienen acceso
             raise HTTPException(status_code=403, detail="No tienes permisos para acceder a esta información")
         
         # Escanear carpetas físicas de usuarios en lugar de solo la base de datos
@@ -553,6 +644,8 @@ async def get_all_users_documents(
                     try:
                         for file_path in folder_path.iterdir():
                             if file_path.is_file():
+                                if file_path.name.lower() in {"thumbs.db", "desktop.ini"}:
+                                    continue
                                 file_stat = file_path.stat()
                                 file_size = file_stat.st_size
                                 
@@ -612,7 +705,7 @@ async def get_user_documents_admin(
     """
     # Verificar permisos de administrador
     user_role = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
-    if user_role != "ADMIN":
+    if user_role not in ("ADMINISTRADOR", "MASTER_ADMIN"):
         raise HTTPException(status_code=403, detail="No tienes permisos para acceder a esta información")
     
     # Verificar que el usuario existe
@@ -647,6 +740,8 @@ async def get_user_documents_admin(
             try:
                 for file_path in folder_path.iterdir():
                     if file_path.is_file():
+                        if file_path.name.lower() in {"thumbs.db", "desktop.ini"}:
+                            continue
                         file_stat = file_path.stat()
                         file_size = file_stat.st_size
                         
@@ -692,6 +787,8 @@ async def get_general_documents():
     try:
         for file_path in general_docs_path.iterdir():
             if file_path.is_file():
+                if file_path.name.lower() in {"thumbs.db", "desktop.ini"}:
+                    continue
                 file_stat = file_path.stat()
                 file_size = file_stat.st_size
                 

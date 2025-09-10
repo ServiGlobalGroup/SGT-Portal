@@ -94,10 +94,11 @@ class FolderStructureService:
             cls._create_user_info_file(user_folder, dni_nie, role, first_name, 
                                      last_name, department, folders_structure)
             
-            # Crear archivo .gitkeep en carpetas vacías para mantenerlas en git
-            for folder_name in folders_structure.keys():
-                gitkeep_file = user_folder / folder_name / ".gitkeep"
-                gitkeep_file.touch()
+            # ⚠️ NO crear archivos .gitkeep automáticamente 
+            # Los archivos .gitkeep se gestionan manualmente según necesidades
+            # for folder_name in folders_structure.keys():
+            #     gitkeep_file = user_folder / folder_name / ".gitkeep"
+            #     gitkeep_file.touch()
             
             logger.info(f"Estructura de carpetas creada para usuario {dni_nie}")
             return str(user_folder)
@@ -140,7 +141,7 @@ class FolderStructureService:
                 f.write("• Usa nombres de archivo descriptivos y con fecha cuando sea relevante\n")
                 f.write("• Los documentos oficiales preferiblemente en formato PDF\n")
                 f.write("• Para archivos grandes, considera comprimirlos\n")
-                f.write("• No elimines este archivo README ni los archivos .gitkeep\n\n")
+                f.write("• No elimines este archivo README\n\n")
                 
                 f.write("NOTAS IMPORTANTES:\n")
                 f.write("-" * 19 + "\n")
@@ -213,8 +214,9 @@ class FolderStructureService:
                 if folder_name in folders_structure:
                     subfolder = user_folder / folder_name
                     subfolder.mkdir(exist_ok=True)
-                    gitkeep_file = subfolder / ".gitkeep"
-                    gitkeep_file.touch()
+                    # ⚠️ NO crear archivos .gitkeep automáticamente
+                    # gitkeep_file = subfolder / ".gitkeep"
+                    # gitkeep_file.touch()
                     logger.info(f"Carpeta reparada: {subfolder}")
             
             # Actualizar archivo README si es necesario
@@ -370,7 +372,7 @@ class FolderStructureService:
                     f.write("ESTRUCTURA:\n")
                     f.write("- Cada usuario tiene una carpeta con su DNI/NIE como nombre\n")
                     f.write("- Las subcarpetas se crean automáticamente según el rol del usuario\n")
-                    f.write("- Los archivos .gitkeep mantienen las carpetas vacías en el control de versiones\n\n")
+                    f.write("- Las subcarpetas se crean automáticamente según el rol del usuario\n")
                     f.write("ACCESO:\n")
                     f.write("- Solo los administradores pueden acceder a todas las carpetas\n")
                     f.write("- Cada usuario puede acceder únicamente a su carpeta personal\n\n")

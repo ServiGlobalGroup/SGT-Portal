@@ -1,3 +1,7 @@
+##############################################
+# Generales
+##############################################
+
 # Dependencias
 node_modules/
 venv/
@@ -41,14 +45,33 @@ Thumbs.db
 .env.test.local
 .env.production.local
 
-# Archivos de uploads temporales
-uploads/temp/
-files/temp/
-
 # Cache de TypeScript
 *.tsbuildinfo
 
-# Archivos PDF y documentos
+##############################################
+# Datos y ficheros subidos
+##############################################
+
+# Ignorar todas las carpetas llamadas "files" en cualquier nivel
+**/files/**
+!**/files/.gitkeep
+
+# Archivos de usuario subidos y temporales
+user_files/
+uploads/
+backend/files/
+backend/.trash/
+backend/maintenance_status.json
+
+# Sistema de archivos unificado - Carpetas de usuarios (datos personales)
+files/users/*/
+!files/users/.gitkeep
+
+##############################################
+# Tipos de archivos a ignorar
+##############################################
+
+# Documentos
 *.pdf
 *.doc
 *.docx
@@ -57,42 +80,21 @@ files/temp/
 *.ppt
 *.pptx
 
-# Archivos de usuario subidos
-user_files/
-backend/files/
-uploads/
-backend/.trash/
-backend/maintenance_status.json
-
-# Sistema de archivos unificado - Carpetas de usuarios (datos personales)
-files/users/*/
-!files/users/.gitkeep
-
-# Mantener estructura base pero ignorar contenido de usuarios
-
-# Archivos de base de datos locales
-*.db
-*.sqlite
-*.sqlite3
-
-# Archivos de backup
-*.bak
-*.backup
-
-# Archivos comprimidos
-*.zip
-*.rar
-*.7z
-*.tar
-*.gz
-
-# Archivos de imágenes grandes
+# Imágenes
 *.tiff
 *.tif
 *.bmp
 *.psd
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.webp
+*.svg
+*.heic
+*.heif
 
-# Archivos de video
+# Vídeo
 *.mp4
 *.avi
 *.mov
@@ -100,11 +102,25 @@ files/users/*/
 *.flv
 *.wmv
 
-# Archivos de audio
+# Audio
 *.mp3
 *.wav
 *.flac
 *.aac
+
+# Bases de datos y backups
+*.db
+*.sqlite
+*.sqlite3
+*.bak
+*.backup
+
+# Comprimidos
+*.zip
+*.rar
+*.7z
+*.tar
+*.gz
 
 # Certificados y claves
 *.key
@@ -114,7 +130,7 @@ files/users/*/
 *.p12
 *.pfx
 
-# Archivos de configuración sensibles
+# Configuración sensible
 config.local.*
 settings.local.*
 secrets.*

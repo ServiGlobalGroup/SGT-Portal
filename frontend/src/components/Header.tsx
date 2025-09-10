@@ -93,6 +93,8 @@ export const Header: React.FC<HeaderProps> = ({ isCollapsed }) => {
         return 'Admin Master';
       case 'ADMINISTRADOR':
         return 'Administrador';
+      case 'ADMINISTRACION':
+        return 'Administración';
       case 'TRAFICO':
         return 'Tráfico';
       case 'TRABAJADOR':
@@ -179,8 +181,9 @@ export const Header: React.FC<HeaderProps> = ({ isCollapsed }) => {
           >
             <Avatar
               sx={{
-                bgcolor: user?.role === 'ADMINISTRADOR' ? '#d32f2f' : 
-                        user?.role === 'TRAFICO' ? '#ed6c02' : 
+    bgcolor: user?.role === 'ADMINISTRADOR' ? '#d32f2f' : 
+      user?.role === 'ADMINISTRACION' ? '#d4a574' : 
+      user?.role === 'TRAFICO' ? '#ed6c02' : 
                         user?.role === 'MASTER_ADMIN' ? '#9c27b0' : '#501b36',
                 width: 45,
                 height: 45,

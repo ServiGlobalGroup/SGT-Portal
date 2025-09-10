@@ -10,6 +10,7 @@ from typing import Optional
 class UserRole(enum.Enum):
     MASTER_ADMIN = "MASTER_ADMIN"  # Usuario maestro oculto
     ADMINISTRADOR = "ADMINISTRADOR"
+    ADMINISTRACION = "ADMINISTRACION"
     TRAFICO = "TRAFICO"
     TRABAJADOR = "TRABAJADOR"
 

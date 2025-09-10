@@ -14,7 +14,8 @@ export interface UserStatsSummary {
 
 export interface AvailableWorkersResponse {
   date: string; // YYYY-MM-DD
-  available: { id: number; full_name: string; dni_nie: string }[];
+  available: { id: number; full_name: string; dni_nie: string; position?: string | null }[];
+  positions?: string[]; // Lista de posiciones disponibles para filtrar
 }
 
 

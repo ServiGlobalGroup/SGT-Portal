@@ -73,7 +73,7 @@ export interface User {
   last_name: string;
   email: string;
   phone?: string;
-  role: 'MASTER_ADMIN' | 'ADMINISTRADOR' | 'TRAFICO' | 'TRABAJADOR';
+  role: 'MASTER_ADMIN' | 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR';
   department: string;
   position?: string;
   // Tipo de trabajador (dietas): antiguo / nuevo
