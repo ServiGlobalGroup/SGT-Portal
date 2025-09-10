@@ -310,20 +310,18 @@ async def get_user_stats(db: Session = Depends(get_db)):
     """
     total_users = db.query(User).count()
     active_users = db.query(User).filter(User.is_active == True).count()  # noqa: E712
-    
-    # Estadísticas por departamento
-    departments = {}
-    for dept, count in db.query(User.department,).all():
-        # Este bucle no cuenta; reemplazamos por aggregate abajo si es necesario
-        pass
-    # Recalcular correctamente con agregación
+    # Estadísticas por departamento (agrupación correcta)
     from sqlalchemy import func
-    dept_counts = db.query(User.department, func.count(User.id)).group_by(User.department).all()
+    dept_counts = (
+        db.query(User.department, func.count(User.id))
+        .group_by(User.department)
+        .all()
+    )
     departments = {dept: cnt for dept, cnt in dept_counts if dept}
-    
-    # Estadísticas por rol
+
+    # Estadísticas por rol (usar value si es Enum)
     role_counts = db.query(User.role, func.count(User.id)).group_by(User.role).all()
-    roles = {role.value if hasattr(role, 'value') else str(role): cnt for role, cnt in role_counts}
+    roles = {getattr(role, 'value', str(role)): cnt for role, cnt in role_counts}
     
     return {
         "total_users": total_users,

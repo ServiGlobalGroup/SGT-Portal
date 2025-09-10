@@ -334,12 +334,12 @@ export const Dashboard: React.FC = () => {
           >
             <StatsCard
               title="Usuarios"
-              value={userStats?.total_users ?? stats?.total_users ?? 0}
+              value={(userStats?.total_users ?? stats?.total_users) ?? 0}
               icon={<People />}
               color="#2196f3"
               loading={loading}
               details={(() => {
-                const total = userStats?.total_users ?? stats?.total_users ?? 0;
+                const total = (userStats?.total_users ?? stats?.total_users) ?? 0;
                 const activos = userStats?.active_users ?? 0;
                 const inactivos = total > 0 ? total - activos : 0;
                 const pct = total > 0 ? Math.round((activos / total) * 100) : 0;
@@ -357,7 +357,7 @@ export const Dashboard: React.FC = () => {
               loading={availableLoading || loading}
               onClick={() => setShowAvailableDialog(true)}
               details={(() => {
-                const totalTrab = (userStats?.roles?.TRABAJADOR ?? 0) as number;
+                const totalTrab = Number((userStats?.roles?.TRABAJADOR ?? 0));
                 const disp = availableWorkers?.available.length || 0;
                 const pct = totalTrab > 0 ? Math.round((disp / totalTrab) * 100) : 0;
                 const colorPct = pct >= 70 ? '#2e7d32' : pct >= 40 ? '#ed6c02' : '#c62828';
@@ -393,13 +393,14 @@ export const Dashboard: React.FC = () => {
                       <Skeleton key={i} variant="rectangular" height={isXs ? 52 : 64} sx={{ borderRadius: 2 }} />
                     ))}
                   </Box>
-                ) : userStats ? (
+                ) : (userStats || stats) ? (
                   (() => {
-                    const entries = Object.entries(userStats.roles || {});
+                    const roleMap = userStats?.roles || {} as Record<string, number>;
+                    const entries = Object.entries(roleMap);
                     if (entries.length === 0) {
                       return <Typography color="text.secondary">Sin datos de roles</Typography>;
                     }
-                    const total = entries.reduce((acc, [, c]) => acc + Number(c), 0) || 0;
+                    const total = entries.reduce((acc, [, c]) => acc + Number(c || 0), 0) || 0;
                     const roleColors: Record<string, string> = {
                       TRABAJADOR: '#7d2d52',
                       ADMINISTRADOR: '#d4a574',

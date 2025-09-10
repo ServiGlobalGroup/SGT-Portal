@@ -17,12 +17,18 @@ from app.utils.permissions import require_role
 router = APIRouter()
 
 @router.get("/stats", response_model=DashboardStats)
-async def get_dashboard_stats():
+async def get_dashboard_stats(db: Session = Depends(get_db)):
+    """Pequeño resumen "hero". total_users debe venir de la base de datos."""
+    try:
+        total_users = db.query(User).count()
+    except Exception:
+        total_users = 0
+    # Los otros datos no están implementados aún; dejamos 0 para no confundir
     return DashboardStats(
-        total_users=1250,
-        active_sessions=48,
-        total_documents=3420,
-        pending_requests=12
+        total_users=total_users,
+        active_sessions=0,
+        total_documents=0,
+        pending_requests=0
     )
 
 
