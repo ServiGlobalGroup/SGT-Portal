@@ -148,6 +148,20 @@ export const Vacations: React.FC = () => {
     oneDay: false,
   });
 
+  // Helpers de fecha (LOCAL, sin UTC) para evitar desfases
+  const toYMDLocal = (d: Date): string => {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  };
+
+  const parseYMDToLocalDate = (s: string): Date => {
+    // Espera 'YYYY-MM-DD' y construye Date en horario local (no UTC)
+    const [y, m, d] = s.split('-').map((v) => parseInt(v, 10));
+    return new Date(y, (m || 1) - 1, d || 1, 0, 0, 0, 0);
+  };
+
   // Estilos comunes para botones granate/burdeos
   const maroonGradient = 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 70%, #501b36 100%)';
   const maroonGradientHover = 'linear-gradient(135deg, #3d1429 0%, #5a1d3a 30%, #6b2545 70%, #3d1429 100%)';
@@ -213,14 +227,14 @@ export const Vacations: React.FC = () => {
       const convertedRequests: VacationRequest[] = data.map((apiRequest: any) => ({
         id: apiRequest.id,
         employeeName: apiRequest.employee_name || 'Usuario',
-        startDate: apiRequest.start_date.toISOString().split('T')[0],
-        endDate: apiRequest.end_date.toISOString().split('T')[0],
+        startDate: toYMDLocal(apiRequest.start_date),
+        endDate: toYMDLocal(apiRequest.end_date),
         reason: apiRequest.reason,
         status: apiRequest.status,
         days: apiRequest.duration_days,
-        requestDate: apiRequest.created_at ? apiRequest.created_at.toISOString().split('T')[0] : '',
+        requestDate: apiRequest.created_at ? toYMDLocal(apiRequest.created_at) : '',
         approvedBy: apiRequest.reviewer_name || '',
-        approvedDate: apiRequest.reviewed_at ? apiRequest.reviewed_at.toISOString().split('T')[0] : '',
+        approvedDate: apiRequest.reviewed_at ? toYMDLocal(apiRequest.reviewed_at) : '',
         comments: apiRequest.admin_response || ''
       }));
       setRequests(convertedRequests);
@@ -375,9 +389,9 @@ export const Vacations: React.FC = () => {
       })
       .map(request => {
         const st = String(request.status || '').toLowerCase().trim() as 'pending' | 'approved';
-        // react-big-calendar interpreta end como exclusivo, por eso el último día no se mostraba.
-        const start = new Date(request.startDate);
-        const endInclusive = new Date(request.endDate);
+        // Usar fechas locales para evitar desfases; end exclusivo en RBC
+        const start = parseYMDToLocalDate(request.startDate);
+        const endInclusive = parseYMDToLocalDate(request.endDate);
         endInclusive.setDate(endInclusive.getDate() + 1); // incluir el último día visualmente
         return ({
           id: request.id,
@@ -498,8 +512,8 @@ export const Vacations: React.FC = () => {
 
   // Funciones auxiliares
   const calculateDays = (start: string, end: string): number => {
-    const startDate = new Date(start);
-    const endDate = new Date(end);
+  const startDate = parseYMDToLocalDate(start);
+  const endDate = parseYMDToLocalDate(end);
     const diffTime = Math.abs(endDate.getTime() - startDate.getTime());
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
     return diffDays + 1; // +1 para incluir el día de inicio
@@ -590,17 +604,17 @@ export const Vacations: React.FC = () => {
       const newLocalRequest: VacationRequest = {
         id: createdRequest.id!,
         employeeName: createdRequest.employee_name || 'Usuario Actual',
-        startDate: createdRequest.start_date.toISOString().split('T')[0],
-        endDate: createdRequest.end_date.toISOString().split('T')[0],
+        startDate: toYMDLocal(createdRequest.start_date),
+        endDate: toYMDLocal(createdRequest.end_date),
         reason: createdRequest.reason,
         status: createdRequest.status,
         days: createdRequest.duration_days ?? calculateDays(
-          createdRequest.start_date.toISOString().split('T')[0],
-          createdRequest.end_date.toISOString().split('T')[0]
+          toYMDLocal(createdRequest.start_date),
+          toYMDLocal(createdRequest.end_date)
         ),
-        requestDate: createdRequest.created_at ? createdRequest.created_at.toISOString().split('T')[0] : '',
+        requestDate: createdRequest.created_at ? toYMDLocal(createdRequest.created_at) : '',
         approvedBy: createdRequest.reviewer_name || '',
-        approvedDate: createdRequest.reviewed_at ? createdRequest.reviewed_at.toISOString().split('T')[0] : '',
+        approvedDate: createdRequest.reviewed_at ? toYMDLocal(createdRequest.reviewed_at) : '',
         comments: createdRequest.admin_response || ''
       };
 
@@ -677,8 +691,8 @@ export const Vacations: React.FC = () => {
     const dayVacations = filteredRequests.filter(req => {
       const st = String(req.status || '').toLowerCase().trim();
       if (st !== 'pending' && st !== 'approved') return false;
-      const startDate = new Date(req.startDate);
-  const endDate = new Date(req.endDate);
+  const startDate = parseYMDToLocalDate(req.startDate);
+  const endDate = parseYMDToLocalDate(req.endDate);
   // Incluir día final (endDate inclusive)
   endDate.setHours(23,59,59,999);
   return selectedDay >= startDate && selectedDay <= endDate;
@@ -708,8 +722,8 @@ export const Vacations: React.FC = () => {
     return filteredRequests.filter(req => {
       const st = String(req.status || '').toLowerCase().trim();
       if (st !== 'pending' && st !== 'approved') return false;
-      const startDate = new Date(req.startDate);
-  const endDate = new Date(req.endDate);
+  const startDate = parseYMDToLocalDate(req.startDate);
+  const endDate = parseYMDToLocalDate(req.endDate);
   endDate.setHours(23,59,59,999); // asegurar inclusión del último día
   return date >= startDate && date <= endDate;
     });
@@ -1599,9 +1613,7 @@ export const Vacations: React.FC = () => {
                     '.rbc-toolbar': {
                       display: 'none !important', // Ocultamos completamente la toolbar nativa
                     },
-                    '.rbc-event': {
-                      display: 'none !important', // Ocultamos los eventos porque ya mostramos los chips
-                    },
+                    // Mostrar eventos para visualizar rangos correctamente
                     '.rbc-show-more': {
                       color: '#501b36 !important',
                       fontWeight: '600 !important',
