@@ -125,6 +125,9 @@ export const Dashboard: React.FC = () => {
 
   // (helper contrast color eliminado por no uso)
 
+  // Carga inicial del dashboard (solo una vez). Importante: no depender de selectedPosition
+  // para evitar recargar toda la página al cambiar el filtro. El panel de disponibles
+  // se refresca de forma independiente en un useEffect específico más abajo.
   const loadDashboardData = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -133,7 +136,9 @@ export const Dashboard: React.FC = () => {
   dashboardService.getStats(),
         vacationService.getVacationStats().catch(() => null),
         usersAPI.getUserStats().catch(() => null),
-  dashboardService.getAvailableWorkers(todayDate, selectedPosition).catch(() => null),
+  // En la carga inicial usamos "todos" los puestos; los cambios de filtro
+  // actualizan el panel mediante el efecto específico de selectedPosition.
+  dashboardService.getAvailableWorkers(todayDate, '').catch(() => null),
       ]);
 
   setStats(statsRes);
@@ -155,7 +160,7 @@ export const Dashboard: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.role, selectedPosition, todayDate]);
+  }, [user?.role, todayDate]);
 
   useEffect(() => {
     loadDashboardData();
