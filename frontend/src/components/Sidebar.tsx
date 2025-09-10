@@ -61,7 +61,7 @@ const menuItems: MenuItem[] = [
       { text: 'Subida Masiva', icon: <CloudUpload />, path: '/mass-upload' },
     ]
   },
-  { text: 'Vacaciones', icon: <EventNote />, path: '/vacations' },
+  { text: 'Ausencias', icon: <EventNote />, path: '/vacations' },
   { text: 'Dietas', icon: <RestaurantMenu />, path: '/dietas' },
   { text: 'Tráfico', icon: <Traffic />, path: '/traffic' },
   { text: 'Viajes', icon: <LocalShipping />, path: '/trips' },

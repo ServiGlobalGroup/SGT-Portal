@@ -37,6 +37,7 @@ import {
 import { mobileContainedButtonSx as sharedMobileContainedBtn, maroonGradient, maroonGradientHover } from '../../theme/mobileStyles';
 import { ModernModal } from '../../components/ModernModal';
 import { ModernField } from '../../components/ModernFormComponents';
+import { Checkbox, FormControlLabel } from '@mui/material';
 import { vacationService } from '../../services/vacationService';
 import { useAuth } from '../../hooks/useAuth';
 import { MobileFilters } from '../../components/mobile/MobileFilters';
@@ -77,7 +78,7 @@ export const MobileVacations: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [paginationLoading, setPaginationLoading] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
-  const [newRequest, setNewRequest] = useState({ startDate: '', endDate: '', reason: '' });
+  const [newRequest, setNewRequest] = useState({ startDate: '', endDate: '', reason: '', oneDay: false });
 
   // Estados de UI
   const [alert, setAlert] = useState<AlertState | null>(null);
@@ -724,7 +725,7 @@ export const MobileVacations: React.FC = () => {
         <ModernModal
           open={openDialog}
           onClose={() => setOpenDialog(false)}
-          title="Nueva Solicitud de Vacaciones"
+          title="Nueva Solicitud"
           subtitle="Completa los detalles de tu ausencia"
           icon={<CalendarToday />}
           headerColor={corporateColor}
@@ -734,10 +735,24 @@ export const MobileVacations: React.FC = () => {
               label="Fecha inicio"
               type="date"
               value={newRequest.startDate}
-              onChange={(value) => setNewRequest(prev => ({ ...prev, startDate: String(value) }))}
+              onChange={(value) => setNewRequest(prev => ({ ...prev, startDate: String(value), ...(prev.oneDay ? { endDate: String(value) } : {}) }))}
               fullWidth
               helperText="Selecciona la fecha de inicio"
               min={new Date().toISOString().split('T')[0]}
+            />
+            <FormControlLabel 
+              control={
+                <Checkbox 
+                  checked={newRequest.oneDay}
+                  onChange={(e) => setNewRequest(prev => ({
+                    ...prev,
+                    oneDay: e.target.checked,
+                    endDate: e.target.checked ? (prev.startDate || prev.endDate) : prev.endDate,
+                  }))}
+                  sx={{ color: corporateColor, '&.Mui-checked': { color: corporateColor } }}
+                />
+              }
+              label="Un solo día"
             />
             <ModernField
               label="Fecha fin"
@@ -745,8 +760,9 @@ export const MobileVacations: React.FC = () => {
               value={newRequest.endDate}
               onChange={(value) => setNewRequest(prev => ({ ...prev, endDate: String(value) }))}
               fullWidth
-              helperText="Selecciona la fecha de fin"
+              helperText={newRequest.oneDay ? 'Se solicitará solo el día indicado' : 'Selecciona la fecha de fin'}
               min={newRequest.startDate || new Date().toISOString().split('T')[0]}
+              disabled={newRequest.oneDay}
             />
             <ModernField
               label="Motivo"
@@ -781,8 +797,8 @@ export const MobileVacations: React.FC = () => {
                       return;
                     }
 
-                    if (end <= start) {
-                      setSnackbar({ open: true, message: 'La fecha de fin debe ser posterior a la fecha de inicio', severity: 'warning' });
+                    if (end < start) {
+                      setSnackbar({ open: true, message: 'La fecha de fin debe ser posterior o igual a la fecha de inicio', severity: 'warning' });
                       return;
                     }
 
@@ -811,7 +827,7 @@ export const MobileVacations: React.FC = () => {
                     await loadVacationRequests();
 
                     setOpenDialog(false);
-                    setNewRequest({ startDate: '', endDate: '', reason: '' });
+                    setNewRequest({ startDate: '', endDate: '', reason: '', oneDay: false });
                     setSnackbar({ open: true, message: 'Solicitud enviada', severity: 'success' });
                   } catch (error: any) {
                     console.error('Error creando solicitud:', error);

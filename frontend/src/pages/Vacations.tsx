@@ -26,6 +26,8 @@ import {
   ToggleButtonGroup,
   Tooltip,
   Badge,
+  Checkbox,
+  FormControlLabel,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
@@ -142,7 +144,8 @@ export const Vacations: React.FC = () => {
   const [newRequest, setNewRequest] = useState({
     startDate: '',
     endDate: '',
-    reason: ''
+    reason: '',
+    oneDay: false,
   });
 
   // Estilos comunes para botones granate/burdeos
@@ -552,8 +555,8 @@ export const Vacations: React.FC = () => {
       endDate_iso: endDate.toISOString()
     });
     
-    if (startDate >= endDate) {
-      setAlert({ type: 'error', message: `La fecha de fin (${newRequest.endDate}) debe ser posterior a la fecha de inicio (${newRequest.startDate})` });
+    if (startDate > endDate) {
+      setAlert({ type: 'error', message: `La fecha de fin (${newRequest.endDate}) debe ser posterior o igual a la fecha de inicio (${newRequest.startDate})` });
       return;
     }
 
@@ -578,7 +581,7 @@ export const Vacations: React.FC = () => {
       const requestData: VacationRequestCreate = {
         start_date: startDate,
         end_date: endDate,
-        reason: newRequest.reason.trim()
+  reason: newRequest.reason.trim(),
       };
 
       const createdRequest = await vacationService.createVacationRequest(requestData);
@@ -603,7 +606,7 @@ export const Vacations: React.FC = () => {
 
       setRequests(prev => [newLocalRequest, ...prev]);
       setOpenDialog(false);
-      setNewRequest({ startDate: '', endDate: '', reason: '' });
+  setNewRequest({ startDate: '', endDate: '', reason: '', oneDay: false });
       setAlert({ type: 'success', message: 'Solicitud de vacaciones enviada exitosamente' });
     } catch (error: any) {
       console.error('Error creating vacation request:', error);
@@ -684,6 +687,19 @@ export const Vacations: React.FC = () => {
     if (dayVacations.length > 0) {
       setSelectedDayVacations(dayVacations);
       setDayDetailModal(true);
+    } else {
+      // Si no hay vacaciones ese día, abrir el diálogo de nueva solicitud de un día
+      const y = selectedDay.getFullYear();
+      const m = String(selectedDay.getMonth() + 1).padStart(2, '0');
+      const d = String(selectedDay.getDate()).padStart(2, '0');
+      const dateStr = `${y}-${m}-${d}`;
+      setNewRequest(prev => ({
+        ...prev,
+        startDate: dateStr,
+        endDate: dateStr,
+        oneDay: true,
+      }));
+      setOpenDialog(true);
     }
   };
 
@@ -845,10 +861,10 @@ export const Vacations: React.FC = () => {
                   </Box>
                   <Box>
                     <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
-                      Mis Vacaciones
+                      Mis Ausencias
                     </Typography>
                     <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400 }}>
-                      Gestiona tus solicitudes de vacaciones de forma eficiente
+                      Gestiona tus solicitudes de vacaciones y asuntos propios
                     </Typography>
                   </Box>
                 </Box>
@@ -1481,7 +1497,7 @@ export const Vacations: React.FC = () => {
                     <CalendarMonth sx={{ color: '#501b36', fontSize: 28 }} />
                     <Box>
                       <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36' }}>
-                        Calendario de Vacaciones
+                        Calendario de Ausencias
                       </Typography>
                       <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                         {filteredRequests.length} solicitud{filteredRequests.length !== 1 ? 'es' : ''} encontrada{filteredRequests.length !== 1 ? 's' : ''}
@@ -1749,13 +1765,13 @@ export const Vacations: React.FC = () => {
                   <EventNote sx={{ fontSize: 48, color: '#501b36' }} />
                 </Box>
                 <Typography variant="h5" sx={{ fontWeight: 600, color: 'text.secondary', mb: 1 }}>
-                  No hay solicitudes de vacaciones
+          No hay solicitudes de ausencias
                 </Typography>
                 <Typography variant="body1" sx={{ color: 'text.secondary', mb: 3, maxWidth: 400 }}>
                   {searchTerm 
                     ? `No se encontraron solicitudes que coincidan con "${searchTerm}"`
                     : filterStatus === 'all'
-                      ? 'Comienza creando tu primera solicitud de vacaciones'
+            ? 'Comienza creando tu primera solicitud de ausencia'
                       : `No hay solicitudes con estado "${filterStatus === 'pending' ? 'Pendiente' : filterStatus === 'approved' ? 'Aprobada' : 'Rechazada'}"`
                   }
                 </Typography>
@@ -2045,8 +2061,8 @@ export const Vacations: React.FC = () => {
         <ModernModal
           open={openDialog}
           onClose={() => setOpenDialog(false)}
-          title="Nueva Solicitud de Vacaciones"
-          subtitle="Completa los datos de tu solicitud"
+          title="Nueva Solicitud"
+          subtitle="Completa los datos de tu ausencia"
           icon={<Add />}
           maxWidth="md"
           headerColor="#501b36"
@@ -2073,15 +2089,32 @@ export const Vacations: React.FC = () => {
           }
         >
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {/* Tipo de solicitud eliminado: se usa solo el botón "Un solo día" */}
             <ModernField
               label="Fecha de inicio"
               type="date"
               value={newRequest.startDate}
-              onChange={(value) => setNewRequest(prev => ({ ...prev, startDate: value as string }))}
+              onChange={(value) => setNewRequest(prev => ({ ...prev, startDate: value as string, ...(prev.oneDay ? { endDate: value as string } : {}) }))}
               required
               startIcon={<CalendarToday />}
               min={new Date().toISOString().split('T')[0]}
               helperText="Selecciona la fecha de inicio de tus vacaciones"
+            />
+
+            {/* Un solo día */}
+            <FormControlLabel 
+              control={
+                <Checkbox 
+                  checked={newRequest.oneDay} 
+                  onChange={(e) => setNewRequest(prev => ({ 
+                    ...prev, 
+                    oneDay: e.target.checked, 
+                    endDate: e.target.checked ? (prev.startDate || prev.endDate) : prev.endDate 
+                  }))} 
+                  sx={{ color: '#501b36', '&.Mui-checked': { color: '#501b36' } }} 
+                />
+              } 
+              label="Un solo día"
             />
 
             <ModernField
@@ -2092,7 +2125,8 @@ export const Vacations: React.FC = () => {
               required
               startIcon={<CalendarToday />}
               min={newRequest.startDate || new Date().toISOString().split('T')[0]}
-              helperText="Selecciona la fecha de fin de tus vacaciones"
+              disabled={newRequest.oneDay}
+              helperText={newRequest.oneDay ? 'Se solicitará solo el día indicado' : 'Selecciona la fecha de fin (puede ser igual al inicio para un solo día)'}
             />
 
             <ModernField
@@ -2107,7 +2141,7 @@ export const Vacations: React.FC = () => {
               helperText="Proporciona una descripción detallada del motivo"
             />
 
-            {newRequest.startDate && newRequest.endDate && newRequest.startDate < newRequest.endDate && (
+            {newRequest.startDate && newRequest.endDate && newRequest.startDate <= newRequest.endDate && (
               <InfoCard
                 title="Resumen de la solicitud"
                 color="#501b36"
