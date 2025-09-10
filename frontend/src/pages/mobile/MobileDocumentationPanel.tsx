@@ -117,11 +117,6 @@ export const MobileDocumentationPanel: React.FC = () => {
       
       const userData = await response.json();
       setUsers(userData);
-
-      setAlert({
-        type: 'success',
-        message: `Cargados ${userData.length} usuarios desde el sistema`
-      });
     } catch (error) {
       console.error('Error loading users:', error);
       setAlert({

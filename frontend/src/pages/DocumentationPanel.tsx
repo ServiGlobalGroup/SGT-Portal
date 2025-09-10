@@ -149,11 +149,6 @@ const DocumentationPanel: React.FC = () => {
       // Cargar usuarios reales desde las carpetas del sistema usando API autenticada
       const userData = await documentationAPI.getUsers();
       setUsers(userData);
-
-      setAlert({
-        type: 'success',
-        message: `Cargados ${userData.length} usuarios desde el sistema`
-      });
     } catch (error) {
       console.error('Error loading users:', error);
       setAlert({

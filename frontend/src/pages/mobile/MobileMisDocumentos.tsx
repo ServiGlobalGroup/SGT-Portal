@@ -145,10 +145,6 @@ export const MobileMisDocumentos: React.FC = () => {
 
       console.log('Documentos cargados:', documentsByFolder);
       setUserDocuments(documentsByFolder);
-      setAlert({
-        type: 'success',
-        message: 'Documentos cargados exitosamente'
-      });
     } catch (err: any) {
       console.error('Error loading user documents:', err);
       setAlert({

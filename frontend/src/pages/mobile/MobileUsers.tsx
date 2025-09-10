@@ -56,7 +56,6 @@ export const MobileUsers: React.FC = () => {
     try {
       const data = await usersAPI.getAllUsers({ per_page: 100, active_only: false });
       setUsers(data.users || []);
-      setAlert({ type: 'success', message: 'Usuarios cargados correctamente' });
     } catch (e) {
       console.error(e);
       setAlert({ type: 'error', message: 'Error al cargar los usuarios' });
