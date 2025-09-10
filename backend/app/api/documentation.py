@@ -53,14 +53,12 @@ async def get_documentation_users(db: Session = Depends(get_db), current_user: U
             if user_folder.is_dir():
                 dni_nie = user_folder.name
                 
-                # Obtener información del usuario de la BD o usar valores por defecto
-                user_info = user_info_map.get(dni_nie, {
-                    'first_name': 'Usuario',
-                    'last_name': dni_nie,
-                    'email': f'{dni_nie}@company.com',
-                    'role': 'TRABAJADOR',
-                    'is_active': True
-                })
+                # Solo procesar usuarios que existen en la base de datos
+                if dni_nie not in user_info_map:
+                    continue  # Saltar usuarios sin datos en BD
+                
+                # Obtener información del usuario de la BD
+                user_info = user_info_map[dni_nie]
                 
                 # Obtener documentos y estadísticas
                 documents = []
