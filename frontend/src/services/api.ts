@@ -365,6 +365,43 @@ export const usersAPI = {
     
     return api.get(`/api/users?${searchParams.toString()}`).then(res => res.data);
   },
+  
+  // Obtener TODOS los usuarios iterando páginas (útil para búsqueda/local y evitar el límite de 100)
+  getAllUsers: async (params?: {
+    per_page?: number; // opcional, por defecto 100
+    search?: string;
+    department?: string;
+    role?: string;
+    active_only?: boolean;
+  }): Promise<{ users: any[]; total: number; total_pages: number; per_page: number; page: number; }> => {
+    const perPage = Math.min(params?.per_page || 100, 100); // el backend limita a 100
+    const base = new URLSearchParams();
+    if (params?.search) base.append('search', params.search);
+    if (params?.department) base.append('department', params.department);
+    if (params?.role) base.append('role', params.role);
+    if (params?.active_only !== undefined) base.append('active_only', String(params.active_only));
+    base.append('per_page', String(perPage));
+
+    // Primera página para conocer total y total_pages
+    const firstRes = await api.get(`/api/users?page=1&${base.toString()}`).then(r => r.data as { users:any[]; total:number; total_pages:number; per_page:number; page:number; });
+    const allUsers = [...(firstRes.users || [])];
+    const totalPages = Number(firstRes.total_pages || 1);
+
+    for (let p = 2; p <= totalPages; p++) {
+      const res = await api.get(`/api/users?page=${p}&${base.toString()}`).then(r => r.data as { users:any[]; });
+      if (Array.isArray(res?.users) && res.users.length > 0) {
+        allUsers.push(...res.users);
+      }
+    }
+
+    return {
+      users: allUsers,
+      total: Number(firstRes.total || allUsers.length),
+      total_pages: totalPages,
+      per_page: perPage,
+      page: 1,
+    };
+  },
 
   // Crear nuevo usuario
   createUser: (userData: {

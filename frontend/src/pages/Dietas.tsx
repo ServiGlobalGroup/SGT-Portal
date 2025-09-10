@@ -536,17 +536,9 @@ export const Dietas: React.FC = () => {
   useEffect(() => {
     if (!canView) return;
     setLoadingDrivers(true);
-  // Backend limita per_page <= 100. Antes: 500 causaba 422 Unprocessable Content.
-    usersAPI.getUsers({ per_page: 100, role: 'TRABAJADOR', active_only: true })
+    usersAPI.getAllUsers({ per_page: 100, role: 'TRABAJADOR', active_only: true })
       .then(data => {
-        // El backend devuelve un objeto { users: [...], total, ... }
-        const list = Array.isArray(data)
-          ? data
-          : Array.isArray((data as any).users)
-            ? (data as any).users
-            : Array.isArray((data as any).items)
-              ? (data as any).items
-              : [];
+        const list = Array.isArray((data as any).users) ? (data as any).users : [];
         setDrivers(list as User[]);
       })
       .catch(() => {})

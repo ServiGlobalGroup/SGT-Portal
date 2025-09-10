@@ -12,6 +12,7 @@ import { alpha } from '@mui/material/styles';
 import { People, SupervisorAccount } from '@mui/icons-material';
 
 import { usePagination } from '../../hooks/usePagination';
+import { usersAPI } from '../../services/api';
 import { MobileUserCard } from '../../components/mobile/MobileUserCard';
 import { MobileFilters } from '../../components/mobile/MobileFilters';
 import { MobilePagination } from '../../components/mobile/MobilePagination';
@@ -53,13 +54,8 @@ export const MobileUsers: React.FC = () => {
   const loadUsers = async () => {
     setLoading(true);
     try {
-      const token = localStorage.getItem('access_token') || localStorage.getItem('token');
-      const resp = await fetch('/api/users', {
-        headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-      });
-      if (!resp.ok) throw new Error('Error al cargar usuarios');
-      const data = await resp.json();
-      setUsers(data.users || data || []);
+      const data = await usersAPI.getAllUsers({ per_page: 100, active_only: false });
+      setUsers(data.users || []);
       setAlert({ type: 'success', message: 'Usuarios cargados correctamente' });
     } catch (e) {
       console.error(e);

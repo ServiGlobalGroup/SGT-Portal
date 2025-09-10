@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.orm import Session
+from sqlalchemy import or_
 from typing import List, Optional
 from app.database.connection import get_db
 from app.services.user_service import UserService
@@ -54,33 +55,40 @@ async def get_users(
     Obtener lista de usuarios con paginación y filtros.
     """
     skip = (page - 1) * per_page
-    
+
+    # Construir query base
+    query = db.query(User)
+
+    # Filtros
     if search:
-        users = UserService.search_users(db, search)
-    elif department:
-        users = UserService.get_users_by_department(db, department)
-    elif role:
-        users = UserService.get_users_by_role(db, role)
-    else:
-        users = UserService.get_all_users(db, skip=skip, limit=per_page)
-    
-    # Filtrar por activos si se solicita
+        pattern = f"%{search}%"
+        query = query.filter(or_(
+            User.dni_nie.ilike(pattern),
+            User.email.ilike(pattern),
+            User.first_name.ilike(pattern),
+            User.last_name.ilike(pattern)
+        ))
+    if department:
+        query = query.filter(User.department == department)
+    if role:
+        query = query.filter(User.role == role)
     if active_only:
-        users = [user for user in users if bool(user.is_active)]
-    
-    # Aplicar paginación si no es una búsqueda
-    if not search and not department and not role:
-        total_users = len(users)
-        paginated_users = users[skip:skip + per_page]
-    else:
-        total_users = len(users)
-        paginated_users = users[skip:skip + per_page]
-    
-    total_pages = math.ceil(total_users / per_page)
-    
-    # Convertir a esquema UserList si es necesario
+        query = query.filter(User.is_active == True)  # noqa: E712
+
+    # Total antes de paginar
+    total_users = query.count()
+    total_pages = math.ceil(total_users / per_page) if per_page else 1
+
+    # Orden estable y paginación
+    users = (query
+             .order_by(User.id.asc())
+             .offset(skip)
+             .limit(per_page)
+             .all())
+
+    # Convertir a esquema UserList
     from app.models.user_schemas import UserList as UserListSchema
-    users_schema = [UserListSchema.model_validate(u, from_attributes=True) for u in paginated_users]
+    users_schema = [UserListSchema.model_validate(u, from_attributes=True) for u in users]
     return UserListResponse(
         users=users_schema,
         total=total_users,
@@ -300,24 +308,22 @@ async def get_user_stats(db: Session = Depends(get_db)):
     """
     Obtener estadísticas generales de usuarios.
     """
-    total_users = len(UserService.get_all_users(db))
-    active_users = len([u for u in UserService.get_all_users(db) if bool(u.is_active)])
+    total_users = db.query(User).count()
+    active_users = db.query(User).filter(User.is_active == True).count()  # noqa: E712
     
     # Estadísticas por departamento
     departments = {}
-    for user in UserService.get_all_users(db):
-        dept = user.department
-        if dept not in departments:
-            departments[dept] = 0
-        departments[dept] += 1
+    for dept, count in db.query(User.department,).all():
+        # Este bucle no cuenta; reemplazamos por aggregate abajo si es necesario
+        pass
+    # Recalcular correctamente con agregación
+    from sqlalchemy import func
+    dept_counts = db.query(User.department, func.count(User.id)).group_by(User.department).all()
+    departments = {dept: cnt for dept, cnt in dept_counts if dept}
     
     # Estadísticas por rol
-    roles = {}
-    for user in UserService.get_all_users(db):
-        role = user.role.value
-        if role not in roles:
-            roles[role] = 0
-        roles[role] += 1
+    role_counts = db.query(User.role, func.count(User.id)).group_by(User.role).all()
+    roles = {role.value if hasattr(role, 'value') else str(role): cnt for role, cnt in role_counts}
     
     return {
         "total_users": total_users,

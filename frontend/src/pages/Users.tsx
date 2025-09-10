@@ -171,13 +171,8 @@ export const Users: React.FC = () => {
   const loadUsers = useCallback(async () => {
     setLoading(true);
     try {
-      // Solicitar más usuarios al backend (por defecto entrega 10). Usamos per_page=100 (límite backend)
-      // para disponer de todos en memoria y aplicar la paginación local existente sin reestructurar.
-      const response = await usersAPI.getUsers({
-        page: 1,
-        per_page: 100, // máximo soportado por el endpoint (ge=1, le=100)
-        active_only: false // Incluir activos e inactivos; filtrado se hace en el cliente
-      });
+      // Traer todas las páginas para no quedarnos en 100
+      const response = await usersAPI.getAllUsers({ per_page: 100, active_only: false });
       setUsers(response.users || []);
     } catch (error) {
       console.error('Error cargando usuarios:', error);
