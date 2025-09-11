@@ -4,12 +4,13 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import extract
 from app.database.connection import get_db
 from app.models.user import User
-from app.models.vacation import VacationRequest, VacationStatus
+from app.models.vacation import VacationRequest, VacationStatus, AbsenceType as ModelAbsenceType
 from app.models.schemas import (
     VacationRequestCreate, 
     VacationRequestUpdate, 
     VacationRequestResponse, 
-    VacationStats
+    VacationStats,
+    VacationUsage,
 )
 from app.services.activity_service import ActivityService
 from app.api.auth import get_current_user
@@ -75,6 +76,7 @@ async def get_vacation_requests(
             "reason": req.reason,
             "status": req.status,
             "admin_response": req.admin_response,
+            "absence_type": req.absence_type,
             "reviewed_by": req.reviewed_by,
             "reviewed_at": req.reviewed_at,
             "created_at": req.created_at,
@@ -132,7 +134,8 @@ async def create_vacation_request(
         start_date=request.start_date,
         end_date=request.end_date,
         reason=request.reason,
-        status=VacationStatus.PENDING
+        status=VacationStatus.PENDING,
+        absence_type=ModelAbsenceType(request.absence_type)
     )
     
     db.add(db_request)
@@ -174,6 +177,7 @@ async def create_vacation_request(
         "end_date": db_request.end_date,
         "reason": db_request.reason,
         "status": db_request.status,
+    "absence_type": db_request.absence_type,
         "admin_response": db_request.admin_response,
         "reviewed_by": db_request.reviewed_by,
         "reviewed_at": db_request.reviewed_at,
@@ -237,6 +241,18 @@ async def update_vacation_request(
     if is_admin and 'status' in update_data and cast(bool, update_data['status'] != db_request.status):
         update_data['reviewed_by'] = current_user.id
         update_data['reviewed_at'] = datetime.now()
+
+    # Normalizar enums provenientes del schema (str Enums) a Enums del modelo
+    if 'status' in update_data and update_data['status'] is not None:
+        try:
+            update_data['status'] = VacationStatus(str(update_data['status']))
+        except Exception:
+            pass
+    if 'absence_type' in update_data and update_data['absence_type'] is not None:
+        try:
+            update_data['absence_type'] = ModelAbsenceType(str(update_data['absence_type']))
+        except Exception:
+            pass
     
     for field, value in update_data.items():
         setattr(db_request, field, value)
@@ -282,6 +298,7 @@ async def update_vacation_request(
         "end_date": db_request.end_date,
         "reason": db_request.reason,
         "status": db_request.status,
+    "absence_type": db_request.absence_type,
         "admin_response": db_request.admin_response,
         "reviewed_by": db_request.reviewed_by,
         "reviewed_at": db_request.reviewed_at,
@@ -500,6 +517,7 @@ async def get_pending_requests_for_admin(
             "end_date": req.end_date,
             "reason": req.reason,
             "status": req.status,
+            "absence_type": req.absence_type,
             "admin_response": req.admin_response,
             "reviewed_by": req.reviewed_by,
             "reviewed_at": req.reviewed_at,
@@ -512,3 +530,71 @@ async def get_pending_requests_for_admin(
         response.append(VacationRequestResponse(**req_dict))
     
     return response
+
+@router.get("/usage", response_model=VacationUsage)
+async def get_vacation_usage(
+    user_id: int | None = None,
+    year: int | None = None,
+    absence_type: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Devuelve el uso anual de días de vacaciones de un usuario.
+    - approved_days_used: suma de días de solicitudes APROBADAS en el año.
+    - pending_days_requested: suma de días de solicitudes PENDIENTES en el año (informativo para decisión del admin).
+    Reglas de acceso:
+      - Usuarios no admin: solo su propio uso (ignora user_id si es de otro usuario).
+      - Admins: pueden consultar cualquier user_id; si no se pasa, se usa el propio.
+    """
+    target_year = year or datetime.now().year
+
+    # Permisos y determinación de usuario objetivo
+    is_admin = current_user.role.value in ['ADMINISTRADOR', 'MASTER_ADMIN']
+    # Determinar usuario objetivo de forma segura
+    base_user_id_any = getattr(current_user, 'id', None)
+    if base_user_id_any is None:
+        raise HTTPException(status_code=http_status.HTTP_401_UNAUTHORIZED, detail="Usuario no válido")
+    base_user_id_int = int(base_user_id_any)
+    if is_admin:
+        target_user_id_val: int = int(user_id) if (user_id is not None) else base_user_id_int
+    else:
+        if (user_id is not None) and (int(user_id) != base_user_id_int):
+            # Usuario regular intentando consultar a otro
+            raise HTTPException(status_code=http_status.HTTP_403_FORBIDDEN, detail="No autorizado")
+        target_user_id_val = base_user_id_int
+
+    # Query base para el año
+    q = db.query(VacationRequest).filter(
+        VacationRequest.user_id == target_user_id_val,
+        extract('year', VacationRequest.start_date) == target_year
+    )
+
+    # Filtro opcional por tipo de ausencia
+    if absence_type:
+        try:
+            at = ModelAbsenceType(absence_type)
+            q = q.filter(VacationRequest.absence_type == at)
+        except ValueError:
+            raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail="absence_type no válido")
+
+    # Sumar días aprobados y pendientes
+    approved_requests = q.filter(VacationRequest.status == VacationStatus.APPROVED).all()
+    pending_q = db.query(VacationRequest).filter(
+        VacationRequest.user_id == target_user_id_val,
+        extract('year', VacationRequest.start_date) == target_year,
+        VacationRequest.status == VacationStatus.PENDING
+    )
+    if absence_type:
+        pending_q = pending_q.filter(VacationRequest.absence_type == at)
+    pending_requests = pending_q.all()
+
+    approved_days_used = sum(req.duration_days for req in approved_requests)
+    pending_days_requested = sum(req.duration_days for req in pending_requests)
+
+    return VacationUsage(
+        user_id=target_user_id_val,
+        year=target_year,
+        approved_days_used=int(approved_days_used),
+        pending_days_requested=int(pending_days_requested),
+    )

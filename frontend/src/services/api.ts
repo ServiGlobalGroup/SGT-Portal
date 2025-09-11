@@ -21,7 +21,7 @@ import type { TrafficData, VacationRequest, Document, TrafficFolder, TrafficDocu
 const envUrl = (import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined;
 export const API_BASE_URL = envUrl && envUrl.trim() !== ''
   ? envUrl
-  : (typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:8000');
+  : (typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:8001');
 
 const api = axios.create({
   baseURL: API_BASE_URL,

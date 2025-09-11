@@ -10,12 +10,13 @@ import {
   Snackbar,
   CircularProgress,
   Avatar,
-  IconButton,
   Button,
   Chip,
   Card,
   CardContent,
   Stack,
+  ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
@@ -28,21 +29,21 @@ import {
   Pending,
   Business,
   Schedule,
-  Refresh,
   EventNote,
   Person,
   Work,
   DateRange,
 } from '@mui/icons-material';
-import { mobileContainedButtonSx as sharedMobileContainedBtn, maroonGradient, maroonGradientHover } from '../../theme/mobileStyles';
+import { mobileContainedButtonSx as sharedMobileContainedBtn, maroonGradient } from '../../theme/mobileStyles';
 import { ModernModal } from '../../components/ModernModal';
 import { ModernField } from '../../components/ModernFormComponents';
 import { Checkbox, FormControlLabel } from '@mui/material';
 import { vacationService } from '../../services/vacationService';
+import type { AbsenceType } from '../../types/vacation';
 import { useAuth } from '../../hooks/useAuth';
-import { MobileFilters } from '../../components/mobile/MobileFilters';
 import { MobilePagination } from '../../components/mobile/MobilePagination';
 import { MobileLoading } from '../../components/mobile/MobileLoading';
+import { MobileTabs } from '../../components/mobile/MobileTabs';
 
 // Interfaces
 interface VacationRequest {
@@ -57,7 +58,7 @@ interface VacationRequest {
   approvedBy?: string;
   approvedDate?: string;
   comments?: string;
-  type: 'personal' | 'sick' | 'maternity' | 'study';
+  type: 'vacation' | 'personal' | 'sick' | 'maternity' | 'study';
 }
 
 type VacationStatus = 'all' | 'pending' | 'approved' | 'rejected';
@@ -78,7 +79,7 @@ export const MobileVacations: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [paginationLoading, setPaginationLoading] = useState(false);
   const [openDialog, setOpenDialog] = useState(false);
-  const [newRequest, setNewRequest] = useState({ startDate: '', endDate: '', reason: '', oneDay: false });
+  const [newRequest, setNewRequest] = useState({ startDate: '', endDate: '', reason: 'Vacaciones', oneDay: false, absenceType: 'VACATION' as AbsenceType });
 
   // Estados de UI
   const [alert, setAlert] = useState<AlertState | null>(null);
@@ -112,9 +113,32 @@ export const MobileVacations: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Comparador superficial para evitar re-render innecesario
+  const isSameRequests = (a: VacationRequest[], b: VacationRequest[]) => {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      const x = a[i];
+      const y = b[i];
+      if (!y || x.id !== y.id) return false;
+      if (
+        x.startDate !== y.startDate ||
+        x.endDate !== y.endDate ||
+        x.reason !== y.reason ||
+        x.status !== y.status ||
+        x.days !== y.days ||
+        x.requestDate !== y.requestDate ||
+        (x.approvedBy || '') !== (y.approvedBy || '') ||
+        (x.approvedDate || '') !== (y.approvedDate || '') ||
+        (x.comments || '') !== (y.comments || '')
+      ) return false;
+    }
+    return true;
+  };
+
   // Funciones principales
-  const loadVacationRequests = async () => {
-    setLoading(true);
+  const loadVacationRequests = async (opts?: { silent?: boolean }) => {
+    const silent = !!opts?.silent;
+    if (!silent) setLoading(true);
     try {
       const params = user?.id ? { user_id: user.id } : undefined;
       const data = await vacationService.getVacationRequests(params);
@@ -130,9 +154,9 @@ export const MobileVacations: React.FC = () => {
         approvedBy: api.reviewer_name || undefined,
         approvedDate: api.reviewed_at ? api.reviewed_at.toISOString().split('T')[0] : undefined,
         comments: api.admin_response || undefined,
-        type: 'personal',
+  type: api.absence_type === 'PERSONAL' ? 'personal' : 'vacation',
       }));
-      setVacationRequests(mapped);
+      setVacationRequests(prev => (isSameRequests(prev, mapped) ? prev : mapped));
     } catch (err: any) {
       console.error('Error loading vacation requests:', err);
       setAlert({
@@ -140,7 +164,7 @@ export const MobileVacations: React.FC = () => {
         message: 'Error al cargar las solicitudes de vacaciones'
       });
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -166,6 +190,17 @@ export const MobileVacations: React.FC = () => {
     }
   }, [searchTerm, currentStatus, requestsPagination]);
 
+  // Auto-refresh silencioso en móvil
+  useEffect(() => {
+    const intervalMs = 30000; // 30s
+    const id = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void loadVacationRequests({ silent: true });
+      }
+    }, intervalMs);
+    return () => window.clearInterval(id);
+  }, [user?.id]);
+
   // Función para manejar cambio de página con loading
   const handlePageChange = async (page: number) => {
     setPaginationLoading(true);
@@ -175,12 +210,19 @@ export const MobileVacations: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  // Opciones de filtro de estado (estilo MobileFilters)
-  const statusOptions = [
-    { value: 'all', label: 'Todas' },
-    { value: 'pending', label: 'Pendientes' },
-    { value: 'approved', label: 'Aprobadas' },
-    { value: 'rejected', label: 'Rechazadas' },
+  // Conteos y tabs para estados (estilo MobileTabs - pills)
+  const statusCounts = React.useMemo(() => ({
+    all: vacationRequests.length,
+    pending: vacationRequests.filter(r => r.status === 'pending').length,
+    approved: vacationRequests.filter(r => r.status === 'approved').length,
+    rejected: vacationRequests.filter(r => r.status === 'rejected').length,
+  }), [vacationRequests]);
+
+  const statusTabs = [
+    { id: 'all', label: 'Todas', count: statusCounts.all, icon: <EventNote sx={{ fontSize: 18 }} /> },
+    { id: 'pending', label: 'Pendientes', count: statusCounts.pending, icon: <HourglassEmpty sx={{ fontSize: 18 }} /> },
+    { id: 'approved', label: 'Aprobadas', count: statusCounts.approved, icon: <CheckCircle sx={{ fontSize: 18 }} /> },
+    { id: 'rejected', label: 'Rechazadas', count: statusCounts.rejected, icon: <Cancel sx={{ fontSize: 18 }} /> },
   ];
 
   // Funciones auxiliares
@@ -231,7 +273,8 @@ export const MobileVacations: React.FC = () => {
 
   const getTypeText = (type: string) => {
     switch (type) {
-      case 'personal': return 'Personal';
+      case 'personal': return 'Asuntos propios';
+      case 'vacation': return 'Vacaciones';
       case 'sick': return 'Médica';
       case 'maternity': return 'Maternidad';
       case 'study': return 'Estudios';
@@ -446,16 +489,7 @@ export const MobileVacations: React.FC = () => {
             : `No hay solicitudes con estado "${getStatusText(currentStatus)}"`
         }
       </Typography>
-      <Button
-        variant="contained"
-        startIcon={<Add />}
-        sx={{
-          ...mobileContainedButtonSx,
-        }}
-  onClick={() => setOpenDialog(true)}
-      >
-        Nueva Solicitud
-      </Button>
+  {/* Botón central eliminado: usamos solo el flotante inferior */}
     </Box>
   );
 
@@ -504,21 +538,10 @@ export const MobileVacations: React.FC = () => {
                     Mis Vacaciones
                   </Typography>
                   <Typography variant="body2" sx={{ opacity: 0.9, lineHeight: 1.3 }}>
-                    Gestiona tus solicitudes de vacaciones
+                    Gestiona tus solicitudes de vacaciones y asuntos propios
                   </Typography>
                 </Box>
-                <IconButton
-                  onClick={loadVacationRequests}
-                  sx={{ 
-                    color: 'white',
-                    bgcolor: 'rgba(255, 255, 255, 0.1)',
-                    '&:hover': {
-                      bgcolor: 'rgba(255, 255, 255, 0.2)',
-                    }
-                  }}
-                >
-                  <Refresh />
-                </IconButton>
+                {/* Botón de refrescar eliminado: hay auto-refresh silencioso */}
               </Box>
             </Box>
           </Paper>
@@ -540,61 +563,26 @@ export const MobileVacations: React.FC = () => {
           </Fade>
         )}
 
-        {/* Búsqueda simple (sin acordeón de filtros) */}
-        <Fade in timeout={900}>
-          <Box sx={{ mb: 2 }}>
-            <MobileFilters
-              searchTerm={searchTerm}
-              onSearchChange={setSearchTerm}
-              corporateColor={corporateColor}
-              searchPlaceholder="Buscar solicitudes..."
-            />
-          </Box>
-        </Fade>
-
-        {/* Selector de estado como chips (plano y rápido) */}
+        {/* Selector de estado + búsqueda integrada (píldoras), igual que Mis Documentos */}
         <Fade in timeout={950}>
-          <Box sx={{ mb: 2, px: 0 }}>
-            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 0.75, width: '100%' }}>
-              {statusOptions.map(opt => {
-                const selected = currentStatus === (opt.value as VacationStatus);
-                return (
-                  <Chip
-                    key={opt.value}
-                    label={opt.label}
-                    size="small"
-                    onClick={() => setCurrentStatus(opt.value as VacationStatus)}
-                    clickable
-                    variant={selected ? 'filled' : 'outlined'}
-                    sx={{
-                      width: '100%',
-                      justifyContent: 'center',
-                      borderRadius: 1.25,
-                      fontWeight: 800,
-                      fontSize: '0.72rem',
-                      height: 26,
-                      px: 0.25,
-                      '& .MuiChip-label': { px: 0.5, letterSpacing: 0.2 },
-                      ...(selected
-                        ? {
-                            background: maroonGradient,
-                            color: '#fff',
-                            borderColor: 'transparent',
-                            boxShadow: '0 4px 12px rgba(80,27,54,0.25)'
-                          }
-                        : {
-                            borderColor: alpha(corporateColor, 0.5),
-                            color: corporateColor,
-                          }
-                      ),
-                      '&:hover': selected
-                        ? { background: maroonGradientHover }
-                        : { bgcolor: alpha(corporateColor, 0.06) },
-                    }}
-                  />
-                );
-              })}
-            </Box>
+          <Box sx={{ mb: 2 }}>
+            <MobileTabs
+              options={statusTabs}
+              activeTab={currentStatus}
+              onChange={(tabId) => setCurrentStatus(tabId as VacationStatus)}
+              corporateColor={corporateColor}
+              variant="pills"
+              searchProps={{
+                searchTerm,
+                onSearchChange: setSearchTerm,
+                placeholder: 'Buscar solicitudes...',
+                showFilter: true,
+                onFilterClick: () => {
+                  // Aquí podríamos abrir filtros extra; por ahora replicamos el comportamiento básico
+                  console.log('Filtro de solicitudes clicado');
+                }
+              }}
+            />
           </Box>
         </Fade>
 
@@ -731,15 +719,62 @@ export const MobileVacations: React.FC = () => {
           headerColor={corporateColor}
         >
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <ModernField
-              label="Fecha inicio"
-              type="date"
-              value={newRequest.startDate}
-              onChange={(value) => setNewRequest(prev => ({ ...prev, startDate: String(value), ...(prev.oneDay ? { endDate: String(value) } : {}) }))}
-              fullWidth
-              helperText="Selecciona la fecha de inicio"
-              min={new Date().toISOString().split('T')[0]}
-            />
+            {/* Tipo de ausencia (píldoras) */}
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+              <Typography variant="subtitle2" sx={{ color: corporateColor, minWidth: 130 }}>Tipo de ausencia</Typography>
+              <Box
+                sx={{
+                  p: 0.5,
+                  borderRadius: 3,
+                  background: 'linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%)',
+                  border: '2px solid #e0e0e0',
+                  boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)',
+                }}
+              >
+                <ToggleButtonGroup
+                  value={newRequest.absenceType}
+                  exclusive
+                  onChange={(_, val) => {
+                    if (!val) return;
+                    setNewRequest(prev => ({
+                      ...prev,
+                      absenceType: val as AbsenceType,
+                      reason: (val as AbsenceType) === 'PERSONAL' ? 'Asuntos propios' : 'Vacaciones',
+                    }));
+                  }}
+                  size="small"
+                  sx={{
+                    '& .MuiToggleButtonGroup-grouped': {
+                      border: 'none',
+                      '&:not(:first-of-type)': { borderRadius: 3, marginLeft: '4px' },
+                      '&:first-of-type': { borderRadius: 3 },
+                    },
+                    '& .MuiToggleButton-root': {
+                      borderRadius: '20px !important',
+                      px: 2,
+                      py: 0.75,
+                      textTransform: 'none',
+                      fontSize: '0.78rem',
+                      fontWeight: 800,
+                      border: 'none !important',
+                      minWidth: 90,
+                      '&.Mui-selected': {
+                        background: maroonGradient,
+                        color: 'white',
+                        boxShadow: '0 3px 8px rgba(80,27,54,0.3)'
+                      },
+                      '&:not(.Mui-selected)': {
+                        color: corporateColor,
+                        backgroundColor: 'rgba(255,255,255,0.85)',
+                      },
+                    },
+                  }}
+                >
+                  <ToggleButton value="VACATION">Vacaciones</ToggleButton>
+                  <ToggleButton value="PERSONAL">Asuntos propios</ToggleButton>
+                </ToggleButtonGroup>
+              </Box>
+            </Box>
             <FormControlLabel 
               control={
                 <Checkbox 
@@ -755,6 +790,15 @@ export const MobileVacations: React.FC = () => {
               label="Un solo día"
             />
             <ModernField
+              label="Fecha inicio"
+              type="date"
+              value={newRequest.startDate}
+              onChange={(value) => setNewRequest(prev => ({ ...prev, startDate: String(value), ...(prev.oneDay ? { endDate: String(value) } : {}) }))}
+              fullWidth
+              helperText="Selecciona la fecha de inicio"
+              min={new Date().toISOString().split('T')[0]}
+            />
+            <ModernField
               label="Fecha fin"
               type="date"
               value={newRequest.endDate}
@@ -764,15 +808,7 @@ export const MobileVacations: React.FC = () => {
               min={newRequest.startDate || new Date().toISOString().split('T')[0]}
               disabled={newRequest.oneDay}
             />
-            <ModernField
-              label="Motivo"
-              placeholder="Describe el motivo de tu solicitud"
-              type="multiline"
-              rows={3}
-              value={newRequest.reason}
-              onChange={(value) => setNewRequest(prev => ({ ...prev, reason: String(value) }))}
-              fullWidth
-            />
+            {/* Campo de motivo eliminado: lo fijamos automáticamente según el tipo seleccionado */}
             <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 1 }}>
               <Button onClick={() => setOpenDialog(false)}>Cancelar</Button>
               <Button
@@ -821,13 +857,14 @@ export const MobileVacations: React.FC = () => {
                       start_date: start,
                       end_date: end,
                       reason: newRequest.reason.trim(),
+                      absence_type: newRequest.absenceType,
                     });
 
                     // Refrescar lista desde el backend para asegurar consistencia
                     await loadVacationRequests();
 
                     setOpenDialog(false);
-                    setNewRequest({ startDate: '', endDate: '', reason: '', oneDay: false });
+                    setNewRequest({ startDate: '', endDate: '', reason: 'Vacaciones', oneDay: false, absenceType: 'VACATION' });
                     setSnackbar({ open: true, message: 'Solicitud enviada', severity: 'success' });
                   } catch (error: any) {
                     console.error('Error creando solicitud:', error);

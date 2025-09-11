@@ -131,6 +131,7 @@ export const MobileTabs: React.FC<MobileTabsProps> = ({
   }
 
   if (variant === 'pills') {
+  const columns = Math.min(options.length || 1, 4);
     return (
       <Box 
         sx={{ 
@@ -138,7 +139,7 @@ export const MobileTabs: React.FC<MobileTabsProps> = ({
           flexDirection: 'column',
           alignItems: 'center',
           width: '100%',
-          px: { xs: 2, sm: 3 },
+          px: { xs: 1, sm: 2 },
           py: 1,
           gap: 2,
         }}
@@ -197,20 +198,20 @@ export const MobileTabs: React.FC<MobileTabsProps> = ({
         {/* Tabs */}
         <Box
           sx={{
-            p: 0.5,
+            p: 0.25,
             borderRadius: 3,
             bgcolor: alpha(corporateColor, 0.08),
             border: `1px solid ${alpha(corporateColor, 0.15)}`,
             width: '100%',
-            maxWidth: '400px',
+            maxWidth: '100%',
             boxShadow: `0 2px 8px ${alpha(corporateColor, 0.1)}`,
           }}
         >
           <Box
             sx={{
               display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: 0.5,
+              gridTemplateColumns: `repeat(${columns}, 1fr)`,
+              gap: 0.25,
               width: '100%',
             }}
           >
@@ -221,7 +222,7 @@ export const MobileTabs: React.FC<MobileTabsProps> = ({
                 sx={{
                   height: 48,
                   borderRadius: 2.5,
-                  px: { xs: 1, sm: 2 },
+                  px: { xs: 0.75, sm: 1.5 },
                   py: 1,
                   position: 'relative',
                   transition: 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
@@ -307,10 +308,11 @@ export const MobileTabs: React.FC<MobileTabsProps> = ({
                     variant="caption"
                     sx={{
                       fontWeight: activeTab === option.id ? 700 : 600,
-                      fontSize: '0.75rem',
+                      fontSize: '0.72rem',
                       lineHeight: 1,
                       textAlign: 'center',
                       letterSpacing: 0.2,
+                      whiteSpace: 'nowrap',
                     }}
                   >
                     {option.label}
