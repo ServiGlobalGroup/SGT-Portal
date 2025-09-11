@@ -487,8 +487,14 @@ export const MobileDocuments: React.FC = () => {
   const handleView = (document: UserDocument) => {
     if (document.type === '.pdf') {
       if (currentFolder === 'informacion') {
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+          setAlert({ type: 'error', message: 'No se puede mostrar el archivo. Por favor, inicia sesión nuevamente.' });
+          return;
+        }
+        
         const fileName = document.download_url.split('/').pop();
-        const previewUrl = `/api/documents/preview/general/${fileName}`;
+        const previewUrl = `/api/documents/preview/general/${fileName}?token=${encodeURIComponent(token)}`;
         const fullUrl = previewUrl.startsWith('http') 
           ? previewUrl 
           : `${API_BASE_URL}${previewUrl}`;

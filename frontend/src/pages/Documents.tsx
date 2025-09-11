@@ -192,9 +192,16 @@ export const Documents: React.FC = () => {
     if (document.type === '.pdf') {
       // Para documentos generales (información)
       if (currentFolder === 'informacion') {
+        // Para documentos generales, usar el endpoint con token
+        const token = localStorage.getItem('access_token');
+        if (!token) {
+          setAlert({ type: 'error', message: 'No se puede mostrar el archivo. Por favor, inicia sesión nuevamente.' });
+          return;
+        }
+        
         // Extraer el nombre del archivo de la download_url
         const fileName = document.download_url.split('/').pop();
-        const previewUrl = `/api/documents/preview/general/${fileName}`;
+        const previewUrl = `/api/documents/preview/general/${fileName}?token=${encodeURIComponent(token)}`;
         const fullUrl = previewUrl.startsWith('http') 
           ? previewUrl 
           : `${API_BASE_URL}${previewUrl}`;

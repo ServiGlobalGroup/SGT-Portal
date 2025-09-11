@@ -2,7 +2,7 @@ from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from fastapi.responses import FileResponse
 from app.models.schemas import Document
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 import random
 import os
 import shutil
@@ -167,10 +167,39 @@ async def download_general_document(filename: str, current_user: User = Depends(
     )
 
 @router.get("/preview/general/{filename}")
-async def preview_general_document(filename: str, current_user: User = Depends(get_current_user)):
+async def preview_general_document(filename: str, token: Optional[str] = None):
     """
     Endpoint para previsualizar documentos generales en iframe.
+    Usa autenticación por token en query parameter para funcionar con iframes.
     """
+    from app.api.auth import get_current_user
+    from app.database.connection import get_db
+    from jose import JWTError, jwt
+    from app.config import settings
+    
+    # Validar token JWT del query parameter
+    if not token:
+        raise HTTPException(status_code=401, detail="Token requerido")
+    
+    try:
+        # Verificar el token manualmente
+        payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+        dni_nie_from_token = payload.get("sub")
+        if dni_nie_from_token is None:
+            raise HTTPException(status_code=401, detail="Token inválido")
+        
+        # Verificar que el usuario existe y está activo
+        db_gen = get_db()
+        db = next(db_gen)
+        
+        from app.models.user import User
+        user = db.query(User).filter(User.dni_nie == dni_nie_from_token).first()
+        if not user or not user.is_active:
+            raise HTTPException(status_code=403, detail="Usuario no encontrado o inactivo")
+            
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Token inválido")
+    
     file_path = Path("backend/files/general_documents") / filename
     
     if not file_path.exists():

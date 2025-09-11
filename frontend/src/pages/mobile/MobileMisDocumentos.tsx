@@ -26,7 +26,7 @@ import { MobileDocumentCard } from '../../components/mobile/MobileDocumentCard';
 import { MobilePagination } from '../../components/mobile/MobilePagination';
 import { MobileLoading } from '../../components/mobile/MobileLoading';
 import { MobileTabs } from '../../components/mobile/MobileTabs';
-import { userFilesAPI } from '../../services/api';
+import { userFilesAPI, API_BASE_URL } from '../../services/api';
 import { AuthContext } from '../../contexts/AuthContext';
 
 // Interfaces
@@ -276,8 +276,41 @@ export const MobileMisDocumentos: React.FC = () => {
               severity: 'error'
             });
           }
+        } else if (currentFolder === 'documentos') {
+          // Para documentos generales (información), usar el endpoint de documentos generales con token
+          try {
+            const token = localStorage.getItem('access_token');
+            if (!token) {
+              setSnackbar({
+                open: true,
+                message: 'No se puede mostrar el archivo. Por favor, inicia sesión nuevamente.',
+                severity: 'error'
+              });
+              return;
+            }
+            
+            const fileName = document.download_url?.split('/').pop() || document.name;
+            const previewUrl = `/api/documents/preview/general/${fileName}?token=${encodeURIComponent(token)}`;
+            const fullUrl = previewUrl.startsWith('http') 
+              ? previewUrl 
+              : `${API_BASE_URL}${previewUrl}`;
+            
+            setPdfPreview({
+              open: true,
+              fileUrl: fullUrl,
+              fileName: document.name,
+              title: `${document.name} - ${getFolderDisplayName(currentFolder)}`
+            });
+          } catch (error) {
+            console.error('Error generando URL de preview para documentos:', error);
+            setSnackbar({
+              open: true,
+              message: 'Error al preparar la previsualización',
+              severity: 'error'
+            });
+          }
         } else {
-          // Para otras carpetas (documentos, etc.), usar la URL de descarga directa
+          // Para otras carpetas, usar la URL de descarga directa
           // pero solo mostrar una advertencia ya que no podemos previsualizar
           setSnackbar({
             open: true,
