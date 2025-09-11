@@ -27,7 +27,8 @@ export default defineConfig({
     host: true,
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        // Actualizado a nuevo puerto backend 8010
+        target: 'http://localhost:8010',
         changeOrigin: true,
         secure: false,
       },

@@ -155,6 +155,9 @@ export const canAccessRoute = (user: User | null, route: string): boolean => {
       return hasPermission(user, Permission.VIEW_GESTOR);
     case '/dietas':
       return hasPermission(user, Permission.VIEW_DIETAS);
+    case '/recursos':
+      // Página informativa accesible a quienes pueden ver documentos (trabajadores y superiores)
+      return hasPermission(user, Permission.VIEW_DOCUMENTS);
     case '/settings':
       // Solo el usuario maestro puede acceder a configuración
       return user.role === 'MASTER_ADMIN';
