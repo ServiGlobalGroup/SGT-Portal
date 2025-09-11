@@ -670,49 +670,14 @@ export const Vacations: React.FC = () => {
   }, [alert]);
 
   // Estilos personalizados para los eventos del calendario
-  const eventStyleGetter = (event: CalendarEvent) => {
-    let backgroundColor = '#501b36';
-    let borderColor = '#501b36';
-    let color = 'white';
-
-    // Salvaguarda: ocultar cualquier evento rechazado
-    const st = String(event.resource?.status || '').toLowerCase().trim();
-    if (st === 'rejected') {
-      return {
-        style: {
-          display: 'none',
-        },
-      };
-    }
-
-    if (event.resource) {
-      switch (event.resource.status) {
-        case 'approved':
-          backgroundColor = '#4caf50';
-          borderColor = '#388e3c';
-          break;
-        case 'pending':
-          backgroundColor = '#ff9800';
-          borderColor = '#f57c00';
-          break;
-        case 'rejected':
-          backgroundColor = '#f44336';
-          borderColor = '#d32f2f';
-          break;
-      }
-    }
-
+  const eventStyleGetter = (_event: CalendarEvent) => {
+    // Ocultamos completamente todos los eventos para mostrar solo los chips en CustomDateHeader
     return {
       style: {
-        backgroundColor,
-        borderColor,
-        color,
-        border: `2px solid ${borderColor}`,
-        borderRadius: '8px',
-        fontSize: '12px',
-        fontWeight: 600,
-        padding: '2px 6px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+        display: 'none', // Ocultar completamente todos los eventos del calendario
+        height: '0px',
+        opacity: 0,
+        overflow: 'hidden',
       },
     };
   };
@@ -721,41 +686,60 @@ export const Vacations: React.FC = () => {
   const CustomEvent = ({ event }: { event: CalendarEvent }) => (
     <Tooltip
       title={
-        <Box>
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+        <Box sx={{ p: 1 }}>
+          <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 600 }}>
             {event.resource?.employeeName}
           </Typography>
           <Typography variant="body2" sx={{ mb: 0.5 }}>
             <strong>Motivo:</strong> {event.resource?.reason}
           </Typography>
-          <Typography variant="body2">
+          <Typography variant="body2" sx={{ mb: 0.5 }}>
             <strong>Estado:</strong> {
-              event.resource?.status === 'approved' ? 'Aprobado' :
-              event.resource?.status === 'pending' ? 'Pendiente' : 'Rechazado'
+              event.resource?.status === 'approved' ? '✅ Aprobado' :
+              event.resource?.status === 'pending' ? '⏳ Pendiente' : '❌ Rechazado'
             }
+          </Typography>
+          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.8)' }}>
+            Haz clic para ver más detalles
           </Typography>
         </Box>
       }
       arrow
+      placement="top"
+      enterDelay={300}
     >
-      <Box sx={{ height: '100%', width: '100%' }}>
+      <Box sx={{ 
+        height: '100%', 
+        width: '100%',
+        borderRadius: '6px',
+        overflow: 'hidden',
+        cursor: 'pointer',
+        transition: 'all 0.2s ease',
+        '&:hover': {
+          transform: 'scale(1.02)',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.2)',
+        }
+      }}>
         <Typography variant="caption" sx={{ 
           fontSize: '0.7rem', 
-          fontWeight: 600,
+          fontWeight: 700,
           display: 'block',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap'
+          whiteSpace: 'nowrap',
+          lineHeight: 1.2,
+          mb: 0.25,
         }}>
           {event.resource?.employeeName}
         </Typography>
         <Typography variant="caption" sx={{ 
-          fontSize: '0.65rem', 
-          opacity: 0.9,
+          fontSize: '0.6rem', 
+          opacity: 0.95,
           display: 'block',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap'
+          whiteSpace: 'nowrap',
+          lineHeight: 1.1,
         }}>
           {event.resource?.reason}
         </Typography>
@@ -1002,79 +986,163 @@ export const Vacations: React.FC = () => {
   const CustomDateHeader = ({ date, label }: { date: Date; label: string }) => {
     const vacationUsers = getDayVacationUsers(date);
     const isToday = moment(date).isSame(moment(), 'day');
+    const isCurrentMonth = moment(date).isSame(currentDate, 'month');
     
     return (
       <Box sx={{ 
         position: 'relative', 
         height: '100%', 
         width: '100%',
-        p: 1,
+        p: '0.5rem 0.75rem 0.75rem 0.75rem',
         display: 'flex',
         flexDirection: 'column',
-        gap: 0.5,
-        overflow: 'hidden',
-        boxSizing: 'border-box'
+        gap: 0.75,
+        overflow: 'visible',
+        boxSizing: 'border-box',
+        minHeight: '120px',
+        backgroundColor: !isCurrentMonth ? '#f8f9fa !important' : 'transparent',
+        opacity: !isCurrentMonth ? 0.6 : 1,
       }}>
-        <Typography 
-          variant="body2" 
-          sx={{ 
-            fontWeight: isToday ? 700 : 500,
-            color: isToday ? '#501b36' : 'inherit',
-            fontSize: '0.875rem',
-            textAlign: 'center',
-            mb: 1,
-            flexShrink: 0
-          }}
-        >
-          {label}
-        </Typography>
+        {/* Número del día */}
+        <Box sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between',
+          mb: 1
+        }}>
+          <Typography 
+            variant="body1" 
+            sx={{ 
+              fontWeight: isToday ? 900 : 700,
+              color: isToday ? '#ffffff' : !isCurrentMonth ? '#6c757d' : '#333',
+              fontSize: isToday ? '1.1rem' : '1rem',
+              lineHeight: 1,
+              p: 0.75,
+              borderRadius: '6px',
+              backgroundColor: isToday ? '#501b36' : 'transparent',
+              minWidth: isToday ? 32 : 'auto',
+              height: isToday ? 32 : 'auto',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s ease',
+              boxShadow: isToday ? '0 2px 8px rgba(80, 27, 54, 0.3)' : 'none',
+            }}
+          >
+            {label}
+          </Typography>
+          
+          {vacationUsers.length > 0 && (
+            <Chip
+              label={vacationUsers.length}
+              size="small"
+              sx={{
+                height: 20,
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                bgcolor: alpha('#501b36', isCurrentMonth ? 0.1 : 0.05),
+                color: isCurrentMonth ? '#501b36' : '#6c757d',
+                border: `1px solid ${alpha('#501b36', isCurrentMonth ? 0.2 : 0.1)}`,
+                opacity: isCurrentMonth ? 1 : 0.6,
+                '& .MuiChip-label': {
+                  px: 0.75,
+                },
+              }}
+            />
+          )}
+        </Box>
         
+        {/* Lista de usuarios con ausencias */}
         {vacationUsers.length > 0 && (
           <Box sx={{ 
             display: 'flex', 
             flexDirection: 'column', 
-            gap: 0.25,
-            maxHeight: 80,
+            gap: 0.5,
+            flex: 1,
             minHeight: 0,
-            overflow: 'hidden',
-            flex: 1
+            overflow: 'visible',
+            opacity: isCurrentMonth ? 1 : 0.6,
           }}>
-            {vacationUsers.slice(0, 3).map((user) => (
-              <Chip
-                key={user.id}
-                label={user.employeeName.split(' ')[0]} // Solo el primer nombre
-                size="small"
-                sx={{
-                  height: 18,
-                  fontSize: '0.6rem',
-                  fontWeight: 600,
-                  bgcolor: user.status === 'approved' ? '#4caf50' : 
-                          user.status === 'pending' ? '#ff9800' : '#f44336',
-                  color: 'white',
-                  flexShrink: 0,
-                  '& .MuiChip-label': {
-                    px: 0.5,
-                  },
-                  cursor: 'pointer',
-                  '&:hover': {
-                    opacity: 0.8,
-                  }
-                }}
-              />
-            ))}
-            {vacationUsers.length > 3 && (
+            {vacationUsers.slice(0, 4).map((user, index) => {
+              // Determinar el color según el tipo de ausencia
+              const getEventColor = () => {
+                if (user.status !== 'approved') {
+                  return user.status === 'pending' ? '#ff9800' : '#f44336';
+                }
+                // Solo para eventos aprobados aplicamos los colores por tipo
+                // Verificar si es vacación o asunto propio basado en el reason
+                return user.reason === 'Asuntos propios' ? '#2196f3' : '#4caf50';
+              };
+              
+              return (
+                <Chip
+                  key={user.id}
+                  label={user.employeeName.split(' ')[0]} // Solo el primer nombre
+                  size="small"
+                  sx={{
+                    height: 22,
+                    fontSize: '0.65rem',
+                    fontWeight: 600,
+                    bgcolor: getEventColor(),
+                    color: 'white',
+                    borderRadius: '6px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    '& .MuiChip-label': {
+                      px: 1,
+                      py: 0.25,
+                    },
+                    '&:hover': {
+                      transform: 'scale(1.05)',
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
+                    },
+                    // Animación de entrada escalonada
+                    animation: `fadeInUp 0.3s ease-out ${index * 0.1}s both`,
+                    '@keyframes fadeInUp': {
+                      '0%': {
+                        opacity: 0,
+                        transform: 'translateY(10px)',
+                      },
+                      '100%': {
+                        opacity: 1,
+                        transform: 'translateY(0)',
+                      },
+                    },
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    // Aquí podrías abrir más detalles del usuario si quieres
+                  }}
+                />
+              );
+            })}
+            {vacationUsers.length > 4 && (
               <Typography 
                 variant="caption" 
                 sx={{ 
-                  fontSize: '0.6rem',
+                  fontSize: '0.65rem',
                   color: '#501b36',
-                  fontWeight: 600,
+                  fontWeight: 700,
                   textAlign: 'center',
-                  mt: 0.25,
-                  flexShrink: 0
+                  mt: 0.5,
+                  p: 0.5,
+                  bgcolor: alpha('#501b36', 0.05),
+                  borderRadius: '4px',
+                  border: `1px dashed ${alpha('#501b36', 0.2)}`,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  '&:hover': {
+                    bgcolor: alpha('#501b36', 0.1),
+                    transform: 'scale(1.02)',
+                  },
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Podrías mostrar todos los usuarios aquí
                 }}
               >
-                +{vacationUsers.length - 3} más
+                +{vacationUsers.length - 4} más
               </Typography>
             )}
           </Box>
@@ -1799,6 +1867,32 @@ export const Vacations: React.FC = () => {
                     </Box>
                   </Box>
                   
+                  {/* Leyenda */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Box sx={{ 
+                        width: 12, 
+                        height: 12, 
+                        bgcolor: '#4caf50', 
+                        borderRadius: '3px' 
+                      }} />
+                      <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                        Vacaciones
+                      </Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Box sx={{ 
+                        width: 12, 
+                        height: 12, 
+                        bgcolor: '#2196f3', 
+                        borderRadius: '3px' 
+                      }} />
+                      <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                        Asuntos propios
+                      </Typography>
+                    </Box>
+                  </Box>
+                  
                   {/* Controles de navegación del calendario */}
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <IconButton 
@@ -1857,92 +1951,224 @@ export const Vacations: React.FC = () => {
                   styles={{
                     '.rbc-calendar': {
                       fontFamily: '"Roboto","Helvetica","Arial",sans-serif !important',
+                      fontSize: '14px !important',
                     },
                     '.rbc-month-view': {
                       border: '1px solid #e0e0e0',
-                      borderRadius: '8px',
+                      borderRadius: '12px',
                       overflow: 'hidden',
+                      backgroundColor: '#ffffff',
+                    },
+                    '.rbc-month-header': {
+                      borderBottom: '1px solid #e0e0e0 !important',
+                      marginBottom: '0 !important',
+                      overflow: 'visible !important',
+                      // Hacer que las iniciales ocupen el espacio en blanco
+                      height: '110px !important',
                     },
                     '.rbc-header': {
-                      backgroundColor: alpha('#501b36', 0.05) + ' !important',
-                      borderBottom: '1px solid #e0e0e0 !important',
-                      fontWeight: '700 !important',
-                      fontSize: '0.875rem !important',
+                      backgroundColor: alpha('#501b36', 0.08) + ' !important',
+                      borderBottom: 'none !important',
+                      fontWeight: '800 !important',
+                      fontSize: '1rem !important',
                       color: '#501b36 !important',
-                      padding: '12px 8px !important',
+                      padding: '0 4px !important',
+                      textAlign: 'center !important',
+                      textTransform: 'uppercase !important',
+                      lineHeight: '1 !important',
+                      height: '100% !important',
+                      marginBottom: '0 !important',
+                      margin: '0 !important',
+                      display: 'flex !important',
+                      alignItems: 'center !important',
+                      justifyContent: 'center !important',
                     },
                     '.rbc-date-cell': {
-                      padding: '4px !important',
+                      padding: '0px 6px 4px 6px !important',
                       borderRight: '1px solid #e0e0e0 !important',
-                      borderBottom: '1px solid #e0e0e0 !important',
-                      height: '125px !important',
-                      minHeight: '125px !important',
-                      maxHeight: '125px !important',
+                      borderBottom: 'none !important',
+                      minHeight: '120px !important',
+                      maxHeight: '140px !important',
                       cursor: 'pointer !important',
-                      transition: 'background-color 0.2s ease !important',
+                      transition: 'all 0.2s ease !important',
                       position: 'relative !important',
-                      overflow: 'hidden !important',
+                      overflow: 'visible !important',
                       boxSizing: 'border-box !important',
+                      backgroundColor: '#ffffff !important',
+                      marginTop: '0 !important',
+                      paddingTop: '0px !important',
+                    },
+                    '.rbc-off-range-bg': {
+                      backgroundColor: '#f8f9fa !important',
+                      opacity: '0.6 !important',
+                      color: '#6c757d !important',
+                    },
+                    '.rbc-off-range': {
+                      color: '#6c757d !important',
+                      opacity: '0.6 !important',
+                      backgroundColor: '#f8f9fa !important',
                     },
                     '.rbc-date-cell:hover': {
-                      backgroundColor: alpha('#501b36', 0.04) + ' !important',
+                      backgroundColor: alpha('#501b36', 0.03) + ' !important',
+                      transform: 'scale(1.02) !important',
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.1) !important',
+                      zIndex: '10 !important',
                     },
                     '.rbc-today': {
-                      backgroundColor: alpha('#501b36', 0.15) + ' !important',
+                      backgroundColor: alpha('#501b36', 0.12) + ' !important',
+                      border: 'none !important',
+                      outline: 'none !important',
+                      boxShadow: 'none !important',
+                      fontWeight: '800 !important',
                     },
                     '.rbc-toolbar': {
-                      display: 'none !important', // Ocultamos completamente la toolbar nativa
+                      display: 'none !important',
                     },
-                    // Mostrar eventos para visualizar rangos correctamente
                     '.rbc-show-more': {
                       color: '#501b36 !important',
                       fontWeight: '600 !important',
-                      fontSize: '0.75rem !important',
+                      fontSize: '0.7rem !important',
                       backgroundColor: alpha('#501b36', 0.1) + ' !important',
-                      borderRadius: '4px !important',
-                      padding: '2px 6px !important',
-                      margin: '2px 1px !important',
+                      borderRadius: '6px !important',
+                      padding: '3px 8px !important',
+                      margin: '2px 0 !important',
+                      border: `1px solid ${alpha('#501b36', 0.2)} !important`,
+                      cursor: 'pointer !important',
+                      transition: 'all 0.2s ease !important',
+                    },
+                    '.rbc-show-more:hover': {
+                      backgroundColor: alpha('#501b36', 0.15) + ' !important',
+                      transform: 'scale(1.05) !important',
                     },
                     '.rbc-date-cell button': {
                       color: '#333 !important',
                       fontWeight: '500 !important',
                       fontSize: '0.875rem !important',
-                      padding: '4px 8px !important',
-                      borderRadius: '4px !important',
+                      padding: '6px 8px !important',
+                      borderRadius: '6px !important',
                       border: 'none !important',
                       backgroundColor: 'transparent !important',
                       width: 'auto !important',
                       height: 'auto !important',
-                      lineHeight: '1.2 !important',
+                      lineHeight: '1.3 !important',
+                      transition: 'all 0.2s ease !important',
                     },
                     '.rbc-date-cell .rbc-button-link:hover': {
                       backgroundColor: alpha('#501b36', 0.08) + ' !important',
-                    },
-                    '.rbc-off-range-bg': {
-                      backgroundColor: '#f9f9f9 !important',
+                      transform: 'scale(1.1) !important',
                     },
                     '.rbc-off-range .rbc-button-link': {
                       color: '#bbb !important',
-                    },
-                    '.rbc-month-header': {
-                      overflow: 'visible !important',
                     },
                     '.rbc-button-link': {
                       display: 'block !important',
                       width: '100% !important',
                       textAlign: 'left !important',
-                      padding: '4px 0 !important',
-                      borderRadius: '4px !important',
+                      padding: '6px 0 !important',
+                      borderRadius: '6px !important',
                       position: 'relative !important',
+                      transition: 'all 0.2s ease !important',
                     },
                     '.rbc-row-content': {
                       height: '100% !important',
+                      overflow: 'visible !important',
+                      display: 'flex !important',
+                      flexDirection: 'column !important',
+                      // Eliminar el espacio reservado para filas de eventos
+                      marginTop: '0 !important',
+                      paddingTop: '0 !important',
+                    },
+                    // Ocultar completamente las filas de eventos del mes (manteniendo la primera fila de días)
+                    '.rbc-month-row .rbc-row-content > .rbc-row:not(:first-child)': {
+                      display: 'none !important',
+                      height: '0 !important',
+                      margin: '0 !important',
+                      padding: '0 !important',
                       overflow: 'hidden !important',
+                    },
+                    // Asegurar que la primera fila (números/días) ocupa todo el alto disponible
+                    '.rbc-month-row .rbc-row-content > .rbc-row:first-child': {
+                      height: '100% !important',
                     },
                     '.rbc-date-cell > div': {
                       height: '100% !important',
-                      overflow: 'hidden !important',
+                      overflow: 'visible !important',
                       boxSizing: 'border-box !important',
+                      display: 'flex !important',
+                      flexDirection: 'column !important',
+                    },
+                    '.rbc-month-row': {
+                      minHeight: '120px !important',
+                      borderBottom: 'none !important',
+                      margin: '0 !important',
+                      marginTop: '0 !important',
+                    },
+                    '.rbc-month-row:first-child': {
+                      marginTop: '0 !important',
+                    },
+                    '.rbc-row': {
+                      minHeight: '120px !important',
+                      borderBottom: 'none !important',
+                      margin: '0 !important',
+                    },
+                    '.rbc-row:last-child': {
+                      borderBottom: 'none !important',
+                    },
+                    // Estilos para eventos
+                    '.rbc-event': {
+                      borderRadius: '6px !important',
+                      padding: '2px 6px !important',
+                      margin: '1px !important',
+                      fontSize: '0.7rem !important',
+                      fontWeight: '600 !important',
+                      cursor: 'pointer !important',
+                      transition: 'all 0.2s ease !important',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.2) !important',
+                    },
+                    '.rbc-event:hover': {
+                      transform: 'scale(1.02) !important',
+                      boxShadow: '0 2px 6px rgba(0,0,0,0.25) !important',
+                    },
+                    // Mejoras para pantallas más pequeñas
+                    '@media (max-width: 768px)': {
+                      '.rbc-date-cell': {
+                        minHeight: '100px !important',
+                        maxHeight: '120px !important',
+                        padding: '4px !important',
+                      },
+                      '.rbc-month-header': {
+                        height: '80px !important',
+                      },
+                      '.rbc-header': {
+                        padding: '0 4px !important',
+                        fontSize: '0.9rem !important',
+                        height: '100% !important',
+                      },
+                    },
+                    // Eliminar líneas extra y espacios
+                    '.rbc-month-view .rbc-row:last-child .rbc-date-cell': {
+                      borderBottom: 'none !important',
+                    },
+                    '.rbc-month-view .rbc-date-cell:last-child': {
+                      borderRight: 'none !important',
+                    },
+                    '.rbc-month-view .rbc-month-header': {
+                      marginBottom: '0 !important',
+                      borderBottom: '1px solid #e0e0e0 !important',
+                    },
+                    '.rbc-month-view .rbc-month-row:first-child': {
+                      marginTop: '0 !important',
+                      paddingTop: '0 !important',
+                    },
+                    '.rbc-month-view .rbc-row-segment': {
+                      display: 'none !important',
+                      height: '0 !important',
+                      minHeight: '0 !important',
+                      marginTop: '0 !important',
+                      paddingTop: '0 !important',
+                    },
+                    '.rbc-row-bg': {
+                      overflow: 'visible !important',
                     },
                   }}
                 />
@@ -1951,7 +2177,11 @@ export const Vacations: React.FC = () => {
                   events={calendarEvents}
                   startAccessor="start"
                   endAccessor="end"
-                  style={{ height: 750 }}
+                  style={{ 
+                    height: 760,
+                    minHeight: 680,
+                    backgroundColor: '#ffffff'
+                  }}
                   view={Views.MONTH}
                   date={currentDate}
                   onNavigate={handleNavigate}
@@ -1968,11 +2198,9 @@ export const Vacations: React.FC = () => {
                   culture="es"
                   formats={{
                     monthHeaderFormat: (date) => moment(date).locale('es').format('MMMM YYYY'),
-                    // Encabezados de días: usar abreviaturas españolas consistentes
-                    // Opciones habituales: ["L", "M", "X", "J", "V", "S", "D"] o ["Lu","Ma","Mi","Ju","Vi","Sa","Do"]
-                    // Elegimos 2 letras (segunda en minúscula salvo X) para claridad visual.
+                    // Encabezados de días: usar solo primera letra para hacerlos más pequeños
                     weekdayFormat: (date) => {
-                      const map = ['Lu','Ma','Mi','Ju','Vi','Sa','Do'];
+                      const map = ['L','M','X','J','V','S','D'];
                       const day = moment(date).isoWeekday(); // 1..7
                       return map[day-1];
                     },
