@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Box,
   Typography,
@@ -131,7 +132,30 @@ export const Vacations: React.FC = () => {
   const [selectedRequest, setSelectedRequest] = useState<VacationRequest | null>(null);
 
   // Estados para el calendario
-  const [viewMode, setViewMode] = useState<'calendar' | 'table' | 'user-lookup'>('table');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const viewModeParam = searchParams.get('tab');
+  const validViewModes = ['calendar', 'table', 'user-lookup'];
+  let initialViewMode = validViewModes.includes(viewModeParam || '') ? viewModeParam! : 'table';
+  
+  // Aplicar restricciones de rol solo si no hay parámetro de URL
+  // Solo los empleados están restringidos a vista tabla
+  if (!viewModeParam && isRestrictedRole) {
+    initialViewMode = 'table';
+  }
+  
+  const viewMode = initialViewMode;
+  
+  const setViewMode = (mode: 'calendar' | 'table' | 'user-lookup') => {
+    // Solo restringir a empleados normales
+    if (isRestrictedRole && mode !== 'table') {
+      return; // No permitir cambio a otras vistas para empleados
+    }
+    
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set('tab', mode);
+    setSearchParams(newParams);
+  };
+  
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDayVacations, setSelectedDayVacations] = useState<VacationRequest[]>([]);
   const [dayDetailModal, setDayDetailModal] = useState(false);
@@ -314,7 +338,16 @@ export const Vacations: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [alert, setAlert] = useState<{ type: 'success' | 'error', message: string } | null>(null);
   // Alcance de lista para administradores: 'mine' (propias) | 'all' (todas)
-  const [scope, setScope] = useState<'mine' | 'all'>('mine');
+  // Obtener scope de URL params o usar 'mine' por defecto
+  const scopeParam = searchParams.get('scope');
+  const validScopes = ['mine', 'all'];
+  const scope = validScopes.includes(scopeParam || '') ? scopeParam! as 'mine' | 'all' : 'mine';
+  
+  const setScope = (newScope: 'mine' | 'all') => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.set('scope', newScope);
+    setSearchParams(newParams);
+  };
 
   // Estados para administradores (simulado como false para usuarios normales)
   const isAdmin = isAdminRole;
@@ -350,8 +383,10 @@ export const Vacations: React.FC = () => {
       setError(null);
     }
     try {
-      const useAll = isAdminRole && scope === 'all';
-      const params = !useAll && user?.id ? { user_id: user.id } : undefined;
+      // Para calendario, siempre mostrar todas las ausencias si eres admin
+      // Para tabla, respetar el scope seleccionado
+      const shouldShowAll = viewMode === 'calendar' ? isAdminRole : (isAdminRole && scope === 'all');
+      const params = !shouldShowAll && user?.id ? { user_id: user.id } : undefined;
       const data = await vacationService.getVacationRequests(params);
       // Convertir el formato de la API al formato local
       const convertedRequests: VacationRequest[] = data.map((apiRequest: any) => ({
@@ -381,7 +416,7 @@ export const Vacations: React.FC = () => {
   useEffect(() => {
     loadRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope, user?.id, isAdminRole]);
+  }, [scope, user?.id, isAdminRole, viewMode]);
 
   // Buscar usuarios con debounce cuando se escribe en el Autocomplete
   useEffect(() => {
@@ -436,19 +471,6 @@ export const Vacations: React.FC = () => {
   }, [scope, user?.id, isAdminRole]);
 
   // Para administradores: si el alcance es 'mine', forzar vista tabla y ocultar controles de calendario/notificaciones
-  useEffect(() => {
-    if (isAdminRole && scope === 'mine' && viewMode !== 'table') {
-      setViewMode('table');
-    }
-  }, [isAdminRole, scope, viewMode]);
-
-  // Forzar vista 'tabla' para roles restringidos
-  useEffect(() => {
-    if (isRestrictedRole && viewMode !== 'table') {
-      setViewMode('table');
-    }
-  }, [isRestrictedRole, viewMode]);
-
   // Funciones para navegar en el calendario
   const handleNavigate = (date: Date) => {
     setCurrentDate(date);
