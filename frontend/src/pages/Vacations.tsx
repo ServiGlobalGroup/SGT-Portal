@@ -224,30 +224,32 @@ export const Vacations: React.FC = () => {
     }
 
     return (
-      <TableContainer sx={{ mt: 1 }}>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Período</TableCell>
-              <TableCell>Días</TableCell>
-              <TableCell>Motivo</TableCell>
-              <TableCell>Estado</TableCell>
-              <TableCell>Solicitado</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {rows.map(r => (
-              <TableRow key={r.id} hover>
-                <TableCell>{formatDate(r.startDate)} - {formatDate(r.endDate)}</TableCell>
-                <TableCell>{r.days}</TableCell>
-                <TableCell>{r.reason}</TableCell>
-                <TableCell><StatusChip status={r.status} size="small" /></TableCell>
-                <TableCell>{formatDate(r.requestDate)}</TableCell>
+      <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <TableContainer sx={{ flex: 1, overflow: 'auto' }}>
+          <Table size="small">
+            <TableHead>
+              <TableRow>
+                <TableCell>Período</TableCell>
+                <TableCell>Días</TableCell>
+                <TableCell>Motivo</TableCell>
+                <TableCell>Estado</TableCell>
+                <TableCell>Solicitado</TableCell>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+            </TableHead>
+            <TableBody>
+              {rows.map(r => (
+                <TableRow key={r.id} hover>
+                  <TableCell>{formatDate(r.startDate)} - {formatDate(r.endDate)}</TableCell>
+                  <TableCell>{r.days}</TableCell>
+                  <TableCell>{r.reason}</TableCell>
+                  <TableCell><StatusChip status={r.status} size="small" /></TableCell>
+                  <TableCell>{formatDate(r.requestDate)}</TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </TableContainer>
+      </Box>
     );
   };
 
@@ -1971,7 +1973,7 @@ export const Vacations: React.FC = () => {
           <Fade in timeout={1000}>
             <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '320px 1fr' }, gap: 2 }}>
               {/* Columna izquierda: buscador y lista de usuarios */}
-              <Paper elevation={0} sx={{ p: 2, borderRadius: 2, border: '1px solid #e0e0e0', background: '#fff' }}>
+              <Paper elevation={0} sx={{ p: 2, borderRadius: 2, border: '1px solid #e0e0e0', background: '#fff', height: 580, display: 'flex', flexDirection: 'column' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                   <PersonSearch sx={{ color: '#501b36' }} />
                   <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#501b36' }}>Usuarios</Typography>
@@ -1984,7 +1986,7 @@ export const Vacations: React.FC = () => {
                   InputProps={{ startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} /> }}
                   sx={{ mb: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
                 />
-                <Box sx={{ maxHeight: 480, overflow: 'auto', pr: 1 }}>
+                <Box sx={{ flex: 1, overflow: 'auto', pr: 1 }}>
                   {userOptions.length === 0 ? (
                     <Typography variant="body2" sx={{ color: 'text.secondary', p: 1 }}>
                       {userSearch.trim().length < 2 ? 'Escribe al menos 2 caracteres' : 'Sin resultados'}
@@ -2012,7 +2014,7 @@ export const Vacations: React.FC = () => {
               </Paper>
 
               {/* Columna derecha: detalle por año */}
-              <Paper elevation={0} sx={{ p: 3, borderRadius: 2, border: '1px solid #e0e0e0', background: '#fff' }}>
+              <Paper elevation={0} sx={{ p: 3, borderRadius: 2, border: '1px solid #e0e0e0', background: '#fff', height: 580, display: 'flex', flexDirection: 'column' }}>
                 <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2, flexWrap: 'wrap' }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36' }}>
@@ -2022,64 +2024,70 @@ export const Vacations: React.FC = () => {
                   <FormControl size="small" sx={{ minWidth: 140 }}>
                     <InputLabel>Año</InputLabel>
                     <Select label="Año" value={lookupYear} onChange={(e) => setLookupYear(Number(e.target.value))}>
-                      {[-1,0,1].map((delta) => { const y = currentYearDefault + delta; return <MenuItem key={y} value={y}>{y}</MenuItem>; })}
+                      {[0,1,2,3,4,5].map((delta) => { const y = currentYearDefault + delta; return <MenuItem key={y} value={y}>{y}</MenuItem>; })}
                     </Select>
                   </FormControl>
                 </Box>
 
-                {!selectedUser ? (
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                    Elige un usuario de la lista para ver sus días por año.
-                  </Typography>
-                ) : (
-                  <>
-                    {/* Métricas */}
-                    {lookupLoading ? (
-                      <Box sx={{ py: 3, textAlign: 'center' }}>
-                        <CircularProgress sx={{ color: '#501b36' }} />
-                      </Box>
-                    ) : (
-                      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mb: 2 }}>
-                        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                          <Typography variant="subtitle2" sx={{ color: '#501b36', mb: 1 }}>
-                            Asuntos propios ({lookupYear})
-                          </Typography>
-                          <Typography variant="h4" sx={{ fontWeight: 800, mb: 0.5 }}>
-                            {Math.max(0, 5 - (usagePersonal?.approved || 0))}
-                          </Typography>
-                          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                            Días restantes de un máximo de 5
-                          </Typography>
-                          <Box sx={{ mt: 1 }}>
-                            <Chip label={`Aprobados: ${usagePersonal?.approved ?? '—'}`} size="small" sx={{ mr: 1 }} />
-                            <Chip label={`Pendientes: ${usagePersonal?.pending ?? '—'}`} size="small" />
-                          </Box>
-                        </Paper>
-                        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                          <Typography variant="subtitle2" sx={{ color: '#501b36', mb: 1 }}>
-                            Vacaciones gastadas ({lookupYear})
-                          </Typography>
-                          <Typography variant="h4" sx={{ fontWeight: 800, mb: 0.5 }}>
-                            {usageVacation?.approved ?? 0}
-                          </Typography>
-                          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                            Días aprobados acumulados
-                          </Typography>
-                          <Box sx={{ mt: 1 }}>
-                            <Chip label={`Pendientes: ${usageVacation?.pending ?? '—'}`} size="small" />
-                          </Box>
-                        </Paper>
-                      </Box>
-                    )}
+                <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  {!selectedUser ? (
+                    <Box sx={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                        Elige un usuario de la lista para ver sus días por año.
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <>
+                      {/* Métricas */}
+                      {lookupLoading ? (
+                        <Box sx={{ py: 3, textAlign: 'center' }}>
+                          <CircularProgress sx={{ color: '#501b36' }} />
+                        </Box>
+                      ) : (
+                        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mb: 2 }}>
+                          <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, height: 160, display: 'flex', flexDirection: 'column' }}>
+                            <Typography variant="subtitle2" sx={{ color: '#501b36', mb: 1 }}>
+                              Asuntos propios ({lookupYear})
+                            </Typography>
+                            <Typography variant="h4" sx={{ fontWeight: 800, mb: 0.5 }}>
+                              {usagePersonal?.approved ?? 0}
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: 'text.secondary', flex: 1 }}>
+                              Días aprobados utilizados
+                            </Typography>
+                            <Box sx={{ mt: 'auto' }}>
+                              <Chip label={`Aprobados: ${usagePersonal?.approved ?? '—'}`} size="small" sx={{ mr: 1 }} />
+                              <Chip label={`Pendientes: ${usagePersonal?.pending ?? '—'}`} size="small" />
+                            </Box>
+                          </Paper>
+                          <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, height: 160, display: 'flex', flexDirection: 'column' }}>
+                            <Typography variant="subtitle2" sx={{ color: '#501b36', mb: 1 }}>
+                              Vacaciones gastadas ({lookupYear})
+                            </Typography>
+                            <Typography variant="h4" sx={{ fontWeight: 800, mb: 0.5 }}>
+                              {usageVacation?.approved ?? 0}
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: 'text.secondary', flex: 1 }}>
+                              Días aprobados acumulados
+                            </Typography>
+                            <Box sx={{ mt: 'auto' }}>
+                              <Chip label={`Pendientes: ${usageVacation?.pending ?? '—'}`} size="small" />
+                            </Box>
+                          </Paper>
+                        </Box>
+                      )}
 
-                    {/* Tabla de solicitudes del usuario y año */}
-                    <UserRequestsTable
-                      userId={selectedUser.id}
-                      userName={selectedUser.name}
-                      year={lookupYear}
-                    />
-                  </>
-                )}
+                      {/* Tabla de solicitudes del usuario y año */}
+                      <Box sx={{ flex: 1, overflow: 'hidden' }}>
+                        <UserRequestsTable
+                          userId={selectedUser.id}
+                          userName={selectedUser.name}
+                          year={lookupYear}
+                        />
+                      </Box>
+                    </>
+                  )}
+                </Box>
               </Paper>
             </Box>
           </Fade>
