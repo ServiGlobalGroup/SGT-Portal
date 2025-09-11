@@ -346,8 +346,20 @@ export const Vacations: React.FC = () => {
   const setScope = (newScope: 'mine' | 'all') => {
     const newParams = new URLSearchParams(searchParams);
     newParams.set('scope', newScope);
+    // Si pasamos a "mías", forzar vista lista para evitar quedarse en calendario/días
+    if (newScope === 'mine') {
+      newParams.set('tab', 'table');
+    }
     setSearchParams(newParams);
   };
+
+  // Salvaguarda: si el scope es "mías" y la vista no es "lista", corrige la URL
+  useEffect(() => {
+    if (scope === 'mine' && viewMode !== 'table') {
+      setViewMode('table');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope]);
 
   // Estados para administradores (simulado como false para usuarios normales)
   const isAdmin = isAdminRole;
