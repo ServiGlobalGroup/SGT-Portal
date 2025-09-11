@@ -1,5 +1,5 @@
 import axios from 'axios';
-import type { VacationRequest, VacationStats, VacationRequestCreate, VacationRequestUpdate } from '../types/vacation';
+import type { VacationRequest, VacationStats, VacationRequestCreate, VacationRequestUpdate, VacationUsage, AbsenceType } from '../types/vacation';
 
 const API_BASE = '/api/vacations/';
 
@@ -48,11 +48,14 @@ export const vacationService = {
   async createVacationRequest(request: VacationRequestCreate): Promise<VacationRequest> {
     try {
       // Convertir fechas a strings ISO para el backend
-      const requestData = {
+      const requestData: any = {
         start_date: request.start_date.toISOString().split('T')[0], // Solo la fecha, no la hora
         end_date: request.end_date.toISOString().split('T')[0],
-        reason: request.reason
+        reason: request.reason,
       };
+      if ((request as any).absence_type) {
+        requestData.absence_type = (request as any).absence_type;
+      }
       const headers = { 
         'Content-Type': 'application/json',
         ...getAuthHeaders(),
@@ -178,6 +181,20 @@ export const vacationService = {
       }));
     } catch (error) {
       console.error('Error fetching pending requests for admin:', error);
+      throw error;
+    }
+  },
+
+  // Obtener uso anual (días aprobados gastados y días pendientes solicitados)
+  async getVacationUsage(params?: { user_id?: number; year?: number; absence_type?: AbsenceType }): Promise<VacationUsage> {
+    try {
+      const response = await axios.get(`${API_BASE}usage`, {
+        params,
+        headers: getAuthHeaders(),
+      });
+      return response.data as VacationUsage;
+    } catch (error) {
+      console.error('Error fetching vacation usage:', error);
       throw error;
     }
   },

@@ -25,10 +25,15 @@ class VacationStatus(str, Enum):
     APPROVED = "APPROVED"
     REJECTED = "REJECTED"
 
+class AbsenceType(str, Enum):
+    VACATION = "VACATION"
+    PERSONAL = "PERSONAL"
+
 class VacationRequestBase(BaseModel):
     start_date: datetime
     end_date: datetime
     reason: str
+    absence_type: AbsenceType = AbsenceType.VACATION
 
     @validator('end_date')
     def end_date_must_be_after_start_date(cls, v, values, **kwargs):
@@ -45,6 +50,7 @@ class VacationRequestUpdate(BaseModel):
     reason: Optional[str] = None
     status: Optional[VacationStatus] = None
     admin_response: Optional[str] = None
+    absence_type: Optional[AbsenceType] = None
 
 class VacationRequestResponse(VacationRequestBase):
     id: int
@@ -71,6 +77,16 @@ class VacationStats(BaseModel):
     rejected: int
     current_year_total: int
     current_year_approved: int
+
+class VacationUsage(BaseModel):
+    """Uso anual de días de ausencia (actualmente vacaciones) por usuario.
+    Contabiliza solo días de solicitudes APROBADAS (gastados) y muestra también días solicitados pendientes.
+    Puede filtrarse por tipo de ausencia.
+    """
+    user_id: int
+    year: int
+    approved_days_used: int
+    pending_days_requested: int
 
 # Mantener el schema anterior para compatibilidad temporal
 class VacationRequest(BaseModel):

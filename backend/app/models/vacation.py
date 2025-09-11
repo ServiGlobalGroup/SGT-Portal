@@ -10,6 +10,10 @@ class VacationStatus(enum.Enum):
     APPROVED = "APPROVED" 
     REJECTED = "REJECTED"
 
+class AbsenceType(enum.Enum):
+    VACATION = "VACATION"
+    PERSONAL = "PERSONAL"
+
 class VacationRequest(Base):
     """
     Modelo de solicitudes de vacaciones.
@@ -30,6 +34,7 @@ class VacationRequest(Base):
     # Información de la solicitud
     reason = Column(Text, nullable=False, comment="Motivo o descripción de la solicitud")
     status = Column(Enum(VacationStatus), nullable=False, default=VacationStatus.PENDING, comment="Estado de la solicitud")
+    absence_type = Column(Enum(AbsenceType), nullable=False, default=AbsenceType.VACATION, comment="Tipo de ausencia: VACATION o PERSONAL")
     
     # Respuesta del administrador
     admin_response = Column(Text, nullable=True, comment="Comentario del administrador al aprobar/rechazar")
@@ -50,8 +55,10 @@ class VacationRequest(Base):
     @property
     def duration_days(self) -> int:
         """Calcula la duración en días de la solicitud de vacaciones"""
-        if self.start_date and self.end_date:
-            delta = self.end_date - self.start_date
+        sd = getattr(self, 'start_date', None)
+        ed = getattr(self, 'end_date', None)
+        if isinstance(sd, datetime) and isinstance(ed, datetime):
+            delta = ed - sd
             return delta.days + 1  # +1 para incluir el día de inicio
         return 0
     
@@ -59,17 +66,29 @@ class VacationRequest(Base):
     def is_current(self) -> bool:
         """Verifica si las vacaciones están en curso actualmente"""
         now = datetime.now()
-        return (self.status == VacationStatus.APPROVED and 
-                self.start_date <= now <= self.end_date)
+        sd = getattr(self, 'start_date', None)
+        ed = getattr(self, 'end_date', None)
+        try:
+            return bool(self.status == VacationStatus.APPROVED and isinstance(sd, datetime) and isinstance(ed, datetime) and sd <= now <= ed)
+        except Exception:
+            return False
     
     @property
     def is_future(self) -> bool:
         """Verifica si las vacaciones son futuras"""
         now = datetime.now()
-        return self.start_date > now
+        sd = getattr(self, 'start_date', None)
+        try:
+            return bool(isinstance(sd, datetime) and sd > now)
+        except Exception:
+            return False
     
     @property
     def is_past(self) -> bool:
         """Verifica si las vacaciones ya han pasado"""
         now = datetime.now()
-        return self.end_date < now
+        ed = getattr(self, 'end_date', None)
+        try:
+            return bool(isinstance(ed, datetime) and ed < now)
+        except Exception:
+            return False

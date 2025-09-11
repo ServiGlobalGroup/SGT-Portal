@@ -42,7 +42,6 @@ import {
   Schedule,
   MoreVert,
   Search,
-  Refresh,
   EditCalendar,
   BeachAccess,
   DateRange,
@@ -54,6 +53,7 @@ import {
   Check,
   Close,
   Delete,
+  PersonSearch,
 } from '@mui/icons-material';
 import { Calendar, momentLocalizer, Event, Views } from 'react-big-calendar';
 import moment from 'moment';
@@ -64,13 +64,15 @@ import { ModernField, InfoCard, StatusChip } from '../components/ModernFormCompo
 import { PaginationComponent } from '../components/PaginationComponent';
 import { usePagination } from '../hooks/usePagination';
 import { vacationService } from '../services/vacationService';
-import type { VacationRequestCreate } from '../types/vacation';
+import { usersAPI } from '../services/api';
+import type { VacationRequestCreate, AbsenceType } from '../types/vacation';
 import { useAuth } from '../hooks/useAuth';
 import { useDeviceType } from '../hooks/useDeviceType';
 import { MobileVacations } from './mobile/MobileVacations';
 
 interface VacationRequest {
   id: number;
+  user_id?: number;
   employeeName: string;
   startDate: string;
   endDate: string;
@@ -129,7 +131,7 @@ export const Vacations: React.FC = () => {
   const [selectedRequest, setSelectedRequest] = useState<VacationRequest | null>(null);
 
   // Estados para el calendario
-  const [viewMode, setViewMode] = useState<'calendar' | 'table'>('table');
+  const [viewMode, setViewMode] = useState<'calendar' | 'table' | 'user-lookup'>('table');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDayVacations, setSelectedDayVacations] = useState<VacationRequest[]>([]);
   const [dayDetailModal, setDayDetailModal] = useState(false);
@@ -138,15 +140,116 @@ export const Vacations: React.FC = () => {
   const [notificationOpen, setNotificationOpen] = useState(false);
   const [notificationAnchor, setNotificationAnchor] = useState<null | HTMLElement>(null);
   const [isAnimating, setIsAnimating] = useState(false);
+  // Cache de uso por usuario para admins (para mostrar días gastados/pendientes)
+  const [usageCache, setUsageCache] = useState<Record<string, { approved: number; pending: number }>>({});
 
   // Estados para el formulario
   const [openDialog, setOpenDialog] = useState(false);
   const [newRequest, setNewRequest] = useState({
     startDate: '',
     endDate: '',
-    reason: '',
+    reason: 'Vacaciones',
     oneDay: false,
+    absenceType: 'VACATION' as AbsenceType,
   });
+  const [personalDaysWarning, setPersonalDaysWarning] = useState<string | null>(null);
+
+  // Estados para pestaña de búsqueda de usuarios (solo desktop)
+  const currentYearDefault = new Date().getFullYear();
+  const [lookupYear, setLookupYear] = useState<number>(currentYearDefault);
+  const [userSearch, setUserSearch] = useState('');
+  const [userOptions, setUserOptions] = useState<{ id:number; name:string }[]>([]);
+  const [selectedUser, setSelectedUser] = useState<{ id:number; name:string } | null>(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [usagePersonal, setUsagePersonal] = useState<{ approved:number; pending:number } | null>(null);
+  const [usageVacation, setUsageVacation] = useState<{ approved:number; pending:number } | null>(null);
+
+  // Tabla de solicitudes por usuario/año (subcomponente)
+  const UserRequestsTable: React.FC<{ userId: number; userName: string; year: number; }> = ({ userId, userName, year }) => {
+    const [rows, setRows] = useState<VacationRequest[]>([]);
+    const [loadingRows, setLoadingRows] = useState(false);
+    const [errorRows, setErrorRows] = useState<string | null>(null);
+
+    useEffect(() => {
+      let cancelled = false;
+      const run = async () => {
+        try {
+          setLoadingRows(true);
+          setErrorRows(null);
+          const data = await vacationService.getVacationRequests({ user_id: userId, year });
+          if (!cancelled) {
+            // Adaptar a nuestro modelo local (coincide con loadRequests mapping)
+            const mapped: VacationRequest[] = (data as any[]).map((apiRequest: any) => ({
+              id: apiRequest.id,
+              user_id: apiRequest.user_id,
+              employeeName: apiRequest.employee_name || userName,
+              startDate: toYMDLocal(apiRequest.start_date),
+              endDate: toYMDLocal(apiRequest.end_date),
+              reason: apiRequest.reason,
+              status: (String(apiRequest.status || '')).toLowerCase() as any,
+              days: apiRequest.duration_days,
+              requestDate: apiRequest.created_at ? toYMDLocal(apiRequest.created_at) : '',
+              approvedBy: apiRequest.reviewer_name || '',
+              approvedDate: apiRequest.reviewed_at ? toYMDLocal(apiRequest.reviewed_at) : '',
+              comments: apiRequest.admin_response || ''
+            }));
+            setRows(mapped);
+          }
+        } catch (e) {
+          if (!cancelled) setErrorRows('No se pudieron cargar las solicitudes.');
+        } finally {
+          if (!cancelled) setLoadingRows(false);
+        }
+      };
+      void run();
+      return () => { cancelled = true; };
+    }, [userId, year, userName]);
+
+    if (loadingRows) {
+      return (
+        <Box sx={{ py: 3, textAlign: 'center' }}>
+          <CircularProgress sx={{ color: '#501b36' }} />
+        </Box>
+      );
+    }
+    if (errorRows) {
+      return <Alert severity="error" sx={{ mb: 2 }}>{errorRows}</Alert>;
+    }
+    if (rows.length === 0) {
+      return (
+        <Box sx={{ p: 3, textAlign: 'center', color: 'text.secondary' }}>
+          <Typography variant="body2">Sin solicitudes en {year}.</Typography>
+        </Box>
+      );
+    }
+
+    return (
+      <TableContainer sx={{ mt: 1 }}>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Período</TableCell>
+              <TableCell>Días</TableCell>
+              <TableCell>Motivo</TableCell>
+              <TableCell>Estado</TableCell>
+              <TableCell>Solicitado</TableCell>
+            </TableRow>
+          </TableHead>
+          <TableBody>
+            {rows.map(r => (
+              <TableRow key={r.id} hover>
+                <TableCell>{formatDate(r.startDate)} - {formatDate(r.endDate)}</TableCell>
+                <TableCell>{r.days}</TableCell>
+                <TableCell>{r.reason}</TableCell>
+                <TableCell><StatusChip status={r.status} size="small" /></TableCell>
+                <TableCell>{formatDate(r.requestDate)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    );
+  };
 
   // Helpers de fecha (LOCAL, sin UTC) para evitar desfases
   const toYMDLocal = (d: Date): string => {
@@ -215,10 +318,35 @@ export const Vacations: React.FC = () => {
   const isAdmin = isAdminRole;
   const [error, setError] = useState<string | null>(null);
 
-  // Función para cargar las solicitudes desde el API
-  const loadRequests = async () => {
-    setLoading(true);
-    setError(null);
+  // Comparador superficial para evitar re-render innecesario
+  const isSameRequests = (a: VacationRequest[], b: VacationRequest[]) => {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+      const x = a[i];
+      const y = b[i];
+      if (!y || x.id !== y.id) return false;
+      if (
+        x.startDate !== y.startDate ||
+        x.endDate !== y.endDate ||
+        x.reason !== y.reason ||
+        x.status !== y.status ||
+        x.days !== y.days ||
+        x.requestDate !== y.requestDate ||
+        (x.approvedBy || '') !== (y.approvedBy || '') ||
+        (x.approvedDate || '') !== (y.approvedDate || '') ||
+        (x.comments || '') !== (y.comments || '')
+      ) return false;
+    }
+    return true;
+  };
+
+  // Función para cargar las solicitudes desde el API (con modo silencioso)
+  const loadRequests = async (opts?: { silent?: boolean }) => {
+    const silent = !!opts?.silent;
+    if (!silent) {
+      setLoading(true);
+      setError(null);
+    }
     try {
       const useAll = isAdminRole && scope === 'all';
       const params = !useAll && user?.id ? { user_id: user.id } : undefined;
@@ -226,6 +354,7 @@ export const Vacations: React.FC = () => {
       // Convertir el formato de la API al formato local
       const convertedRequests: VacationRequest[] = data.map((apiRequest: any) => ({
         id: apiRequest.id,
+        user_id: apiRequest.user_id,
         employeeName: apiRequest.employee_name || 'Usuario',
         startDate: toYMDLocal(apiRequest.start_date),
         endDate: toYMDLocal(apiRequest.end_date),
@@ -237,12 +366,12 @@ export const Vacations: React.FC = () => {
         approvedDate: apiRequest.reviewed_at ? toYMDLocal(apiRequest.reviewed_at) : '',
         comments: apiRequest.admin_response || ''
       }));
-      setRequests(convertedRequests);
+      setRequests(prev => (isSameRequests(prev, convertedRequests) ? prev : convertedRequests));
     } catch (err) {
       console.error('Error loading vacation requests:', err);
-      setError('Error al cargar las solicitudes de vacaciones');
+      if (!silent) setError('Error al cargar las solicitudes de vacaciones');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -250,6 +379,58 @@ export const Vacations: React.FC = () => {
   useEffect(() => {
     loadRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, user?.id, isAdminRole]);
+
+  // Buscar usuarios con debounce cuando se escribe en el Autocomplete
+  useEffect(() => {
+    let t: number | undefined;
+    const run = async () => {
+      if (!userSearch || userSearch.trim().length < 2) { setUserOptions([]); return; }
+      try {
+        const res = await usersAPI.getAllUsers({ search: userSearch.trim(), active_only: true });
+        const opts = (res.users || []).map((u:any) => ({ id: Number(u.id), name: `${u.first_name || ''} ${u.last_name || ''}`.trim() || (u.email || `Usuario ${u.id}`) }));
+        setUserOptions(opts);
+      } catch (e) {
+        setUserOptions([]);
+      }
+    };
+    t = window.setTimeout(run, 300);
+    return () => { if (t) window.clearTimeout(t); };
+  }, [userSearch]);
+
+  // Cargar métricas para usuario/año seleccionados
+  const loadUserUsage = async (userId: number, year: number) => {
+    try {
+      setLookupLoading(true);
+      const [per, vac] = await Promise.all([
+        vacationService.getVacationUsage({ user_id: userId, year, absence_type: 'PERSONAL' }),
+        vacationService.getVacationUsage({ user_id: userId, year, absence_type: 'VACATION' }),
+      ]);
+      setUsagePersonal({ approved: per.approved_days_used || 0, pending: per.pending_days_requested || 0 });
+      setUsageVacation({ approved: vac.approved_days_used || 0, pending: vac.pending_days_requested || 0 });
+    } catch (e) {
+      setUsagePersonal(null);
+      setUsageVacation(null);
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (selectedUser?.id && lookupYear) {
+      void loadUserUsage(selectedUser.id, lookupYear);
+    }
+  }, [selectedUser?.id, lookupYear]);
+
+  // Auto-refresh silencioso para evitar parpadeos
+  useEffect(() => {
+    const intervalMs = 30000; // 30s
+    const id = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        void loadRequests({ silent: true });
+      }
+    }, intervalMs);
+    return () => window.clearInterval(id);
   }, [scope, user?.id, isAdminRole]);
 
   // Para administradores: si el alcance es 'mine', forzar vista tabla y ocultar controles de calendario/notificaciones
@@ -285,6 +466,34 @@ export const Vacations: React.FC = () => {
     setCurrentDate(new Date());
   };
 
+  // Calcular advertencia para asuntos propios
+  useEffect(() => {
+    const calc = async () => {
+      setPersonalDaysWarning(null);
+      if (!newRequest.startDate || !newRequest.endDate) return;
+      if (newRequest.absenceType !== 'PERSONAL') return;
+      try {
+        const start = new Date(newRequest.startDate);
+        const end = new Date(newRequest.endDate);
+        if (start > end) return;
+        const reqDays = Math.floor((end.getTime() - start.getTime()) / (1000*60*60*24)) + 1;
+        const year = start.getFullYear();
+        const usage = await vacationService.getVacationUsage({ year, absence_type: 'PERSONAL' });
+        const totalIfApproved = (usage?.approved_days_used || 0) + reqDays;
+        if (totalIfApproved > 5) {
+          setPersonalDaysWarning(`Aviso: con esta solicitud usarías ${totalIfApproved} días de asuntos propios en ${year} (máximo 5).`);
+        } else if (totalIfApproved === 5) {
+          setPersonalDaysWarning(`Ojo: con esta solicitud llegarías al máximo de 5 días de asuntos propios en ${year}.`);
+        } else {
+          setPersonalDaysWarning(null);
+        }
+      } catch {
+        // Ignorar errores de cálculo de advertencia
+      }
+    };
+    void calc();
+  }, [newRequest.startDate, newRequest.endDate, newRequest.absenceType]);
+
   // Funciones para las notificaciones
   const handleNotificationClick = (event: React.MouseEvent<HTMLElement>) => {
     setNotificationAnchor(event.currentTarget);
@@ -298,6 +507,26 @@ export const Vacations: React.FC = () => {
     setNotificationOpen(false);
     setNotificationAnchor(null);
   };
+
+  // Cargar uso anual por usuario al abrir notificaciones (solo admins en scope all)
+  useEffect(() => {
+    const loadUsageForPending = async () => {
+      if (!(isAdminRole && scope === 'all') || !notificationOpen) return;
+      const currentYear = new Date().getFullYear();
+      const uniqueUserIds = Array.from(new Set(requests.map(r => (r as any).user_id).filter(Boolean)));
+      for (const uid of uniqueUserIds) {
+        const key = `${uid}-${currentYear}`;
+        if (usageCache[key]) continue;
+        try {
+          const usage = await vacationService.getVacationUsage({ user_id: Number(uid), year: currentYear });
+          setUsageCache(prev => ({ ...prev, [key]: { approved: usage.approved_days_used, pending: usage.pending_days_requested } }));
+        } catch (_) {
+          // Silenciar errores en panel de notificaciones
+        }
+      }
+    };
+    void loadUsageForPending();
+  }, [isAdminRole, scope, notificationOpen, requests, usageCache]);
 
   // Funciones para aceptar/rechazar rápido desde notificaciones
   const handleQuickApprove = async (requestId: number, event: React.MouseEvent) => {
@@ -540,6 +769,21 @@ export const Vacations: React.FC = () => {
   const handleMenuClick = (event: React.MouseEvent<HTMLElement>, request: VacationRequest) => {
     setAnchorEl(event.currentTarget);
     setSelectedRequest(request);
+    // Precargar uso para el usuario de la solicitud si es admin
+    if (isAdminRole && scope === 'all' && request.user_id) {
+      const year = new Date().getFullYear();
+      const key = `${request.user_id}-${year}`;
+      if (!usageCache[key]) {
+        void (async () => {
+          try {
+            const usage = await vacationService.getVacationUsage({ user_id: Number(request.user_id), year });
+            setUsageCache(prev => ({ ...prev, [key]: { approved: usage.approved_days_used, pending: usage.pending_days_requested } }));
+          } catch (_) {
+            // Silenciar
+          }
+        })();
+      }
+    }
   };
 
   const handleCloseMenu = () => {
@@ -595,7 +839,8 @@ export const Vacations: React.FC = () => {
       const requestData: VacationRequestCreate = {
         start_date: startDate,
         end_date: endDate,
-  reason: newRequest.reason.trim(),
+        reason: newRequest.reason.trim(),
+        absence_type: newRequest.absenceType,
       };
 
       const createdRequest = await vacationService.createVacationRequest(requestData);
@@ -618,9 +863,9 @@ export const Vacations: React.FC = () => {
         comments: createdRequest.admin_response || ''
       };
 
-      setRequests(prev => [newLocalRequest, ...prev]);
-      setOpenDialog(false);
-  setNewRequest({ startDate: '', endDate: '', reason: '', oneDay: false });
+  setRequests(prev => [newLocalRequest, ...prev]);
+  setOpenDialog(false);
+  setNewRequest({ startDate: '', endDate: '', reason: 'Vacaciones', oneDay: false, absenceType: 'VACATION' });
       setAlert({ type: 'success', message: 'Solicitud de vacaciones enviada exitosamente' });
     } catch (error: any) {
       console.error('Error creating vacation request:', error);
@@ -925,6 +1170,7 @@ export const Vacations: React.FC = () => {
           </Fade>
         )}
 
+        
         {/* Panel de Control */}
         <Fade in timeout={1000}>
           <Paper
@@ -1280,19 +1526,15 @@ export const Vacations: React.FC = () => {
                         <CalendarMonth sx={{ mr: 0.5, fontSize: 18 }} />
                         Calendario
                       </ToggleButton>
+                        <ToggleButton value="user-lookup">
+                          <PersonSearch sx={{ mr: 0.5, fontSize: 18 }} />
+                          Días
+                        </ToggleButton>
                     </ToggleButtonGroup>
                   </Box>
                 )}
                 
-                <Button
-                  variant="contained"
-                  startIcon={<Refresh />}
-                  onClick={loadRequests}
-                  disabled={loading}
-                  sx={commonContainedButtonSx}
-                >
-                  {loading ? 'Actualizando...' : 'Actualizar'}
-                </Button>
+                {/* Botón Actualizar eliminado: hay auto-refresh silencioso */}
 
                 {(!isAdminRole || scope === 'mine') && (
                   <Button
@@ -1309,8 +1551,8 @@ export const Vacations: React.FC = () => {
           </Paper>
         </Fade>
 
-        {/* Menú de Notificaciones */}
-        {isAdminRole && scope === 'all' && (
+  {/* Menú de Notificaciones */}
+  {isAdminRole && scope === 'all' && (
         <Menu
           anchorEl={notificationAnchor}
           open={notificationOpen}
@@ -1425,6 +1667,20 @@ export const Vacations: React.FC = () => {
                             {request.reason}
                           </Typography>
                         )}
+                        {/* Info de uso anual (aprobados/pendientes) para admins */}
+                        {isAdminRole && scope === 'all' && (request as any).user_id && (
+                          (() => {
+                            const year = new Date().getFullYear();
+                            const key = `${(request as any).user_id}-${year}`;
+                            const usage = usageCache[key];
+                            return (
+                              <Typography variant="caption" sx={{ color: '#501b36', display: 'block', mt: 0.5, fontWeight: 600 }}>
+                                Gastados (aprobados): {usage ? usage.approved : '…'} día(s)
+                                {usage ? ` • Pendientes solicitados: ${usage.pending} día(s)` : ''}
+                              </Typography>
+                            );
+                          })()
+                        )}
                       </Box>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, ml: 1 }}>
                         <Chip 
@@ -1486,8 +1742,8 @@ export const Vacations: React.FC = () => {
   </Menu>
   )}
 
-        {/* Contenido Principal */}
-        {viewMode === 'calendar' ? (
+  {/* Contenido Principal */}
+  {viewMode === 'calendar' ? (
           // Vista Calendario
           <Fade in timeout={1200}>
             <Paper
@@ -1710,6 +1966,123 @@ export const Vacations: React.FC = () => {
               </Box>
             </Paper>
           </Fade>
+        ) : viewMode === 'user-lookup' ? (
+          // Vista "Días": listado de usuarios + detalle por año
+          <Fade in timeout={1000}>
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '320px 1fr' }, gap: 2 }}>
+              {/* Columna izquierda: buscador y lista de usuarios */}
+              <Paper elevation={0} sx={{ p: 2, borderRadius: 2, border: '1px solid #e0e0e0', background: '#fff' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <PersonSearch sx={{ color: '#501b36' }} />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#501b36' }}>Usuarios</Typography>
+                </Box>
+                <TextField
+                  placeholder="Filtrar por nombre..."
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  size="small"
+                  InputProps={{ startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} /> }}
+                  sx={{ mb: 1, '& .MuiOutlinedInput-root': { borderRadius: 2 } }}
+                />
+                <Box sx={{ maxHeight: 480, overflow: 'auto', pr: 1 }}>
+                  {userOptions.length === 0 ? (
+                    <Typography variant="body2" sx={{ color: 'text.secondary', p: 1 }}>
+                      {userSearch.trim().length < 2 ? 'Escribe al menos 2 caracteres' : 'Sin resultados'}
+                    </Typography>
+                  ) : (
+                    userOptions.map(u => (
+                      <Box
+                        key={u.id}
+                        onClick={() => setSelectedUser(u)}
+                        sx={{
+                          p: 1,
+                          borderRadius: 1,
+                          cursor: 'pointer',
+                          bgcolor: selectedUser?.id === u.id ? alpha('#501b36', 0.08) : 'transparent',
+                          '&:hover': { bgcolor: alpha('#501b36', 0.06) },
+                        }}
+                      >
+                        <Typography variant="body2" sx={{ fontWeight: selectedUser?.id === u.id ? 700 : 500 }}>
+                          {u.name}
+                        </Typography>
+                      </Box>
+                    ))
+                  )}
+                </Box>
+              </Paper>
+
+              {/* Columna derecha: detalle por año */}
+              <Paper elevation={0} sx={{ p: 3, borderRadius: 2, border: '1px solid #e0e0e0', background: '#fff' }}>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2, mb: 2, flexWrap: 'wrap' }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36' }}>
+                      {selectedUser ? selectedUser.name : 'Selecciona un usuario'}
+                    </Typography>
+                  </Box>
+                  <FormControl size="small" sx={{ minWidth: 140 }}>
+                    <InputLabel>Año</InputLabel>
+                    <Select label="Año" value={lookupYear} onChange={(e) => setLookupYear(Number(e.target.value))}>
+                      {[-1,0,1].map((delta) => { const y = currentYearDefault + delta; return <MenuItem key={y} value={y}>{y}</MenuItem>; })}
+                    </Select>
+                  </FormControl>
+                </Box>
+
+                {!selectedUser ? (
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                    Elige un usuario de la lista para ver sus días por año.
+                  </Typography>
+                ) : (
+                  <>
+                    {/* Métricas */}
+                    {lookupLoading ? (
+                      <Box sx={{ py: 3, textAlign: 'center' }}>
+                        <CircularProgress sx={{ color: '#501b36' }} />
+                      </Box>
+                    ) : (
+                      <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mb: 2 }}>
+                        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                          <Typography variant="subtitle2" sx={{ color: '#501b36', mb: 1 }}>
+                            Asuntos propios ({lookupYear})
+                          </Typography>
+                          <Typography variant="h4" sx={{ fontWeight: 800, mb: 0.5 }}>
+                            {Math.max(0, 5 - (usagePersonal?.approved || 0))}
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                            Días restantes de un máximo de 5
+                          </Typography>
+                          <Box sx={{ mt: 1 }}>
+                            <Chip label={`Aprobados: ${usagePersonal?.approved ?? '—'}`} size="small" sx={{ mr: 1 }} />
+                            <Chip label={`Pendientes: ${usagePersonal?.pending ?? '—'}`} size="small" />
+                          </Box>
+                        </Paper>
+                        <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                          <Typography variant="subtitle2" sx={{ color: '#501b36', mb: 1 }}>
+                            Vacaciones gastadas ({lookupYear})
+                          </Typography>
+                          <Typography variant="h4" sx={{ fontWeight: 800, mb: 0.5 }}>
+                            {usageVacation?.approved ?? 0}
+                          </Typography>
+                          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                            Días aprobados acumulados
+                          </Typography>
+                          <Box sx={{ mt: 1 }}>
+                            <Chip label={`Pendientes: ${usageVacation?.pending ?? '—'}`} size="small" />
+                          </Box>
+                        </Paper>
+                      </Box>
+                    )}
+
+                    {/* Tabla de solicitudes del usuario y año */}
+                    <UserRequestsTable
+                      userId={selectedUser.id}
+                      userName={selectedUser.name}
+                      year={lookupYear}
+                    />
+                  </>
+                )}
+              </Paper>
+            </Box>
+          </Fade>
         ) : (
           // Vista Tabla (existente)
         <Fade in timeout={1200}>
@@ -1787,16 +2160,7 @@ export const Vacations: React.FC = () => {
                       : `No hay solicitudes con estado "${filterStatus === 'pending' ? 'Pendiente' : filterStatus === 'approved' ? 'Aprobada' : 'Rechazada'}"`
                   }
                 </Typography>
-                {(!isAdminRole || scope === 'mine') && (
-                  <Button
-                    variant="contained"
-                    startIcon={<Add />}
-                    onClick={() => setOpenDialog(true)}
-                    sx={commonContainedButtonSx}
-                  >
-                    Crear Primera Solicitud
-                  </Button>
-                )}
+                {/* CTA eliminado para evitar duplicar con el botón principal de la parte superior */}
               </Box>
             ) : (
               <>
@@ -1974,6 +2338,21 @@ export const Vacations: React.FC = () => {
             }
           }}
         >
+          {isAdminRole && scope === 'all' && selectedRequest?.user_id && (
+            <Box sx={{ px: 2, pt: 1.5, pb: 0.5 }}>
+              {(() => {
+                const year = new Date().getFullYear();
+                const key = `${selectedRequest.user_id}-${year}`;
+                const u = usageCache[key];
+                return (
+                  <Typography variant="caption" sx={{ color: '#501b36', fontWeight: 600 }}>
+                    Uso {year}: Gastados (aprobados) {u ? u.approved : '…'} día(s)
+                    {u ? ` • Pendientes ${u.pending} día(s)` : ''}
+                  </Typography>
+                );
+              })()}
+            </Box>
+          )}
           <MenuItem 
             onClick={() => {
               // Aquí podrías abrir un diálogo de edición
@@ -2102,18 +2481,107 @@ export const Vacations: React.FC = () => {
         >
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             {/* Tipo de solicitud eliminado: se usa solo el botón "Un solo día" */}
-            <ModernField
-              label="Fecha de inicio"
-              type="date"
-              value={newRequest.startDate}
-              onChange={(value) => setNewRequest(prev => ({ ...prev, startDate: value as string, ...(prev.oneDay ? { endDate: value as string } : {}) }))}
-              required
-              startIcon={<CalendarToday />}
-              min={new Date().toISOString().split('T')[0]}
-              helperText="Selecciona la fecha de inicio de tus vacaciones"
-            />
+            {/* Tipo de ausencia */}
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              <Typography variant="subtitle2" sx={{ minWidth: 160 }}>Tipo de ausencia</Typography>
+              <Box
+                sx={{
+                  p: 0.5,
+                  borderRadius: 3,
+                  background: 'linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%)',
+                  border: '2px solid #e0e0e0',
+                  boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)',
+                  display: 'inline-block',
+                }}
+              >
+                <ToggleButtonGroup
+                  value={newRequest.absenceType}
+                  exclusive
+                  onChange={(_, val) => {
+                    if (!val) return;
+                    setNewRequest(prev => ({
+                      ...prev,
+                      absenceType: val as AbsenceType,
+                      reason: (val as AbsenceType) === 'PERSONAL' ? 'Asuntos propios' : 'Vacaciones',
+                    }));
+                  }}
+                  size="small"
+                  sx={{
+                    '& .MuiToggleButtonGroup-grouped': {
+                      border: 'none',
+                      '&:not(:first-of-type)': {
+                        borderRadius: 3,
+                        marginLeft: '4px',
+                      },
+                      '&:first-of-type': {
+                        borderRadius: 3,
+                      },
+                    },
+                    '& .MuiToggleButton-root': {
+                      borderRadius: '20px !important',
+                      px: 2.5,
+                      py: 1,
+                      textTransform: 'none',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      border: 'none !important',
+                      minWidth: 90,
+                      transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                      position: 'relative',
+                      overflow: 'hidden',
+                      '&::before': {
+                        content: '""',
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        background: 'linear-gradient(135deg, rgba(80,27,54,0.1) 0%, rgba(80,27,54,0.05) 100%)',
+                        opacity: 0,
+                        transition: 'opacity 0.3s ease',
+                      },
+                      '&:hover::before': {
+                        opacity: 1,
+                      },
+                      '&.Mui-selected': {
+                        background: 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 70%, #501b36 100%)',
+                        color: 'white',
+                        boxShadow: '0 4px 12px rgba(80,27,54,0.3), 0 2px 4px rgba(80,27,54,0.2)',
+                        transform: 'translateY(-1px)',
+                        '&:hover': {
+                          background: 'linear-gradient(135deg, #3d1429 0%, #5a1d3a 30%, #6b2545 70%, #3d1429 100%)',
+                          boxShadow: '0 6px 16px rgba(80,27,54,0.4), 0 2px 8px rgba(80,27,54,0.3)',
+                        },
+                        '&::before': {
+                          opacity: 0,
+                        },
+                      },
+                      '&:not(.Mui-selected)': {
+                        color: '#501b36',
+                        backgroundColor: 'rgba(255,255,255,0.8)',
+                        backdropFilter: 'blur(10px)',
+                        '&:hover': {
+                          backgroundColor: 'rgba(255,255,255,0.95)',
+                          transform: 'translateY(-0.5px)',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+                        },
+                      },
+                    },
+                  }}
+                >
+                  <ToggleButton value="VACATION">
+                    <BeachAccess sx={{ mr: 0.5, fontSize: 18 }} />
+                    Vacaciones
+                  </ToggleButton>
+                  <ToggleButton value="PERSONAL">
+                    <EventNote sx={{ mr: 0.5, fontSize: 18 }} />
+                    Asuntos propios
+                  </ToggleButton>
+                </ToggleButtonGroup>
+              </Box>
+            </Box>
 
-            {/* Un solo día */}
+            {/* Un solo día (antes de las fechas) */}
             <FormControlLabel 
               control={
                 <Checkbox 
@@ -2130,6 +2598,19 @@ export const Vacations: React.FC = () => {
             />
 
             <ModernField
+              label="Fecha de inicio"
+              type="date"
+              value={newRequest.startDate}
+              onChange={async (value) => {
+                setNewRequest(prev => ({ ...prev, startDate: value as string, ...(prev.oneDay ? { endDate: value as string } : {}) }));
+              }}
+              required
+              startIcon={<CalendarToday />}
+              min={new Date().toISOString().split('T')[0]}
+              helperText="Selecciona la fecha de inicio"
+            />
+
+            <ModernField
               label="Fecha de fin"
               type="date"
               value={newRequest.endDate}
@@ -2138,20 +2619,10 @@ export const Vacations: React.FC = () => {
               startIcon={<CalendarToday />}
               min={newRequest.startDate || new Date().toISOString().split('T')[0]}
               disabled={newRequest.oneDay}
-              helperText={newRequest.oneDay ? 'Se solicitará solo el día indicado' : 'Selecciona la fecha de fin (puede ser igual al inicio para un solo día)'}
+              helperText={newRequest.oneDay ? 'Se solicitará solo el día indicado' : 'Selecciona la fecha de fin'}
             />
 
-            <ModernField
-              label="Motivo de la solicitud"
-              type="multiline"
-              value={newRequest.reason}
-              onChange={(value) => setNewRequest(prev => ({ ...prev, reason: value as string }))}
-              required
-              rows={4}
-              placeholder="Describe el motivo de tu solicitud de vacaciones..."
-              maxLength={500}
-              helperText="Proporciona una descripción detallada del motivo"
-            />
+            {/* Campo de motivo eliminado: lo fijamos automáticamente segun el tipo seleccionado */}
 
             {newRequest.startDate && newRequest.endDate && newRequest.startDate <= newRequest.endDate && (
               <InfoCard
@@ -2170,11 +2641,25 @@ export const Vacations: React.FC = () => {
                   },
                   {
                     icon: <EventNote sx={{ fontSize: 16 }} />,
+                    label: "Tipo",
+                    value: newRequest.absenceType === 'PERSONAL' ? 'Asuntos propios' : 'Vacaciones'
+                  },
+                  {
+                    icon: <EventNote sx={{ fontSize: 16 }} />,
                     label: "Estado inicial",
                     value: <StatusChip status="pending" size="small" />
                   }
                 ]}
               />
+            )}
+
+            {/* Aviso si excede 5 días de asuntos propios */}
+            {personalDaysWarning && (
+              <Box sx={{ mt: 1, p: 1.5, borderRadius: 1, bgcolor: alpha('#f44336', 0.08), border: '1px solid', borderColor: alpha('#f44336', 0.3) }}>
+                <Typography variant="body2" sx={{ color: '#c62828', fontWeight: 600 }}>
+                  {personalDaysWarning}
+                </Typography>
+              </Box>
             )}
           </Box>
         </ModernModal>
