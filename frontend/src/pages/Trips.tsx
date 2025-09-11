@@ -1,48 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Box, Typography, Paper, TextField, Button, Fade, GlobalStyles, Alert, Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Stack, IconButton, Tooltip, ToggleButtonGroup, ToggleButton, Pagination, Autocomplete, CircularProgress, Chip, Divider } from '@mui/material';
+import { Box, Typography, Paper, TextField, Button, Fade, GlobalStyles, Alert, Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Stack, IconButton, Tooltip, ToggleButtonGroup, ToggleButton, Pagination, Autocomplete, CircularProgress, Chip } from '@mui/material';
 import { WorkOutline, DeleteOutline, History, Calculate } from '@mui/icons-material';
 import { useAuth } from '../hooks/useAuth';
 import { hasPermission, Permission } from '../utils/permissions';
 import { tripsAPI, type TripRecord } from '../services/api';
 
 interface TripEntry { id: string; orderNumber: string; pernocta: boolean; festivo: boolean; nota: string; createdAt: string; eventDate: string; userName: string; }
-
-// Estilo pill reutilizable (inspirado Dietas)
-const pillGroupSx = {
-  '& .MuiToggleButtonGroup-grouped': {
-    border: 'none',
-    '&:not(:first-of-type)': { borderRadius: 3, marginLeft: '6px' },
-    '&:first-of-type': { borderRadius: 3 }
-  },
-  '& .MuiToggleButton-root': {
-    borderRadius: '22px !important',
-    px: 2.5,
-    py: 0.9,
-    textTransform: 'none',
-    fontSize: '0.72rem',
-    letterSpacing: '.6px',
-    fontWeight: 700,
-    border: 'none !important',
-    minWidth: 118,
-    background: 'linear-gradient(145deg,#ffffff 0%,#f6f1f3 55%,#eee2e7 100%)',
-    color: '#55213c',
-    boxShadow: '0 1px 2px rgba(0,0,0,0.08),0 0 0 1px rgba(90,34,64,0.10)',
-    position: 'relative',
-    overflow: 'hidden',
-    transition: 'all .35s cubic-bezier(.4,0,.2,1)',
-    backdropFilter: 'blur(8px)',
-    '&::before': { content: '""', position: 'absolute', inset: 0, background: 'linear-gradient(135deg,rgba(80,27,54,.18) 0%,rgba(80,27,54,.05) 100%)', opacity: 0, transition: 'opacity .35s' },
-    '&:hover::before': { opacity: 1 },
-    '&.Mui-selected': {
-      color: '#fff',
-      background: 'linear-gradient(135deg,#501b36 0%,#6d2548 30%,#7d2d52 70%,#501b36 100%)',
-      boxShadow: '0 5px 14px rgba(80,27,54,0.45),0 2px 6px rgba(80,27,54,0.3)',
-      transform: 'translateY(-2px)',
-      '&:hover': { background: 'linear-gradient(135deg,#3d1429 0%,#5a1d3a 30%,#6b2545 70%,#3d1429 100%)' },
-      '&::before': { opacity: 0 }
-    }
-  }
-} as const;
 
 export const Trips: React.FC = () => {
   const { user } = useAuth();
@@ -60,8 +23,6 @@ export const Trips: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(25);
   const [total, setTotal] = useState(0);
-  // métricas simples
-  const [stats, setStats] = useState({ pernocta: 0, festivo: 0 });
   // Filtros admin
   const [filterUserId, setFilterUserId] = useState<string>('');
   const [filterStart, setFilterStart] = useState<string>('');
@@ -98,21 +59,15 @@ export const Trips: React.FC = () => {
       }).then(data => {
         if(!active) return;
         setTotal(data.total);
-        const mapped = data.items.map(mapTrip);
-        setEntries(mapped);
-        const pernoctaCount = mapped.filter(m => m.pernocta).length;
-        const festivoCount = mapped.filter(m => m.festivo).length;
-        setStats({ pernocta: pernoctaCount, festivo: festivoCount });
+  const mapped = data.items.map(mapTrip);
+  setEntries(mapped);
       }).catch(err => { if(active) setError(err?.response?.data?.detail || 'Error cargando registros'); }).finally(()=> active && setLoading(false));
     } else {
       tripsAPI.listMine().then(data => {
         if(!active) return;
-        const mapped = data.map(mapTrip);
-        setEntries(mapped);
-        setTotal(mapped.length);
-        const pernoctaCount = mapped.filter(m => m.pernocta).length;
-        const festivoCount = mapped.filter(m => m.festivo).length;
-        setStats({ pernocta: pernoctaCount, festivo: festivoCount });
+  const mapped = data.map(mapTrip);
+  setEntries(mapped);
+  setTotal(mapped.length);
       }).catch(err => { if(active) setError(err?.response?.data?.detail || 'Error cargando registros'); }).finally(()=> active && setLoading(false));
     }
     return () => { active = false; };
@@ -205,13 +160,6 @@ export const Trips: React.FC = () => {
                   <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>Viajes (Pernocta / Festivo)</Typography>
                   <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400, fontSize: { xs: '1rem', sm: '1.1rem' } }}>Registra si una orden tuvo pernocta y/o fue en día festivo</Typography>
                 </Box>
-                <Box sx={{ flexGrow:1 }} />
-                {/* Chips métricas */}
-                <Stack direction="row" spacing={1} sx={{ flexWrap:'wrap' }}>
-                  <Chip label={`Total: ${total}`} color="default" sx={{ bgcolor:'rgba(255,255,255,0.15)', color:'#fff', fontWeight:600 }} />
-                  <Chip label={`Pernocta: ${stats.pernocta}`} sx={{ bgcolor:'rgba(255,255,255,0.18)', color:'#fff', fontWeight:600 }} />
-                  <Chip label={`Festivo: ${stats.festivo}`} sx={{ bgcolor:'rgba(255,255,255,0.18)', color:'#fff', fontWeight:600 }} />
-                </Stack>
               </Box>
             </Box>
           </Paper>
