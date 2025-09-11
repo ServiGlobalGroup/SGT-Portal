@@ -514,34 +514,44 @@ export const MobileVacations: React.FC = () => {
           <Paper 
             elevation={0}
             sx={{
-              p: 3,
+              p: { xs: 3, sm: 4 },
               mb: 3,
-              background: `linear-gradient(135deg, ${corporateColor} 0%, #6d2548 30%, #7d2d52 50%, #d4a574 100%)`,
+              background: 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 55%, #d4a574 100%)',
               color: 'white',
               borderRadius: 3,
               position: 'relative',
               overflow: 'hidden',
+              '&::before': {
+                content: '""',
+                position: 'absolute',
+                inset: 0,
+                backgroundImage: 'url("data:image/svg+xml,%3Csvg width=%5C"60%5C" height=%5C"60%5C" viewBox=%5C"0 0 60 60%5C" xmlns=%5C"http://www.w3.org/2000/svg%5C"%3E%3Cg fill=%5C"none%5C" fill-rule=%5C"evenodd%5C"%3E%3Cg fill=%5C"%23ffffff%5C" fill-opacity=%5C"0.08%5C"%3E%3Cpath d=%5C"m36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z%5C"/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
+              },
             }}
           >
             <Box sx={{ position: 'relative', zIndex: 1 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                <Avatar
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Box
                   sx={{
-                    bgcolor: 'rgba(255, 255, 255, 0.2)',
-                    backdropFilter: 'blur(10px)',
+                    p: 2,
+                    bgcolor: 'rgba(255,255,255,0.18)',
+                    borderRadius: 2,
+                    backdropFilter: 'blur(8px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
                   }}
                 >
-                  <BeachAccess sx={{ fontSize: 24 }} />
-                </Avatar>
-                <Box sx={{ flex: 1 }}>
-                  <Typography variant="h5" sx={{ fontWeight: 700, mb: 0.5 }}>
-                    Mis Vacaciones
+                  <BeachAccess sx={{ fontSize: 32 }} />
+                </Box>
+                <Box>
+                  <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
+                    Mis Ausencias
                   </Typography>
-                  <Typography variant="body2" sx={{ opacity: 0.9, lineHeight: 1.3 }}>
+                  <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400 }}>
                     Gestiona tus solicitudes de vacaciones y asuntos propios
                   </Typography>
                 </Box>
-                {/* Botón de refrescar eliminado: hay auto-refresh silencioso */}
               </Box>
             </Box>
           </Paper>
