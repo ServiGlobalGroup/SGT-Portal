@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     debug: bool = False  # Producción por defecto
     # Server (host / port configurables por entorno) - nombres alineados a variables .env
     app_host: str = os.getenv("APP_HOST", "0.0.0.0")
-    app_port: int = int(os.getenv("APP_PORT", os.getenv("BACKEND_PORT", os.getenv("PORT", "8001"))))
+    app_port: int = int(os.getenv("APP_PORT", os.getenv("BACKEND_PORT", os.getenv("PORT", "8000"))))
 
     # CORS
     allowed_origins: List[str] = [
