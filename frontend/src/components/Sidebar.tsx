@@ -34,6 +34,7 @@ import {
   Folder,
   Assignment,
   Dashboard,
+  Info,
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -59,6 +60,7 @@ const menuItems: MenuItem[] = [
       { text: 'Mis Documentos', icon: <Description />, path: '/' },
       { text: 'Documentación', icon: <Assignment />, path: '/gestor' },
       { text: 'Subida Masiva', icon: <CloudUpload />, path: '/mass-upload' },
+      { text: 'Recursos', icon: <Info />, path: '/recursos' },
     ]
   },
   { text: 'Ausencias', icon: <EventNote />, path: '/vacations' },

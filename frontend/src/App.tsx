@@ -17,6 +17,7 @@ const Trips = lazy(() => import('./pages/Trips').then(m => ({ default: m.Trips }
 const Users = lazy(() => import('./pages/Users'));
 const DocumentationPanel = lazy(() => import('./pages/DocumentationPanel'));
 const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })));
+const Recursos = lazy(() => import('./pages/Recursos').then(m => ({ default: m.Recursos })));
 const Login = lazy(() => import('./pages/Login'));
 import { useAuth } from './hooks/useAuth';
 import theme from './theme/theme';
@@ -98,6 +99,11 @@ function App() {
                     <Route path="/users" element={
                       <ProtectedRoute>
                         <Users />
+                      </ProtectedRoute>
+                    } />
+                    <Route path="/recursos" element={
+                      <ProtectedRoute>
+                        <Recursos />
                       </ProtectedRoute>
                     } />
                     <Route path="/gestor" element={

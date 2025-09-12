@@ -17,11 +17,28 @@ const processQueue = (error: unknown, newToken: string | null) => {
 };
 import type { TrafficData, VacationRequest, Document, TrafficFolder, TrafficDocument, PayrollDocument, PayrollStats, User, DietaRecord } from '../types';
 
-// Usar variable de entorno en Vite para configurar el backend en dev/prod
+// Usar variable de entorno en Vite para configurar el backend en dev/prod.
+// Si no está definida y estamos en el puerto de Vite (5173/5174) intentamos adivinar backend en 8000/8001.
 const envUrl = (import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined;
-export const API_BASE_URL = envUrl && envUrl.trim() !== ''
-  ? envUrl
-  : (typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:8001');
+
+function guessBackendOrigin(): string {
+  if (typeof window === 'undefined') return 'http://127.0.0.1:8001';
+  try {
+    const loc = window.location;
+    if (loc.port === '5173' || loc.port === '5174') {
+      // Intentar 8000 primero (backend por defecto fastapi), fallback 8001 (por si ya estaba en uso y se movió).
+      return `${loc.protocol}//${loc.hostname}:8000`;
+    }
+  } catch (_) { /* noop */ }
+  return window.location.origin;
+}
+
+export const API_BASE_URL = envUrl && envUrl.trim() !== '' ? envUrl : guessBackendOrigin();
+if (!envUrl) {
+  // Mensaje de diagnóstico útil en consola para desarrolladores.
+  // eslint-disable-next-line no-console
+  console.info('[api] VITE_API_BASE_URL no definido, usando heurística:', API_BASE_URL);
+}
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -643,6 +660,36 @@ export const tripsAPI = {
   remove: (id: number) => api.delete(`/api/trips/${id}`).then(r=>r.data),
   userSuggestions: (q: string): Promise<{ id:number; label:string; role:string; }[]> =>
     api.get('/api/trips/user-suggestions', { params: { q } }).then(r=>r.data)
+};
+
+// Recursos (Fuel Cards y Via T)
+export interface FuelCardRecord { id:number; pan:string; matricula:string; caducidad:string|null; created_at:string; masked_pin:string; pin:string }
+export interface FuelCardPage { total:number; page:number; page_size:number; items:FuelCardRecord[] }
+export interface ViaTRecord { id:number; numero_telepeaje:string; pan:string; compania?:string|null; matricula:string; caducidad:string|null; created_at:string }
+export interface ViaTPage { total:number; page:number; page_size:number; items:ViaTRecord[] }
+
+export const resourcesAPI = {
+  listFuelCards: (params: { pan?:string; matricula?:string; page?:number; page_size?:number } = {}): Promise<FuelCardPage> => {
+    const sp = new URLSearchParams();
+    if (params.pan) sp.append('pan', params.pan);
+    if (params.matricula) sp.append('matricula', params.matricula);
+    if (params.page) sp.append('page', String(params.page));
+    if (params.page_size) sp.append('page_size', String(params.page_size));
+    return api.get(`/api/resources/fuel-cards?${sp.toString()}`).then(r=>r.data as FuelCardPage);
+  },
+  createFuelCard: (data: { pan:string; matricula:string; caducidad?:string; pin:string }): Promise<FuelCardRecord> =>
+    api.post('/api/resources/fuel-cards', data).then(r=>r.data as FuelCardRecord),
+  listViaTDevices: (params: { numero_telepeaje?:string; pan?:string; matricula?:string; page?:number; page_size?:number } = {}): Promise<ViaTPage> => {
+    const sp = new URLSearchParams();
+    if (params.numero_telepeaje) sp.append('numero_telepeaje', params.numero_telepeaje);
+    if (params.pan) sp.append('pan', params.pan);
+    if (params.matricula) sp.append('matricula', params.matricula);
+    if (params.page) sp.append('page', String(params.page));
+    if (params.page_size) sp.append('page_size', String(params.page_size));
+    return api.get(`/api/resources/via-t-devices?${sp.toString()}`).then(r=>r.data as ViaTPage);
+  },
+  createViaTDevice: (data: { numero_telepeaje:string; pan:string; compania?:string; matricula:string; caducidad?:string }): Promise<ViaTRecord> =>
+    api.post('/api/resources/via-t-devices', data).then(r=>r.data as ViaTRecord)
 };
 
 // API de documentación
