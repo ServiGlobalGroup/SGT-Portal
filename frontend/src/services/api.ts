@@ -224,7 +224,11 @@ export const documentsAPI = {
     return api.post('/api/documents/upload-general-documents', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     }).then(res => res.data);
-  }
+  },
+  
+  // Eliminar documento general (solo administradores)
+  deleteGeneralDocument: (filename: string) =>
+    api.delete(`/api/documents/admin/delete/general/${filename}`).then(res => res.data)
 };
 
 export const payrollAPI = {
@@ -585,6 +589,10 @@ export const userFilesAPI = {
   // Eliminar un archivo
   deleteFile: (folderType: string, filename: string) => 
     api.delete(`/api/user-files/delete/${folderType}/${filename}`).then(res => res.data),
+    
+  // Eliminar archivo de cualquier usuario (solo administradores)
+  deleteFileAdmin: (dniNie: string, folderType: string, filename: string) =>
+    api.delete(`/api/user-files/admin/delete/${dniNie}/${folderType}/${filename}`).then(res => res.data),
     
   // Obtener estadísticas de carpetas
   getFolderStats: () => 

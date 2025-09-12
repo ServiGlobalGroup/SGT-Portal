@@ -46,9 +46,11 @@ import {
   FolderOpen,
   FilePresent,
   Info,
+  Delete,
 } from '@mui/icons-material';
 import { PdfPreview } from '../components/PdfPreview';
-import { userFilesAPI, API_BASE_URL } from '../services/api';
+import { userFilesAPI, documentsAPI, API_BASE_URL } from '../services/api';
+import { useAuth } from '../hooks/useAuth';
 
 interface UserDocument {
   id: number;
@@ -69,11 +71,15 @@ interface FolderData {
 
 export const Documents: React.FC = () => {
   const { useMobileVersion } = useDeviceType();
+  const { user } = useAuth();
   
   // Si es dispositivo móvil, usar la versión optimizada
   if (useMobileVersion) {
     return <MobileMisDocumentos />;
   }
+
+  // Verificar si el usuario es administrador
+  const isAdmin = user?.role === 'ADMINISTRADOR' || user?.role === 'MASTER_ADMIN';
 
   const [currentFolder, setCurrentFolder] = useState('informacion');
   const [folderData, setFolderData] = useState<FolderData | null>(null);
@@ -233,6 +239,55 @@ export const Documents: React.FC = () => {
       }
     } else {
       window.open(document.download_url, '_blank');
+    }
+    handleCloseMenu();
+  };
+
+  const handleDelete = async (document: UserDocument) => {
+    if (!isAdmin) {
+      setAlert({ type: 'error', message: 'No tienes permisos para eliminar archivos' });
+      return;
+    }
+
+    // Confirmar eliminación
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar "${document.name}"? Esta acción no se puede deshacer.`)) {
+      return;
+    }
+
+    try {
+      // Verificar si es un documento general (información) o un documento de usuario
+      if (currentFolder === 'informacion') {
+        // Para documentos generales, extraer el nombre del archivo de la URL
+        // URL formato: /api/documents/download/general/{filename}
+        const filename = document.download_url.split('/').pop();
+        if (!filename) {
+          throw new Error('No se pudo determinar el nombre del archivo');
+        }
+
+        await documentsAPI.deleteGeneralDocument(filename);
+      } else {
+        // Para documentos de usuarios (nóminas, dietas)
+        // La URL de descarga tiene el formato: /api/user-files/download/{dni_nie}/{folder_type}/{filename}
+        const urlParts = document.download_url.split('/');
+        if (urlParts.length < 6) {
+          throw new Error('No se pudo determinar la información del archivo');
+        }
+
+        const dniNie = urlParts[4];
+        const folderType = urlParts[5];
+        const filename = urlParts[6];
+
+        await userFilesAPI.deleteFileAdmin(dniNie, folderType, filename);
+      }
+
+      setAlert({ type: 'success', message: 'Archivo eliminado exitosamente' });
+      
+      // Recargar la lista de documentos
+      loadDocuments();
+    } catch (error: any) {
+      console.error('Error deleting file:', error);
+      const errorMessage = error?.response?.data?.detail || 'Error al eliminar el archivo';
+      setAlert({ type: 'error', message: errorMessage });
     }
     handleCloseMenu();
   };
@@ -797,6 +852,25 @@ export const Documents: React.FC = () => {
             Descargar
           </Typography>
         </MenuItem>
+        {isAdmin && (
+          <MenuItem 
+            onClick={() => selectedDocument && handleDelete(selectedDocument)}
+            sx={{
+              py: 1.5,
+              px: 2,
+              gap: 2,
+              '&:hover': {
+                bgcolor: alpha('#d32f2f', 0.08),
+                color: '#d32f2f',
+              },
+            }}
+          >
+            <Delete sx={{ fontSize: 20 }} />
+            <Typography variant="body2" sx={{ fontWeight: 500 }}>
+              Eliminar
+            </Typography>
+          </MenuItem>
+        )}
       </Menu>
 
       {/* Dialog de subida mejorado */}

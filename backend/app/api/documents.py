@@ -218,3 +218,30 @@ async def preview_general_document(filename: str, token: Optional[str] = None):
         media_type='application/pdf',
         headers={"Content-Disposition": "inline"}
     )
+
+@router.delete("/admin/delete/general/{filename}")
+async def delete_general_document(filename: str, current_user: User = Depends(get_current_user)):
+    """
+    Endpoint para eliminar documentos generales. Solo para administradores.
+    """
+    # Verificar permisos de administrador
+    user_role = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+    if user_role not in ("ADMINISTRADOR", "MASTER_ADMIN"):
+        raise HTTPException(status_code=403, detail="No tienes permisos para eliminar documentos generales")
+    
+    file_path = Path("backend/files/general_documents") / filename
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Documento no encontrado")
+    
+    if not file_path.is_file():
+        raise HTTPException(status_code=400, detail="La ruta no corresponde a un archivo")
+    
+    try:
+        file_path.unlink()  # Eliminar el archivo
+        return {
+            "message": "Documento eliminado exitosamente",
+            "filename": filename
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al eliminar el documento: {str(e)}")
