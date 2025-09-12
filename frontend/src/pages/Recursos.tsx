@@ -15,7 +15,11 @@ import { resourcesAPI, FuelCardRecord, ViaTRecord } from '../services/api';
 // Página de Recursos: base inicial con banner y estructura de pestañas (Gasoil, Via T)
 // Se ampliará posteriormente con lógica de carga desde backend/APIs
 export const Recursos: React.FC = () => {
-  const [tab, setTab] = React.useState<'gasolina' | 'viat'>('gasolina');
+  const [tab, setTab] = React.useState<'gasolina' | 'viat'>(() => {
+    // Recuperar la pestaña activa desde localStorage o usar 'gasolina' por defecto
+    const savedTab = localStorage.getItem('recursos-active-tab');
+    return (savedTab === 'gasolina' || savedTab === 'viat') ? savedTab : 'gasolina';
+  });
   const { user } = useAuth();
   const { isMobile } = useDeviceType();
   const role = user?.role;
@@ -277,7 +281,13 @@ export const Recursos: React.FC = () => {
   // Reset página al cambiar filtros o pestaña
   React.useEffect(()=> { setGasPage(1); }, [gasCards.length]);
   React.useEffect(()=> { setViaTPage(1); }, [viaTSearch.numeroTelepeaje, viaTSearch.pan, viaTSearch.matricula]);
-  React.useEffect(()=> { /* cambio de tab */ if(tab==='gasolina') setGasPage(1); else setViaTPage(1); }, [tab]);
+  React.useEffect(()=> { 
+    /* cambio de tab */ 
+    if(tab==='gasolina') setGasPage(1); 
+    else setViaTPage(1);
+    // Guardar la pestaña activa en localStorage
+    localStorage.setItem('recursos-active-tab', tab);
+  }, [tab]);
 
   const gasStart = (gasPage-1)*PAGE_SIZE;
   const paginatedGas = filteredGasCards.slice(gasStart, gasStart + PAGE_SIZE);
@@ -604,7 +614,9 @@ export const Recursos: React.FC = () => {
                             <TableRow key={card.id} hover>
                               <TableCell>{card.pan}</TableCell>
                               <TableCell>{card.matricula}</TableCell>
-                              <TableCell>{card.compania || '—'}</TableCell>
+                              <TableCell>
+                                <Chip size="small" label={card.compania || ''} sx={{ fontWeight:600, bgcolor:'rgba(92,35,64,0.08)', color:'#501b36' }} />
+                              </TableCell>
                               <TableCell>{card.caducidad}</TableCell>
                               <TableCell>
                                 <Box sx={{ display:'flex', alignItems:'center', gap:1 }}>
