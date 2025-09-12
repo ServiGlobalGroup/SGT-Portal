@@ -2,14 +2,15 @@ import React from 'react';
 import { 
   Box, Paper, Typography, Fade, GlobalStyles, ToggleButtonGroup, ToggleButton, 
   Button, TextField, Stack, 
-  Table, TableHead, TableRow, TableCell, TableBody, IconButton, InputAdornment, Chip,
-  Pagination, Card, CardContent, Divider
+  Table, TableHead, TableRow, TableCell, TableBody, Chip,
+  Pagination, Card, CardContent, Divider, CircularProgress, Snackbar, Alert, Skeleton
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { ModernModal, ModernButton } from '../components/ModernModal';
 import { useAuth } from '../hooks/useAuth';
 import { useDeviceType } from '../hooks/useDeviceType';
-import { LocalGasStation, CreditCard, Info, Add, Visibility, VisibilityOff } from '@mui/icons-material';
+import { LocalGasStation, CreditCard, Info, Add } from '@mui/icons-material';
+import { resourcesAPI, FuelCardRecord, ViaTRecord } from '../services/api';
 
 // Página de Recursos: base inicial con banner y estructura de pestañas (Gasoil, Via T)
 // Se ampliará posteriormente con lógica de carga desde backend/APIs
@@ -21,11 +22,18 @@ export const Recursos: React.FC = () => {
   const canAdd = role === 'MASTER_ADMIN' || role === 'ADMINISTRADOR' || role === 'ADMINISTRACION';
   
   // Tipos locales (futuro: mover a types/recursos.ts y reemplazar por datos de backend)
-  interface GasCard { id: string; pan: string; matricula: string; caducidad: string; pin: string; }
-  interface ViaT { id: string; numeroTelepeaje: string; panViaT: string; compania: string; matricula: string; caducidad: string; }
-
-  const [gasCards, setGasCards] = React.useState<GasCard[]>([]);
-  const [viaTs, setViaTs] = React.useState<ViaT[]>([]);
+  // Estados provenientes de backend
+  const [gasCardsAll, setGasCardsAll] = React.useState<FuelCardRecord[]>([]); // cache inicial fuel cards
+  const [gasCards, setGasCards] = React.useState<FuelCardRecord[]>([]); // resultado visible (búsqueda o all)
+  const [viaTsAll, setViaTsAll] = React.useState<ViaTRecord[]>([]);
+  const [viaTs, setViaTs] = React.useState<ViaTRecord[]>([]);
+  const [loadingGas, setLoadingGas] = React.useState(false);
+  const [loadingViaT, setLoadingViaT] = React.useState(false);
+  const [errorGas, setErrorGas] = React.useState<string|undefined>();
+  const [errorViaT, setErrorViaT] = React.useState<string|undefined>();
+  const [savingGas, setSavingGas] = React.useState(false);
+  const [savingViaT, setSavingViaT] = React.useState(false);
+  const [snack, setSnack] = React.useState<{open:boolean; msg:string; type:'success'|'error'}>({open:false,msg:'',type:'success'});
 
   // Búsquedas (draft vs applied)
   const [gasSearchDraft, setGasSearchDraft] = React.useState({ pan:'', matricula:'' });
@@ -33,19 +41,105 @@ export const Recursos: React.FC = () => {
   const [viaTSearchDraft, setViaTSearchDraft] = React.useState({ numeroTelepeaje:'', pan:'', matricula:'' });
   const [viaTSearch, setViaTSearch] = React.useState({ numeroTelepeaje:'', pan:'', matricula:'' });
 
-  const applyGasSearch = () => {
-    setGasSearch({ ...gasSearchDraft });
+  // Control para versión móvil: obligar a realizar una búsqueda antes de mostrar resultados
+  const [hasSearchedGas, setHasSearchedGas] = React.useState(false);
+  const [hasSearchedViaT, setHasSearchedViaT] = React.useState(false);
+
+  // Estados de animación de búsqueda (delay artificial)
+  const [searchingGas, setSearchingGas] = React.useState(false);
+  const [searchingViaT, setSearchingViaT] = React.useState(false);
+  const gasSearchTimeout = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const viaTSearchTimeout = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const applyGasSearch = async () => {
+    if(gasSearchTimeout.current) clearTimeout(gasSearchTimeout.current);
+    setHasSearchedGas(true);
+    const applied = { ...gasSearchDraft };
+    setGasSearch(applied);
+    // Si no hay filtros, restaurar lista cache sin llamar al backend
+    if(!applied.pan.trim() && !applied.matricula.trim()){
+      setGasCards(gasCardsAll);
+      setSearchingGas(false);
+      return;
+    }
+    const params: { pan?:string; matricula?:string; page:number; page_size:number } = { page:1, page_size:200 };
+    if(applied.pan.trim()) params.pan = applied.pan.trim();
+    if(applied.matricula.trim()) params.matricula = applied.matricula.trim();
+    let startTime = 0;
+    try {
+      if(isMobile){
+        setSearchingGas(true); startTime = Date.now();
+      }
+      const res = await resourcesAPI.listFuelCards(params);
+      setGasCards(res.items);
+    } catch(e:any){
+      setErrorGas(e?.response?.data?.detail || 'Error buscando tarjetas');
+      setGasCards([]);
+    } finally {
+      if(isMobile){
+        const MIN=300; const elapsed = Date.now()-startTime; const finish=()=>setSearchingGas(false);
+        if(elapsed<MIN) gasSearchTimeout.current = setTimeout(finish, MIN-elapsed); else finish();
+      } else { setSearchingGas(false); }
+    }
   };
   const clearGasSearch = () => {
     setGasSearchDraft({ pan:'', matricula:'' });
     setGasSearch({ pan:'', matricula:'' });
+    setSearchingGas(false);
+    if(gasSearchTimeout.current) clearTimeout(gasSearchTimeout.current);
+    if(isMobile){
+      // En móvil se oculta la lista hasta que el usuario vuelva a pulsar Buscar
+      setHasSearchedGas(false);
+      setGasCards(gasCardsAll); // mantenemos cache actualizada internamente
+    } else {
+      // En escritorio mostramos todo inmediatamente
+      setGasCards(gasCardsAll);
+      setHasSearchedGas(true); // para que se vea la lista completa
+    }
   };
-  const applyViaTSearch = () => {
-    setViaTSearch({ ...viaTSearchDraft });
+  const applyViaTSearch = async () => {
+    if(viaTSearchTimeout.current) clearTimeout(viaTSearchTimeout.current);
+    setHasSearchedViaT(true);
+    const applied = { ...viaTSearchDraft };
+    setViaTSearch(applied);
+    const params: { numero_telepeaje?:string; pan?:string; matricula?:string; page:number; page_size:number } = { page:1, page_size:200 };
+    if(applied.numeroTelepeaje.trim()) params.numero_telepeaje = applied.numeroTelepeaje.trim();
+    if(applied.pan.trim()) params.pan = applied.pan.trim();
+    if(applied.matricula.trim()) params.matricula = applied.matricula.trim();
+    let startTime = 0;
+    try {
+      if(isMobile){
+        setSearchingViaT(true);
+        startTime = Date.now();
+      }
+      const res = await resourcesAPI.listViaTDevices(params);
+      setViaTs(res.items);
+    } catch(e:any){
+      setErrorViaT(e?.response?.data?.detail || 'Error buscando Via T');
+      setViaTs([]);
+    } finally {
+      if(isMobile){
+        const MIN = 300;
+        const elapsed = Date.now() - startTime;
+        const finish = () => setSearchingViaT(false);
+        if(elapsed < MIN) viaTSearchTimeout.current = setTimeout(finish, MIN - elapsed); else finish();
+      } else {
+        setSearchingViaT(false);
+      }
+    }
   };
   const clearViaTSearch = () => {
     setViaTSearchDraft({ numeroTelepeaje:'', pan:'', matricula:'' });
     setViaTSearch({ numeroTelepeaje:'', pan:'', matricula:'' });
+    setSearchingViaT(false);
+    if(viaTSearchTimeout.current) clearTimeout(viaTSearchTimeout.current);
+    if(isMobile){
+      setHasSearchedViaT(false);
+      setViaTs(viaTsAll);
+    } else {
+      setViaTs(viaTsAll);
+      setHasSearchedViaT(true);
+    }
   };
 
   // Paginación
@@ -56,7 +150,7 @@ export const Recursos: React.FC = () => {
   // Diálogos
   const [openGasDialog, setOpenGasDialog] = React.useState(false);
   const [openViaTDialog, setOpenViaTDialog] = React.useState(false);
-  const [showPin, setShowPin] = React.useState(false);
+  // PIN siempre visible (no toggle)
 
   // Formularios
   const [gasForm, setGasForm] = React.useState({ pan:'', matricula:'', caducidad:'', pin:'' });
@@ -67,7 +161,7 @@ export const Recursos: React.FC = () => {
     setGasForm({ pan:'', matricula:'', caducidad:'', pin:'' });
     setViaTForm({ numeroTelepeaje:'', panViaT:'', compania:'', matricula:'', caducidad:'' });
     setErrors({});
-    setShowPin(false);
+  //
   };
 
   const validateGas = () => {
@@ -88,24 +182,48 @@ export const Recursos: React.FC = () => {
     return e;
   };
 
-  const handleAddGasCard = () => {
+  const handleAddGasCard = async () => {
     const e = validateGas();
     setErrors(e);
     if(Object.keys(e).length) return;
-    setGasCards(prev => [...prev, { id: crypto.randomUUID(), ...gasForm }]);
-    setOpenGasDialog(false);
-    resetForms();
+    try {
+      setSavingGas(true);
+      const created = await resourcesAPI.createFuelCard({
+        pan: gasForm.pan.trim(),
+        matricula: gasForm.matricula.trim(),
+        caducidad: gasForm.caducidad || undefined,
+        pin: gasForm.pin
+      });
+      setGasCards(prev => [created, ...prev]);
+      setSnack({open:true, msg:'Tarjeta creada', type:'success'});
+      setOpenGasDialog(false);
+      resetForms();
+    } catch (err:any) {
+      setSnack({open:true, msg: err?.response?.data?.detail || 'Error creando tarjeta', type:'error'});
+    } finally { setSavingGas(false); }
   };
-  const handleAddViaT = () => {
+  const handleAddViaT = async () => {
     const e = validateViaT();
     setErrors(e);
     if(Object.keys(e).length) return;
-    setViaTs(prev => [...prev, { id: crypto.randomUUID(), ...viaTForm }]);
-    setOpenViaTDialog(false);
-    resetForms();
+    try {
+      setSavingViaT(true);
+      const created = await resourcesAPI.createViaTDevice({
+        numero_telepeaje: viaTForm.numeroTelepeaje.trim(),
+        pan: viaTForm.panViaT.trim(),
+        compania: viaTForm.compania.trim() || undefined,
+        matricula: viaTForm.matricula.trim(),
+        caducidad: viaTForm.caducidad || undefined
+      });
+      setViaTs(prev => [created, ...prev]);
+      setSnack({open:true, msg:'Dispositivo creado', type:'success'});
+      setOpenViaTDialog(false);
+      resetForms();
+    } catch (err:any) {
+      setSnack({open:true, msg: err?.response?.data?.detail || 'Error creando dispositivo', type:'error'});
+    } finally { setSavingViaT(false); }
   };
 
-  const maskPin = (pin: string) => pin.replace(/./g,'•');
   const handleOpenAdd = () => {
     resetForms();
     if(tab === 'gasolina') setOpenGasDialog(true); else setOpenViaTDialog(true);
@@ -113,18 +231,36 @@ export const Recursos: React.FC = () => {
   const addButtonLabel = tab === 'gasolina' ? 'Añadir Tarjeta' : 'Añadir Via T';
 
   // Filtrado (case-insensitive, trim)
-  const filteredGasCards = gasCards.filter(c => {
-    const panOk = !gasSearch.pan.trim() || c.pan.toLowerCase().includes(gasSearch.pan.trim().toLowerCase());
-    const matOk = !gasSearch.matricula.trim() || c.matricula.toLowerCase().includes(gasSearch.matricula.trim().toLowerCase());
-    return panOk && matOk;
-  });
-  const filteredViaTs = viaTs.filter(v => {
-    const nOk = !viaTSearch.numeroTelepeaje.trim() || v.numeroTelepeaje.toLowerCase().includes(viaTSearch.numeroTelepeaje.trim().toLowerCase());
-    const panOk = !viaTSearch.pan.trim() || v.panViaT.toLowerCase().includes(viaTSearch.pan.trim().toLowerCase());
-    const mOk = !viaTSearch.matricula.trim() || v.matricula.toLowerCase().includes(viaTSearch.matricula.trim().toLowerCase());
-    return nOk && panOk && mOk;
-  });
-  const anyGasFilters = gasSearch.pan || gasSearch.matricula;
+  const filteredGasCards = gasCards; // backend aplica filtros ahora
+  const filteredViaTs = viaTs; // backend ya aplica filtros
+  // Carga inicial (ambas colecciones) – simple, trae primera página grande (page_size=500) para uso local
+  React.useEffect(()=> {
+    const load = async () => {
+      if(!user) return;
+      try {
+        setLoadingGas(true); setErrorGas(undefined);
+        // Backend limita page_size <= 200, antes se enviaban 500 causando 422.
+  const fc = await resourcesAPI.listFuelCards({ page:1, page_size:200 });
+  setGasCardsAll(fc.items);
+  setGasCards(fc.items);
+      } catch(e:any){
+        const msg = e?.response?.status === 401 ? 'No autorizado (401)' : (e?.message || 'Error cargando tarjetas');
+        setErrorGas(msg);
+      } finally { setLoadingGas(false); }
+      try {
+        setLoadingViaT(true); setErrorViaT(undefined);
+  const vt = await resourcesAPI.listViaTDevices({ page:1, page_size:200 });
+  setViaTsAll(vt.items);
+  setViaTs(vt.items);
+      } catch(e:any){
+        const msg = e?.response?.status === 401 ? 'No autorizado (401)' : (e?.message || 'Error cargando Via T');
+        setErrorViaT(msg);
+      } finally { setLoadingViaT(false); }
+    };
+    load();
+  }, [user]);
+
+  const anyGasFilters = !!(gasSearch.pan || gasSearch.matricula);
   const anyViaTFilters = viaTSearch.numeroTelepeaje || viaTSearch.pan || viaTSearch.matricula;
 
   // Ajustar página si se reduce el total
@@ -138,7 +274,7 @@ export const Recursos: React.FC = () => {
   }, [filteredViaTs.length, viaTPage]);
 
   // Reset página al cambiar filtros o pestaña
-  React.useEffect(()=> { setGasPage(1); }, [gasSearch.pan, gasSearch.matricula]);
+  React.useEffect(()=> { setGasPage(1); }, [gasCards.length]);
   React.useEffect(()=> { setViaTPage(1); }, [viaTSearch.numeroTelepeaje, viaTSearch.pan, viaTSearch.matricula]);
   React.useEffect(()=> { /* cambio de tab */ if(tab==='gasolina') setGasPage(1); else setViaTPage(1); }, [tab]);
 
@@ -148,6 +284,24 @@ export const Recursos: React.FC = () => {
   const viaTStart = (viaTPage-1)*PAGE_SIZE;
   const paginatedViaTs = filteredViaTs.slice(viaTStart, viaTStart + PAGE_SIZE);
   const viaTTotalPages = Math.max(1, Math.ceil(filteredViaTs.length / PAGE_SIZE) || 1);
+
+  // Limpieza de timeouts al desmontar
+  React.useEffect(()=> {
+    return () => {
+      if(gasSearchTimeout.current) clearTimeout(gasSearchTimeout.current);
+      if(viaTSearchTimeout.current) clearTimeout(viaTSearchTimeout.current);
+    };
+  }, []);
+
+  // Si se pasa a escritorio, forzar fin de animaciones
+  React.useEffect(()=> {
+    if(!isMobile){
+      if(gasSearchTimeout.current) clearTimeout(gasSearchTimeout.current);
+      if(viaTSearchTimeout.current) clearTimeout(viaTSearchTimeout.current);
+      setSearchingGas(false);
+      setSearchingViaT(false);
+    }
+  }, [isMobile]);
 
   return (
     <>
@@ -215,15 +369,24 @@ export const Recursos: React.FC = () => {
         </Box>
 
         {/* Selector estilo pill (inspirado en Mías/Todas) */}
-        <Box sx={{ mb: 4, display:'flex', alignItems:'center', gap:2, flexWrap:'wrap', justifyContent:'space-between' }}>
+        <Box sx={{
+          mb:4,
+          display:'flex',
+          flexDirection: isMobile ? 'column' : 'row',
+          alignItems: isMobile ? 'center' : 'center',
+            // En desktop colocamos el botón a la derecha como antes
+          justifyContent: isMobile ? 'center' : 'space-between',
+          gap: isMobile ? 2 : 2
+        }}>
           <Box
             sx={{
-              p: 0.6,
-              borderRadius: 3,
+              p:0.6,
+              borderRadius:3,
               background: 'linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%)',
               border: '2px solid #e0e0e0',
               boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.08)',
-              display: 'inline-block'
+              display:'inline-block',
+              maxWidth:'100%'
             }}
           >
             <ToggleButtonGroup
@@ -321,7 +484,7 @@ export const Recursos: React.FC = () => {
         <Fade in timeout={400}>
           <Box>
             {tab === 'gasolina' && (
-              <Paper elevation={0} sx={{ p: 3, borderRadius: 3, border: '1px solid #e0e0e0', background:'#ffffff', overflow:'hidden' }}>
+              <Paper elevation={0} sx={{ p:{ xs:3, sm:4 }, borderRadius: 3, border: '1px solid #e0e0e0', background:'#ffffff', overflow:'hidden' }}>
                 <Box sx={{ 
                   display:'flex', alignItems:'center', gap:2, flexWrap:'wrap', mb:2,
                   pb:1.5, borderBottom:'1px solid #e0e0e0'
@@ -404,21 +567,38 @@ export const Recursos: React.FC = () => {
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {gasCards.length === 0 && (
+                          {loadingGas && (
+                            <TableRow><TableCell colSpan={4}><Box sx={{ display:'flex', alignItems:'center', gap:1 }}><CircularProgress size={18} /> <Typography variant="body2">Cargando...</Typography></Box></TableCell></TableRow>
+                          )}
+                          {!loadingGas && searchingGas && (
+                            <TableRow>
+                              <TableCell colSpan={4}>
+                                <Stack spacing={1}>
+                                  <Skeleton height={28} />
+                                  <Skeleton height={28} />
+                                  <Skeleton height={28} />
+                                </Stack>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                          {!loadingGas && !searchingGas && errorGas && (
+                            <TableRow><TableCell colSpan={4}><Typography color="error" variant="body2">{errorGas}</Typography></TableCell></TableRow>
+                          )}
+                          {!loadingGas && !searchingGas && gasCards.length === 0 && (
                             <TableRow>
                               <TableCell colSpan={4}>
                                 <Typography variant="body2" sx={{ color:'text.secondary' }}>No hay tarjetas registradas todavía.</Typography>
                               </TableCell>
                             </TableRow>
                           )}
-                          {gasCards.length > 0 && filteredGasCards.length === 0 && (
+                          {!loadingGas && !searchingGas && gasCards.length > 0 && filteredGasCards.length === 0 && (
                             <TableRow>
                               <TableCell colSpan={4}>
                                 <Typography variant="body2" sx={{ color:'text.secondary' }}>Sin coincidencias con los filtros aplicados.</Typography>
                               </TableCell>
                             </TableRow>
                           )}
-                          {paginatedGas.map(card => (
+                          {!loadingGas && !searchingGas && paginatedGas.map(card => (
                             <TableRow key={card.id} hover>
                               <TableCell>{card.pan}</TableCell>
                               <TableCell>{card.matricula}</TableCell>
@@ -426,7 +606,7 @@ export const Recursos: React.FC = () => {
                               <TableCell>
                                 <Box sx={{ display:'flex', alignItems:'center', gap:1 }}>
                                   <Typography sx={{ fontFamily:'monospace', letterSpacing:1 }}>
-                                    {showPin ? card.pin : maskPin(card.pin)}
+                                    {card.pin ?? card.masked_pin}
                                   </Typography>
                                 </Box>
                               </TableCell>
@@ -437,12 +617,8 @@ export const Recursos: React.FC = () => {
                     </Box>
                     {(filteredGasCards.length > 0) && (
                       <Box sx={{ mt:2, display:'flex', flexWrap:'wrap', gap:2, alignItems:'center', justifyContent:'space-between' }}>
-                        <Box sx={{ display:'flex', gap:1 }}>
-                          <Button size="small" variant="outlined" onClick={()=> setShowPin(p=>!p)}>
-                            {showPin ? 'Ocultar PIN' : 'Ver PIN'}
-                          </Button>
-                        </Box>
-                        {gasTotalPages > 1 && (
+                        <Box />
+                        {!searchingGas && gasTotalPages > 1 && (
                           <Pagination
                             page={gasPage}
                             count={gasTotalPages}
@@ -460,43 +636,53 @@ export const Recursos: React.FC = () => {
                 )}
                 {isMobile && (
                   <Box>
-                    {gasCards.length === 0 && (
-                      <Typography variant="body2" sx={{ color:'text.secondary' }}>No hay tarjetas registradas todavía.</Typography>
+                    {!hasSearchedGas && (
+                      <Typography variant="body2" sx={{ color:'text.secondary', mb:2 }}>
+                        Introduce algún criterio y pulsa "Buscar" para ver tarjetas.
+                      </Typography>
                     )}
-                    {gasCards.length > 0 && filteredGasCards.length === 0 && (
-                      <Typography variant="body2" sx={{ color:'text.secondary' }}>Sin coincidencias con los filtros aplicados.</Typography>
-                    )}
-                    <Stack spacing={1.5}>
-                      {filteredGasCards.map(card => (
-                        <Card key={card.id} variant="outlined" sx={{ borderRadius:2, overflow:'hidden', position:'relative' }}>
-                          <CardContent sx={{ p:1.5, '&:last-child':{ pb:1.5 } }}>
-                            <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
-                              <Box>
-                                <Typography variant="subtitle2" sx={{ fontWeight:700, letterSpacing:.3 }}>{card.matricula}</Typography>
-                                <Typography variant="caption" sx={{ color:'text.secondary' }}>Matrícula</Typography>
-                              </Box>
-                              <Chip size="small" label={card.caducidad || '—'} sx={{ bgcolor:'rgba(80,27,54,0.08)', color:'#501b36' }} />
-                            </Stack>
-                            <Divider sx={{ my:1 }} />
-                            <Stack spacing={0.6}>
-                              <Typography variant="body2"><strong>PAN:</strong> {card.pan}</Typography>
-                              <Typography variant="body2"><strong>PIN:</strong> <span style={{ fontFamily:'monospace', letterSpacing:1 }}>{showPin ? card.pin : maskPin(card.pin)}</span></Typography>
-                            </Stack>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </Stack>
-                    {filteredGasCards.length > 0 && (
-                      <Button size="small" fullWidth variant="outlined" sx={{ mt:2 }} onClick={()=> setShowPin(p=>!p)}>
-                        {showPin ? 'Ocultar PIN' : 'Ver PIN'}
-                      </Button>
+                    {hasSearchedGas && (
+                      <>
+                        {loadingGas && (
+                          <Typography variant="body2" sx={{ color:'text.secondary' }}>Cargando...</Typography>
+                        )}
+                        {!loadingGas && errorGas && (
+                          <Typography variant="body2" color="error">{errorGas}</Typography>
+                        )}
+                        {!loadingGas && gasCards.length === 0 && (
+                          <Typography variant="body2" sx={{ color:'text.secondary' }}>No hay tarjetas registradas todavía.</Typography>
+                        )}
+                        {!loadingGas && gasCards.length > 0 && filteredGasCards.length === 0 && (
+                          <Typography variant="body2" sx={{ color:'text.secondary' }}>Sin coincidencias con los filtros aplicados.</Typography>
+                        )}
+                        <Stack spacing={1.5}>
+                          {filteredGasCards.map(card => (
+                            <Card key={card.id} variant="outlined" sx={{ borderRadius:2, overflow:'hidden', position:'relative' }}>
+                              <CardContent sx={{ p:1.5, '&:last-child':{ pb:1.5 } }}>
+                                <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+                                  <Box>
+                                    <Typography variant="subtitle2" sx={{ fontWeight:700, letterSpacing:.3 }}>{card.matricula}</Typography>
+                                    <Typography variant="caption" sx={{ color:'text.secondary' }}>Matrícula</Typography>
+                                  </Box>
+                                  <Chip size="small" label={card.caducidad || '—'} sx={{ bgcolor:'rgba(80,27,54,0.08)', color:'#501b36' }} />
+                                </Stack>
+                                <Divider sx={{ my:1 }} />
+                                <Stack spacing={0.6}>
+                                  <Typography variant="body2"><strong>PAN:</strong> {card.pan}</Typography>
+                                  <Typography variant="body2"><strong>PIN:</strong> <span style={{ fontFamily:'monospace', letterSpacing:1 }}>{card.pin ?? card.masked_pin}</span></Typography>
+                                </Stack>
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </Stack>
+                      </>
                     )}
                   </Box>
                 )}
               </Paper>
             )}
             {tab === 'viat' && (
-              <Paper elevation={0} sx={{ p: 3, borderRadius: 3, border: '1px solid #e0e0e0', background:'#ffffff', overflow:'hidden' }}>
+              <Paper elevation={0} sx={{ p:{ xs:3, sm:4 }, borderRadius: 3, border: '1px solid #e0e0e0', background:'#ffffff', overflow:'hidden' }}>
                 <Box sx={{ 
                   display:'flex', alignItems:'center', gap:2, flexWrap:'wrap', mb:2,
                   pb:1.5, borderBottom:'1px solid #e0e0e0'
@@ -519,9 +705,8 @@ export const Recursos: React.FC = () => {
                       Control de telepeajes asignados
                     </Typography>
                   </Box>
-                  {/* Botón mover arriba */}
                 </Box>
-                {/* Buscador Via T simplificado */}
+                {/* Buscador Via T */}
                 <Box sx={{ display:'flex', flexWrap:'wrap', gap:1.2, mb:2, alignItems:'center' }}>
                   <TextField
                     size="small"
@@ -591,26 +776,43 @@ export const Recursos: React.FC = () => {
                           </TableRow>
                         </TableHead>
                         <TableBody>
-                          {viaTs.length === 0 && (
+                          {loadingViaT && (
+                            <TableRow><TableCell colSpan={5}><Box sx={{ display:'flex', alignItems:'center', gap:1 }}><CircularProgress size={18} /> <Typography variant="body2">Cargando...</Typography></Box></TableCell></TableRow>
+                          )}
+                          {!loadingViaT && searchingViaT && (
+                            <TableRow>
+                              <TableCell colSpan={5}>
+                                <Stack spacing={1}>
+                                  <Skeleton height={28} />
+                                  <Skeleton height={28} />
+                                  <Skeleton height={28} />
+                                </Stack>
+                              </TableCell>
+                            </TableRow>
+                          )}
+                          {!loadingViaT && !searchingViaT && errorViaT && (
+                            <TableRow><TableCell colSpan={5}><Typography color="error" variant="body2">{errorViaT}</Typography></TableCell></TableRow>
+                          )}
+                          {!loadingViaT && !searchingViaT && viaTs.length === 0 && (
                             <TableRow>
                               <TableCell colSpan={5}>
                                 <Typography variant="body2" sx={{ color:'text.secondary' }}>No hay dispositivos Via T registrados todavía.</Typography>
                               </TableCell>
                             </TableRow>
                           )}
-                          {viaTs.length > 0 && filteredViaTs.length === 0 && (
+                          {!loadingViaT && !searchingViaT && viaTs.length > 0 && filteredViaTs.length === 0 && (
                             <TableRow>
                               <TableCell colSpan={5}>
                                 <Typography variant="body2" sx={{ color:'text.secondary' }}>Sin coincidencias con los filtros aplicados.</Typography>
                               </TableCell>
                             </TableRow>
                           )}
-                          {paginatedViaTs.map(v => (
+                          {!loadingViaT && !searchingViaT && paginatedViaTs.map(v => (
                             <TableRow key={v.id} hover>
-                              <TableCell>{v.numeroTelepeaje}</TableCell>
-                              <TableCell>{v.panViaT}</TableCell>
+                              <TableCell>{v.numero_telepeaje}</TableCell>
+                              <TableCell>{v.pan}</TableCell>
                               <TableCell>
-                                <Chip size="small" label={v.compania} sx={{ fontWeight:600, bgcolor:'rgba(92,35,64,0.08)', color:'#501b36' }} />
+                                <Chip size="small" label={v.compania || ''} sx={{ fontWeight:600, bgcolor:'rgba(92,35,64,0.08)', color:'#501b36' }} />
                               </TableCell>
                               <TableCell>{v.matricula}</TableCell>
                               <TableCell>{v.caducidad}</TableCell>
@@ -621,7 +823,7 @@ export const Recursos: React.FC = () => {
                     </Box>
                     {(filteredViaTs.length > 0) && (
                       <Box sx={{ mt:2, display:'flex', flexWrap:'wrap', gap:2, alignItems:'center', justifyContent:'flex-end' }}>
-                        {viaTTotalPages > 1 && (
+                        {!searchingViaT && viaTTotalPages > 1 && (
                           <Pagination
                             page={viaTPage}
                             count={viaTTotalPages}
@@ -639,33 +841,56 @@ export const Recursos: React.FC = () => {
                 )}
                 {isMobile && (
                   <Box>
-                    {viaTs.length === 0 && (
-                      <Typography variant="body2" sx={{ color:'text.secondary' }}>No hay dispositivos Via T registrados todavía.</Typography>
+                    {!hasSearchedViaT && (
+                      <Typography variant="body2" sx={{ color:'text.secondary', mb:2 }}>
+                        Introduce algún criterio y pulsa "Buscar" para ver dispositivos.
+                      </Typography>
                     )}
-                    {viaTs.length > 0 && filteredViaTs.length === 0 && (
-                      <Typography variant="body2" sx={{ color:'text.secondary' }}>Sin coincidencias con los filtros aplicados.</Typography>
+                    {hasSearchedViaT && (
+                      <>
+                        {loadingViaT && (
+                          <Typography variant="body2" sx={{ color:'text.secondary' }}>Cargando...</Typography>
+                        )}
+                        {!loadingViaT && searchingViaT && (
+                          <Stack spacing={1.2}>
+                            <Skeleton variant="rectangular" height={110} />
+                            <Skeleton variant="rectangular" height={110} />
+                          </Stack>
+                        )}
+                        {!loadingViaT && !searchingViaT && errorViaT && (
+                          <Typography variant="body2" color="error">{errorViaT}</Typography>
+                        )}
+                        {!loadingViaT && !searchingViaT && viaTs.length === 0 && (
+                          <Typography variant="body2" sx={{ color:'text.secondary' }}>No hay dispositivos Via T registrados todavía.</Typography>
+                        )}
+                        {!loadingViaT && !searchingViaT && viaTs.length > 0 && filteredViaTs.length === 0 && (
+                          <Typography variant="body2" sx={{ color:'text.secondary' }}>Sin coincidencias con los filtros aplicados.</Typography>
+                        )}
+                        {!loadingViaT && !searchingViaT && (
+                          <Stack spacing={1.5}>
+                            {filteredViaTs.map(v => (
+                              <Card key={v.id} variant="outlined" sx={{ borderRadius:2, overflow:'hidden', position:'relative' }}>
+                                <CardContent sx={{ p:1.5, '&:last-child':{ pb:1.5 } }}>
+                                  <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+                                    <Box>
+                                      <Typography variant="subtitle2" sx={{ fontWeight:700, letterSpacing:.3 }}>{v.matricula}</Typography>
+                                      <Typography variant="caption" sx={{ color:'text.secondary' }}>Matrícula</Typography>
+                                    </Box>
+                                    <Chip size="small" label={v.caducidad || '—'} sx={{ bgcolor:'rgba(80,27,54,0.08)', color:'#501b36' }} />
+                                  </Stack>
+                                  <Divider sx={{ my:1 }} />
+                                  <Stack spacing={0.6}>
+                                    <Typography variant="body2"><strong>Telepeaje:</strong> {v.numero_telepeaje}</Typography>
+                                    <Typography variant="body2"><strong>PAN:</strong> {v.pan}</Typography>
+                                    <Typography variant="body2"><strong>Compañía:</strong> {v.compania}</Typography>
+                                  </Stack>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </Stack>
+                        )}
+                      </>
                     )}
-                    <Stack spacing={1.5}>
-                      {filteredViaTs.map(v => (
-                        <Card key={v.id} variant="outlined" sx={{ borderRadius:2, overflow:'hidden', position:'relative' }}>
-                          <CardContent sx={{ p:1.5, '&:last-child':{ pb:1.5 } }}>
-                            <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
-                              <Box>
-                                <Typography variant="subtitle2" sx={{ fontWeight:700, letterSpacing:.3 }}>{v.matricula}</Typography>
-                                <Typography variant="caption" sx={{ color:'text.secondary' }}>Matrícula</Typography>
-                              </Box>
-                              <Chip size="small" label={v.caducidad || '—'} sx={{ bgcolor:'rgba(80,27,54,0.08)', color:'#501b36' }} />
-                            </Stack>
-                            <Divider sx={{ my:1 }} />
-                            <Stack spacing={0.6}>
-                              <Typography variant="body2"><strong>Telepeaje:</strong> {v.numeroTelepeaje}</Typography>
-                              <Typography variant="body2"><strong>PAN:</strong> {v.panViaT}</Typography>
-                              <Typography variant="body2"><strong>Compañía:</strong> {v.compania}</Typography>
-                            </Stack>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </Stack>
                   </Box>
                 )}
               </Paper>
@@ -688,7 +913,7 @@ export const Recursos: React.FC = () => {
             <ModernButton variant="outlined" onClick={()=> setOpenGasDialog(false)}>
               Cancelar
             </ModernButton>
-            <ModernButton onClick={handleAddGasCard} startIcon={<Add />}>Guardar</ModernButton>
+            <ModernButton onClick={handleAddGasCard} disabled={savingGas} startIcon={<Add />}>{savingGas ? 'Guardando...' : 'Guardar'}</ModernButton>
           </>
         }
       >
@@ -728,19 +953,10 @@ export const Recursos: React.FC = () => {
             value={gasForm.pin}
             onChange={e=> setGasForm(f=>({...f, pin:e.target.value}))}
             error={!!errors.pin}
-            helperText={errors.pin || 'Se mostrará enmascarado en la tabla'}
+            helperText={errors.pin || 'Se almacenará en claro (TODO: cifrado)'}
             fullWidth
             size="small"
-            type={showPin ? 'text' : 'password'}
-            InputProps={{
-              endAdornment: (
-                <InputAdornment position="end">
-                  <IconButton onClick={()=> setShowPin(p=>!p)} size="small">
-                    {showPin ? <VisibilityOff /> : <Visibility />}
-                  </IconButton>
-                </InputAdornment>
-              )
-            }}
+            type="text"
           />
         </Stack>
       </ModernModal>
@@ -758,7 +974,7 @@ export const Recursos: React.FC = () => {
             <ModernButton variant="outlined" onClick={()=> setOpenViaTDialog(false)}>
               Cancelar
             </ModernButton>
-            <ModernButton onClick={handleAddViaT} startIcon={<Add />}>Guardar</ModernButton>
+            <ModernButton onClick={handleAddViaT} disabled={savingViaT} startIcon={<Add />}>{savingViaT ? 'Guardando...' : 'Guardar'}</ModernButton>
           </>
         }
       >
@@ -808,6 +1024,9 @@ export const Recursos: React.FC = () => {
           />
         </Stack>
       </ModernModal>
+      <Snackbar open={snack.open} autoHideDuration={4000} onClose={()=> setSnack(s=>({...s, open:false}))} anchorOrigin={{ vertical:'bottom', horizontal:'center' }}>
+        <Alert severity={snack.type} variant="filled" onClose={()=> setSnack(s=>({...s, open:false}))}>{snack.msg}</Alert>
+      </Snackbar>
     </>
   );
 };

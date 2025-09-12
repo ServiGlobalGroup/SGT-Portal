@@ -10,13 +10,20 @@ BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
-from app.api import dashboard, traffic, vacations, documents, payroll, profile, settings, users, auth, user_files, documentation, activity, dietas, distancieros, folder_management, trips
+from app.api import dashboard, traffic, vacations, documents, payroll, profile, settings, users, auth, user_files, documentation, activity, dietas, distancieros, folder_management, trips, resources
 from app.database.connection import check_database_connection
 from app.middleware.maintenance import MaintenanceMiddleware
 from app.config import settings as app_settings
 from app.services.folder_structure_service import FolderStructureService
 
-app = FastAPI(title="Portal API", version="1.0.0", docs_url=None, redoc_url=None, openapi_url=None)
+# Habilitamos documentación para ver y validar seguridad (Bearer OAuth2)
+app = FastAPI(
+    title="Portal API",
+    version="1.0.0",
+    docs_url=None,       # Swagger UI deshabilitado
+    redoc_url=None,      # ReDoc deshabilitado
+    openapi_url=None     # Endpoint OpenAPI deshabilitado
+)
 
 # Agregar middleware de mantenimiento (debe ir antes que CORS)
 app.add_middleware(MaintenanceMiddleware)
@@ -48,6 +55,7 @@ app.include_router(activity.router, prefix="/api/activity", tags=["activity"])
 app.include_router(dietas.router, prefix="/api/dietas", tags=["dietas"]) 
 app.include_router(distancieros.router, prefix="/api/distancieros", tags=["distancieros"])
 app.include_router(folder_management.router, prefix="/api", tags=["folder-management"])
+app.include_router(resources.router)  # incluye /api/resources/*
 
 # Inicializar sistema de carpetas al arrancar
 try:
