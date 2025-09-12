@@ -153,12 +153,12 @@ export const Recursos: React.FC = () => {
   // PIN siempre visible (no toggle)
 
   // Formularios
-  const [gasForm, setGasForm] = React.useState({ pan:'', matricula:'', caducidad:'', pin:'' });
+  const [gasForm, setGasForm] = React.useState({ pan:'', matricula:'', caducidad:'', pin:'', compania:'' });
   const [viaTForm, setViaTForm] = React.useState({ numeroTelepeaje:'', panViaT:'', compania:'', matricula:'', caducidad:'' });
   const [errors, setErrors] = React.useState<Record<string,string>>({});
 
   const resetForms = () => {
-    setGasForm({ pan:'', matricula:'', caducidad:'', pin:'' });
+    setGasForm({ pan:'', matricula:'', caducidad:'', pin:'', compania:'' });
     setViaTForm({ numeroTelepeaje:'', panViaT:'', compania:'', matricula:'', caducidad:'' });
     setErrors({});
   //
@@ -192,7 +192,8 @@ export const Recursos: React.FC = () => {
         pan: gasForm.pan.trim(),
         matricula: gasForm.matricula.trim(),
         caducidad: gasForm.caducidad || undefined,
-        pin: gasForm.pin
+        pin: gasForm.pin,
+        compania: gasForm.compania.trim() || undefined
       });
       setGasCards(prev => [created, ...prev]);
       setSnack({open:true, msg:'Tarjeta creada', type:'success'});
@@ -557,22 +558,23 @@ export const Recursos: React.FC = () => {
                 {!isMobile && (
                   <>
                     <Box sx={{ overflowX:'auto' }}>
-                      <Table size="small" sx={{ minWidth:700, '& th':{ whiteSpace:'nowrap' } }}>
+                      <Table size="small" sx={{ minWidth:800, '& th':{ whiteSpace:'nowrap' } }}>
                         <TableHead>
                           <TableRow>
                             <TableCell>P.A.N.</TableCell>
                             <TableCell>Matrícula</TableCell>
+                            <TableCell>Compañía</TableCell>
                             <TableCell>Fecha de caducidad</TableCell>
                             <TableCell>Código PIN</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
                           {loadingGas && (
-                            <TableRow><TableCell colSpan={4}><Box sx={{ display:'flex', alignItems:'center', gap:1 }}><CircularProgress size={18} /> <Typography variant="body2">Cargando...</Typography></Box></TableCell></TableRow>
+                            <TableRow><TableCell colSpan={5}><Box sx={{ display:'flex', alignItems:'center', gap:1 }}><CircularProgress size={18} /> <Typography variant="body2">Cargando...</Typography></Box></TableCell></TableRow>
                           )}
                           {!loadingGas && searchingGas && (
                             <TableRow>
-                              <TableCell colSpan={4}>
+                              <TableCell colSpan={5}>
                                 <Stack spacing={1}>
                                   <Skeleton height={28} />
                                   <Skeleton height={28} />
@@ -582,18 +584,18 @@ export const Recursos: React.FC = () => {
                             </TableRow>
                           )}
                           {!loadingGas && !searchingGas && errorGas && (
-                            <TableRow><TableCell colSpan={4}><Typography color="error" variant="body2">{errorGas}</Typography></TableCell></TableRow>
+                            <TableRow><TableCell colSpan={5}><Typography color="error" variant="body2">{errorGas}</Typography></TableCell></TableRow>
                           )}
                           {!loadingGas && !searchingGas && gasCards.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={4}>
+                              <TableCell colSpan={5}>
                                 <Typography variant="body2" sx={{ color:'text.secondary' }}>No hay tarjetas registradas todavía.</Typography>
                               </TableCell>
                             </TableRow>
                           )}
                           {!loadingGas && !searchingGas && gasCards.length > 0 && filteredGasCards.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={4}>
+                              <TableCell colSpan={5}>
                                 <Typography variant="body2" sx={{ color:'text.secondary' }}>Sin coincidencias con los filtros aplicados.</Typography>
                               </TableCell>
                             </TableRow>
@@ -602,6 +604,7 @@ export const Recursos: React.FC = () => {
                             <TableRow key={card.id} hover>
                               <TableCell>{card.pan}</TableCell>
                               <TableCell>{card.matricula}</TableCell>
+                              <TableCell>{card.compania || '—'}</TableCell>
                               <TableCell>{card.caducidad}</TableCell>
                               <TableCell>
                                 <Box sx={{ display:'flex', alignItems:'center', gap:1 }}>
@@ -669,6 +672,7 @@ export const Recursos: React.FC = () => {
                                 <Divider sx={{ my:1 }} />
                                 <Stack spacing={0.6}>
                                   <Typography variant="body2"><strong>PAN:</strong> {card.pan}</Typography>
+                                  <Typography variant="body2"><strong>Compañía:</strong> {card.compania || '—'}</Typography>
                                   <Typography variant="body2"><strong>PIN:</strong> <span style={{ fontFamily:'monospace', letterSpacing:1 }}>{card.pin ?? card.masked_pin}</span></Typography>
                                 </Stack>
                               </CardContent>
@@ -936,6 +940,16 @@ export const Recursos: React.FC = () => {
             fullWidth
             size="small"
             inputProps={{ maxLength: 10 }}
+          />
+          <TextField
+            label="Compañía"
+            value={gasForm.compania}
+            onChange={e=> setGasForm(f=>({...f, compania:e.target.value}))}
+            error={!!errors.compania}
+            helperText={errors.compania}
+            fullWidth
+            size="small"
+            placeholder="Ej: Repsol, Galp, Shell..."
           />
           <TextField
             label="Fecha de caducidad"
