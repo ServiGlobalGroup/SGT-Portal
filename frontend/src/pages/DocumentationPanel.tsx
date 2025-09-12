@@ -185,7 +185,7 @@ const DocumentationPanel: React.FC = () => {
   // Reset página cuando cambian los filtros
   useEffect(() => {
     usersPagination.setCurrentPage(1);
-  }, [searchTerm, filterStatus, usersPagination.setCurrentPage]);
+  }, [searchTerm, filterStatus]);
 
   const handleExpandUser = (userId: string) => {
     setExpandedUsers(prev => 

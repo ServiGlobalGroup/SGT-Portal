@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 
 interface UsePaginationProps<T> {
   data: T[];
@@ -29,7 +29,14 @@ export const usePagination = <T,>({
   const [currentPage, setCurrentPage] = useState(initialPage);
   const [itemsPerPage, setItemsPerPage] = useState(initialItemsPerPage);
 
-  const totalPages = Math.ceil(data.length / itemsPerPage);
+  const totalPages = Math.ceil(data.length / itemsPerPage) || 1;
+
+  // Auto-ajustar página actual si se vuelve inválida cuando cambian los datos
+  useEffect(() => {
+    if (currentPage > totalPages && totalPages > 0) {
+      setCurrentPage(Math.max(1, totalPages));
+    }
+  }, [data.length, totalPages, currentPage]);
 
   const paginatedData = useMemo(() => {
     const startIndex = (currentPage - 1) * itemsPerPage;
@@ -49,7 +56,7 @@ export const usePagination = <T,>({
   };
 
   const goToFirstPage = () => setCurrentPage(1);
-  const goToLastPage = () => setCurrentPage(totalPages);
+  const goToLastPage = () => setCurrentPage(Math.max(1, totalPages));
   const nextPage = () => handleSetCurrentPage(currentPage + 1);
   const previousPage = () => handleSetCurrentPage(currentPage - 1);
 
