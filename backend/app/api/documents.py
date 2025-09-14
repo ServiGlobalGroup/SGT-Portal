@@ -155,7 +155,7 @@ async def download_general_document(filename: str, current_user: User = Depends(
     """
     Endpoint para descargar documentos generales.
     """
-    file_path = Path("backend/files/general_documents") / filename
+    file_path = Path(settings.documents_files_base_path) / filename
     
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Documento no encontrado")
@@ -200,7 +200,7 @@ async def preview_general_document(filename: str, token: Optional[str] = None):
     except JWTError:
         raise HTTPException(status_code=401, detail="Token inválido")
     
-    file_path = Path("backend/files/general_documents") / filename
+    file_path = Path(settings.documents_files_base_path) / filename
     
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Documento no encontrado")
@@ -229,7 +229,7 @@ async def delete_general_document(filename: str, current_user: User = Depends(ge
     if user_role not in ("ADMINISTRADOR", "MASTER_ADMIN"):
         raise HTTPException(status_code=403, detail="No tienes permisos para eliminar documentos generales")
     
-    file_path = Path("backend/files/general_documents") / filename
+    file_path = Path(settings.documents_files_base_path) / filename
     
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Documento no encontrado")

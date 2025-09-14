@@ -813,9 +813,9 @@ async def get_user_documents_admin(
 async def get_general_documents():
     """
     Obtiene los documentos generales que están disponibles para todos los trabajadores.
-    Estos documentos se almacenan en backend/files/general_documents
+    Estos documentos se almacenan en documents_files_base_path
     """
-    general_docs_path = Path("backend/files/general_documents")
+    general_docs_path = Path(settings.documents_files_base_path)
     
     if not general_docs_path.exists():
         return {
