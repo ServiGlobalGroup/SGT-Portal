@@ -15,15 +15,9 @@ class UserRole(enum.Enum):
     TRABAJADOR = "TRABAJADOR"
 
 class UserStatus(enum.Enum):
-<<<<<<< HEAD
-    ACTIVO = "ACTIVO"
-    INACTIVO = "INACTIVO"
-    BAJA = "BAJA"
-=======
     ACTIVO = "ACTIVO"        # Usuario activo normal
     INACTIVO = "INACTIVO"    # Usuario desactivado (no puede hacer login)
     BAJA = "BAJA"            # Usuario de baja (puede hacer login pero no se cuenta como disponible)
->>>>>>> 66167b7fd64549b4bab8bfb1cbc32f377e50f9d7
 
 class MasterAdminUser:
     """
@@ -48,10 +42,7 @@ class MasterAdminUser:
         self.emergency_contact_name = None
         self.emergency_contact_phone = None
         self.status = UserStatus.ACTIVO
-<<<<<<< HEAD
-=======
         self.is_active = True
->>>>>>> 66167b7fd64549b4bab8bfb1cbc32f377e50f9d7
         self.is_verified = True
         self.avatar = None
         self.user_folder_path = None
@@ -113,9 +104,6 @@ class User(Base):
     
     # Configuración de cuenta
     hashed_password = Column(String(255), nullable=False, comment="Password hasheado")
-<<<<<<< HEAD
-    status = Column(Enum(UserStatus), nullable=False, default=UserStatus.ACTIVO, comment="Estado del usuario")
-=======
     
     # Estado del usuario (nuevo sistema)
     status = Column(Enum(UserStatus), default=UserStatus.ACTIVO, nullable=False, comment="Estado del usuario")
@@ -123,7 +111,6 @@ class User(Base):
     # Campo legacy para compatibilidad (se mantendrá sincronizado con status)
     is_active = Column(Boolean, default=True, nullable=False, comment="Usuario activo (legacy)")
     
->>>>>>> 66167b7fd64549b4bab8bfb1cbc32f377e50f9d7
     is_verified = Column(Boolean, default=False, nullable=False, comment="Email verificado")
     avatar = Column(String(255), nullable=True, comment="Ruta al avatar del usuario")
     
@@ -152,7 +139,6 @@ class User(Base):
         return f"{first_initial}{last_initial}"
     
     @property
-<<<<<<< HEAD
     def is_active(self):
         """Propiedad de compatibilidad: retorna True si el usuario está ACTIVO o en BAJA"""
         return self.status in (UserStatus.ACTIVO, UserStatus.BAJA)
@@ -161,7 +147,8 @@ class User(Base):
     def is_available_for_work(self):
         """Retorna True si el usuario está disponible para ser contado como conductor disponible"""
         return self.status == UserStatus.ACTIVO
-=======
+    
+    @property
     def is_available_driver(self):
         """Retorna True si el usuario puede ser considerado conductor disponible"""
         return (self.status == UserStatus.ACTIVO and self.role == UserRole.TRABAJADOR)
@@ -173,12 +160,11 @@ class User(Base):
     
     def set_status(self, new_status: UserStatus):
         """
-        Actualiza el estado del usuario y sincroniza el campo is_active legacy
+        Actualiza el estado del usuario. 
+        El campo is_active se calcula automáticamente como una propiedad.
         """
         self.status = new_status
-        # Mantener sincronizado el campo legacy is_active
-        self.is_active = (new_status == UserStatus.ACTIVO)
->>>>>>> 66167b7fd64549b4bab8bfb1cbc32f377e50f9d7
+        # No necesitamos asignar is_active manualmente - es una propiedad calculada
     
     def create_user_folder(self, base_path: str) -> str:
         """

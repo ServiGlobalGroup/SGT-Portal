@@ -56,10 +56,7 @@ def user_to_response(user, is_master=False) -> UserResponse:
             emergency_contact_name=user.emergency_contact_name,
             emergency_contact_phone=user.emergency_contact_phone,
             status=user.status,
-<<<<<<< HEAD
-=======
             is_active=user.is_active,
->>>>>>> 66167b7fd64549b4bab8bfb1cbc32f377e50f9d7
             is_verified=user.is_verified,
             avatar=user.avatar,
             user_folder_path="",  # Sin carpeta física
@@ -92,12 +89,8 @@ def user_to_response(user, is_master=False) -> UserResponse:
             "postal_code": user.postal_code,
             "emergency_contact_name": user.emergency_contact_name,
             "emergency_contact_phone": user.emergency_contact_phone,
-<<<<<<< HEAD
-            "status": user.status,
-=======
             "status": getattr(user, 'status', UserStatus.ACTIVO),  # Default ACTIVO si no existe
             "is_active": user.is_active,
->>>>>>> 66167b7fd64549b4bab8bfb1cbc32f377e50f9d7
             "is_verified": user.is_verified,
             "avatar": user.avatar,
             "user_folder_path": f"{settings.user_files_base_path}/{user.dni_nie}",

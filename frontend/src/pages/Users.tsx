@@ -197,13 +197,8 @@ export const Users: React.FC = () => {
 
     // Filtro por estado
     const matchesStatus = statusFilter === 'all' || 
-<<<<<<< HEAD
-      (statusFilter === 'active' && user.status === 'ACTIVO') ||
-      (statusFilter === 'inactive' && user.status === 'INACTIVO') ||
-=======
       (statusFilter === 'active' && (user.status === 'ACTIVO' || (user.status === undefined && user.is_active))) ||
       (statusFilter === 'inactive' && (user.status === 'INACTIVO' || (user.status === undefined && !user.is_active))) ||
->>>>>>> 66167b7fd64549b4bab8bfb1cbc32f377e50f9d7
       (statusFilter === 'baja' && user.status === 'BAJA');
 
     // Filtro por rol
@@ -310,11 +305,7 @@ export const Users: React.FC = () => {
     handleCloseMenu();
   };
 
-<<<<<<< HEAD
-  const handleSetUserBaja = async (id: number) => {
-=======
   const handleSetUserStatus = async (id: number, status: 'ACTIVO' | 'INACTIVO' | 'BAJA') => {
->>>>>>> 66167b7fd64549b4bab8bfb1cbc32f377e50f9d7
     // Verificar permisos de administrador
     if (!isAdmin) {
       setAlert({
@@ -326,14 +317,6 @@ export const Users: React.FC = () => {
     }
 
     try {
-<<<<<<< HEAD
-      await usersAPI.setUserBaja(id);
-      setAlert({ type: 'success', message: 'Usuario puesto en estado de baja correctamente' });
-      await loadUsers(); // Recargar la lista
-    } catch (error) {
-      console.error('Error al poner usuario en baja:', error);
-      setAlert({ type: 'error', message: 'Error al poner el usuario en baja' });
-=======
       await usersAPI.setUserStatus(id, status);
       const statusLabels = {
         'ACTIVO': 'activo',
@@ -348,7 +331,6 @@ export const Users: React.FC = () => {
     } catch (error) {
       console.error('Error al cambiar estado del usuario:', error);
       setAlert({ type: 'error', message: 'Error al cambiar el estado del usuario' });
->>>>>>> 66167b7fd64549b4bab8bfb1cbc32f377e50f9d7
     }
     handleCloseMenu();
   };
@@ -948,11 +930,7 @@ export const Users: React.FC = () => {
                     <MenuItem value="all">Todos</MenuItem>
                     <MenuItem value="active">Activos</MenuItem>
                     <MenuItem value="inactive">Inactivos</MenuItem>
-<<<<<<< HEAD
-                    <MenuItem value="baja">Baja</MenuItem>
-=======
                     <MenuItem value="baja">De Baja</MenuItem>
->>>>>>> 66167b7fd64549b4bab8bfb1cbc32f377e50f9d7
                   </Select>
                 </FormControl>
 
@@ -1221,21 +1199,6 @@ export const Users: React.FC = () => {
                         </TableCell>
                         <TableCell>
                           <Chip
-<<<<<<< HEAD
-                            label={
-                              user.status === 'ACTIVO' ? 'Activo' : 
-                              user.status === 'BAJA' ? 'Baja' : 'Inactivo'
-                            }
-                            size="small"
-                            color={
-                              user.status === 'ACTIVO' ? 'success' : 
-                              user.status === 'BAJA' ? 'warning' : 'error'
-                            }
-                            variant={user.status === 'INACTIVO' ? 'outlined' : 'filled'}
-                            icon={
-                              user.status === 'ACTIVO' ? <CheckCircle /> : 
-                              user.status === 'BAJA' ? <RemoveCircle /> : <Block />
-=======
                             label={user.status || (user.is_active ? 'Activo' : 'Inactivo')}
                             size="small"
                             color={
@@ -1252,7 +1215,6 @@ export const Users: React.FC = () => {
                               user.status === 'ACTIVO' ? <CheckCircle /> :
                               user.status === 'BAJA' ? <RemoveCircle /> :
                               <Block />
->>>>>>> 66167b7fd64549b4bab8bfb1cbc32f377e50f9d7
                             }
                             sx={{
                               borderRadius: 2,
@@ -1364,15 +1326,6 @@ export const Users: React.FC = () => {
                 <ListItemText>Establecer como Baja</ListItemText>
               </MenuItem>
             </>
-          )}
-          
-          {isAdmin && selectedUser?.status === 'ACTIVO' && (
-            <MenuItem onClick={() => selectedUser && handleSetUserBaja(selectedUser.id)}>
-              <ListItemIcon>
-                <RemoveCircle fontSize="small" sx={{ color: 'warning.main' }} />
-              </ListItemIcon>
-              <ListItemText sx={{ color: 'warning.main' }}>Poner en Baja</ListItemText>
-            </MenuItem>
           )}
           
           {isAdmin && (

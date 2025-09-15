@@ -20,41 +20,24 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     # Add status column to users table
-    op.add_column('users', sa.Column('status', sa.Enum('activo', 'inactivo', 'baja', name='userstatus'), nullable=True, comment='Estado del usuario'))
+    op.add_column('users', sa.Column('status', sa.Enum('ACTIVO', 'INACTIVO', 'BAJA', name='userstatus'), nullable=True, comment='Estado del usuario'))
     
     # Migrate data from is_active to status
     connection = op.get_bind()
     connection.execute(sa.text("""
         UPDATE users 
         SET status = CASE 
-            WHEN is_active = true THEN 'activo'::userstatus
-            ELSE 'inactivo'::userstatus
+            WHEN is_active = true THEN 'ACTIVO'::userstatus
+            ELSE 'INACTIVO'::userstatus
         END
     """))
     
     # Make status column non-nullable now that it has data
     op.alter_column('users', 'status', nullable=False)
     
-    # Drop is_active column
-    op.drop_column('users', 'is_active')
+    # Keep is_active column for compatibility (don't drop it)
 
 
 def downgrade() -> None:
-    # Add is_active column back
-    op.add_column('users', sa.Column('is_active', sa.BOOLEAN(), server_default=sa.text('true'), autoincrement=False, nullable=True))
-    
-    # Migrate data from status back to is_active
-    connection = op.get_bind()
-    connection.execute(sa.text("""
-        UPDATE users 
-        SET is_active = CASE 
-            WHEN status = 'activo' THEN true
-            ELSE false
-        END
-    """))
-    
-    # Make is_active non-nullable
-    op.alter_column('users', 'is_active', nullable=False)
-    
-    # Drop status column
+    # Just drop the status column (keep is_active as it was never removed)
     op.drop_column('users', 'status')
