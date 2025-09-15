@@ -19,7 +19,15 @@ CREATE_ROLES = {UserRole.MASTER_ADMIN, UserRole.ADMINISTRADOR, UserRole.ADMINIST
 def create_fuel_card(payload: FuelCardCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     if current_user.role not in CREATE_ROLES:
         raise HTTPException(status_code=403, detail="Permiso denegado")
-    card = ResourcesService.create_fuel_card(db, pan=payload.pan, matricula=payload.matricula, caducidad=payload.caducidad, pin=payload.pin, user_id=int(getattr(current_user, 'id')) if getattr(current_user, 'id', None) is not None else None)
+    card = ResourcesService.create_fuel_card(
+        db, 
+        pan=payload.pan, 
+        matricula=payload.matricula, 
+        caducidad=payload.caducidad, 
+        pin=payload.pin, 
+        compania=payload.compania,
+        user_id=int(getattr(current_user, 'id')) if getattr(current_user, 'id', None) is not None else None
+    )
     return FuelCardOut.from_orm_with_mask(card)
 
 

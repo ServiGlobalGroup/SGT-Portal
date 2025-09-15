@@ -224,7 +224,11 @@ export const documentsAPI = {
     return api.post('/api/documents/upload-general-documents', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     }).then(res => res.data);
-  }
+  },
+  
+  // Eliminar documento general (solo administradores)
+  deleteGeneralDocument: (filename: string) =>
+    api.delete(`/api/documents/admin/delete/general/${filename}`).then(res => res.data)
 };
 
 export const payrollAPI = {
@@ -590,6 +594,10 @@ export const userFilesAPI = {
   deleteFile: (folderType: string, filename: string) => 
     api.delete(`/api/user-files/delete/${folderType}/${filename}`).then(res => res.data),
     
+  // Eliminar archivo de cualquier usuario (solo administradores)
+  deleteFileAdmin: (dniNie: string, folderType: string, filename: string) =>
+    api.delete(`/api/user-files/admin/delete/${dniNie}/${folderType}/${filename}`).then(res => res.data),
+    
   // Obtener estadísticas de carpetas
   getFolderStats: () => 
     api.get('/api/user-files/folder-stats').then(res => res.data),
@@ -667,7 +675,7 @@ export const tripsAPI = {
 };
 
 // Recursos (Fuel Cards y Via T)
-export interface FuelCardRecord { id:number; pan:string; matricula:string; caducidad:string|null; created_at:string; masked_pin:string; pin:string }
+export interface FuelCardRecord { id:number; pan:string; matricula:string; caducidad:string|null; compania?:string|null; created_at:string; masked_pin:string; pin:string }
 export interface FuelCardPage { total:number; page:number; page_size:number; items:FuelCardRecord[] }
 export interface ViaTRecord { id:number; numero_telepeaje:string; pan:string; compania?:string|null; matricula:string; caducidad:string|null; created_at:string }
 export interface ViaTPage { total:number; page:number; page_size:number; items:ViaTRecord[] }
@@ -681,7 +689,7 @@ export const resourcesAPI = {
     if (params.page_size) sp.append('page_size', String(params.page_size));
     return api.get(`/api/resources/fuel-cards?${sp.toString()}`).then(r=>r.data as FuelCardPage);
   },
-  createFuelCard: (data: { pan:string; matricula:string; caducidad?:string; pin:string }): Promise<FuelCardRecord> =>
+  createFuelCard: (data: { pan:string; matricula:string; caducidad?:string; pin:string; compania?:string }): Promise<FuelCardRecord> =>
     api.post('/api/resources/fuel-cards', data).then(r=>r.data as FuelCardRecord),
   listViaTDevices: (params: { numero_telepeaje?:string; pan?:string; matricula?:string; page?:number; page_size?:number } = {}): Promise<ViaTPage> => {
     const sp = new URLSearchParams();

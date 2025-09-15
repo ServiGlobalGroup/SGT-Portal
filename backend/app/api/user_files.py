@@ -204,6 +204,50 @@ async def delete_file(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error al eliminar el archivo: {str(e)}")
 
+@router.delete("/admin/delete/{dni_nie}/{folder_type}/{filename}")
+async def delete_file_admin(
+    dni_nie: str,
+    folder_type: str,
+    filename: str,
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db)
+):
+    """
+    Elimina un archivo de cualquier usuario. Solo para administradores.
+    """
+    
+    # Verificar permisos de administrador
+    user_role = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+    if user_role not in ("ADMINISTRADOR", "MASTER_ADMIN"):
+        raise HTTPException(status_code=403, detail="No tienes permisos para eliminar archivos de otros usuarios")
+    
+    # Validar tipo de carpeta - solo nóminas, dietas y documentos
+    valid_folders = ["nominas", "dietas", "documentos"]
+    if folder_type not in valid_folders:
+        raise HTTPException(status_code=400, detail="Tipo de carpeta no válido")
+    
+    # Verificar que el usuario objetivo existe
+    target_user = db.query(User).filter(User.dni_nie == dni_nie).first()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    
+    # Construir la ruta del archivo
+    file_path = Path(settings.user_files_base_path) / dni_nie / folder_type / filename
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Archivo no encontrado")
+    
+    try:
+        file_path.unlink()
+        return {
+            "message": "Archivo eliminado exitosamente",
+            "filename": filename,
+            "user_dni": dni_nie,
+            "folder_type": folder_type
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error al eliminar el archivo: {str(e)}")
+
 @router.get("/folder-stats")
 async def get_folder_stats(current_user: User = Depends(get_current_active_user)):
     """
@@ -769,9 +813,9 @@ async def get_user_documents_admin(
 async def get_general_documents():
     """
     Obtiene los documentos generales que están disponibles para todos los trabajadores.
-    Estos documentos se almacenan en backend/files/general_documents
+    Estos documentos se almacenan en documents_files_base_path
     """
-    general_docs_path = Path("backend/files/general_documents")
+    general_docs_path = Path(settings.documents_files_base_path)
     
     if not general_docs_path.exists():
         return {
