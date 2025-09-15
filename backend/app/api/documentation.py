@@ -92,21 +92,27 @@ async def get_documentation_users(db: Session = Depends(get_db), current_user: U
                                     # Si hay error al acceder al archivo, continuar
                                     continue
                 
-                # Crear objeto usuario
-                user_data = {
-                    'id': dni_nie,
-                    'dni': dni_nie,
-                    'first_name': user_info['first_name'],
-                    'last_name': user_info['last_name'],
-                    'email': user_info['email'],
-                    'role': user_info['role'],
-                    'is_active': user_info['is_active'],
-                    'total_documents': len(documents),
-                    'total_size': total_size,
-                    'documents': documents
-                }
-                
-                users_data.append(user_data)
+        # Crear objeto usuario
+        user_data = {
+            'id': dni_nie,
+            'dni': dni_nie,
+            'first_name': user_info['first_name'],
+            'last_name': user_info['last_name'],
+            'email': user_info['email'],
+            'role': user_info['role'],
+            'is_active': user_info['is_active'],
+            # Nuevo: agregar información de estado si está disponible
+            'status': getattr(user, 'status', 'ACTIVO' if user_info['is_active'] else 'INACTIVO'),
+            'is_available_driver': (
+                user_info['is_active'] and 
+                user_info['role'] == 'TRABAJADOR'
+            ),
+            'total_documents': len(documents),
+            'total_size': total_size,
+            'documents': documents
+        }
+        
+        users_data.append(user_data)
         
         return users_data
         

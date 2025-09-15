@@ -221,6 +221,43 @@ class UserService:
             return False
 
     @staticmethod
+    def set_user_status(db: Session, user_id: int, new_status) -> bool:
+        """Establece el estado de un usuario y sincroniza is_active"""
+        from app.models.user import UserStatus
+        
+        db_user = UserService.get_user_by_id(db, user_id)
+        if not db_user:
+            return False
+        
+        # Usar el método del modelo para cambiar el estado
+        db_user.set_status(new_status)
+        db.commit()
+        return True
+    
+    @staticmethod
+    def get_available_drivers(db: Session) -> List[User]:
+        """Obtiene todos los conductores disponibles (estado ACTIVO con rol TRABAJADOR)"""
+        from app.models.user import UserStatus, UserRole
+        
+        # Por ahora usar is_active hasta que se aplique la migración
+        # En el futuro: users.filter(status=ACTIVO, role=TRABAJADOR)
+        return db.query(User).filter(
+            User.role == UserRole.TRABAJADOR,
+            # Cuando se aplique la migración:
+            # User.status == UserStatus.ACTIVO
+        ).all()
+    
+    @staticmethod
+    def get_users_by_status(db: Session, status) -> List[User]:
+        """Obtiene usuarios por estado (cuando se aplique la migración)"""
+        # Por ahora devolver basándose en is_active
+        # En el futuro: db.query(User).filter(User.status == status).all()
+        if hasattr(status, 'value'):
+            if status.value == 'ACTIVO':
+                return db.query(User).all()  # Temporal
+        return db.query(User).all()  # Temporal
+
+    @staticmethod
     def delete_user_permanently(db: Session, user_id: int) -> bool:
         """Elimina un usuario permanentemente de la base de datos y su carpeta"""
         db_user = UserService.get_user_by_id(db, user_id)

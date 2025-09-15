@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
 from app.database.connection import get_db
-from app.models.user import User, MasterAdminUser, UserRole
+from app.models.user import User, MasterAdminUser, UserRole, UserStatus
 from app.services.activity_service import ActivityService
 from app.models.user_schemas import UserLogin, Token, TokenData, UserResponse
 from app.services.user_service import UserService
@@ -56,6 +56,10 @@ def user_to_response(user, is_master=False) -> UserResponse:
             emergency_contact_name=user.emergency_contact_name,
             emergency_contact_phone=user.emergency_contact_phone,
             status=user.status,
+<<<<<<< HEAD
+=======
+            is_active=user.is_active,
+>>>>>>> 66167b7fd64549b4bab8bfb1cbc32f377e50f9d7
             is_verified=user.is_verified,
             avatar=user.avatar,
             user_folder_path="",  # Sin carpeta física
@@ -88,7 +92,12 @@ def user_to_response(user, is_master=False) -> UserResponse:
             "postal_code": user.postal_code,
             "emergency_contact_name": user.emergency_contact_name,
             "emergency_contact_phone": user.emergency_contact_phone,
+<<<<<<< HEAD
             "status": user.status,
+=======
+            "status": getattr(user, 'status', UserStatus.ACTIVO),  # Default ACTIVO si no existe
+            "is_active": user.is_active,
+>>>>>>> 66167b7fd64549b4bab8bfb1cbc32f377e50f9d7
             "is_verified": user.is_verified,
             "avatar": user.avatar,
             "user_folder_path": f"{settings.user_files_base_path}/{user.dni_nie}",
@@ -148,7 +157,8 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     if user is None:
         raise credentials_exception
     
-    if bool(getattr(user, "is_active", False)) is False:
+    # Usar la nueva lógica de can_login que permite ACTIVO y BAJA
+    if not user.can_login:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Usuario inactivo"
@@ -158,9 +168,14 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
 
 async def get_current_active_user(current_user: User = Depends(get_current_user)):
     """
-    Verifica que el usuario actual esté activo.
+    Verifica que el usuario actual pueda hacer login (ACTIVO o BAJA).
     """
-    if bool(getattr(current_user, "is_active", False)) is False:
+    # Para usuarios maestros, siempre permitir
+    if isinstance(current_user, MasterAdminUser):
+        return current_user
+    
+    # Para usuarios normales, usar can_login
+    if not getattr(current_user, 'can_login', True):
         raise HTTPException(status_code=400, detail="Usuario inactivo")
     return current_user
 

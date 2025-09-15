@@ -49,6 +49,7 @@ import {
   Visibility,
   VisibilityOff,
   Person,
+  RemoveCircle,
   Email,
   Badge,
   Business,
@@ -71,7 +72,8 @@ interface User {
   department: string;
   position?: string;
   worker_type?: 'antiguo' | 'nuevo';
-  is_active: boolean;
+  status?: 'ACTIVO' | 'INACTIVO' | 'BAJA';  // Nuevo sistema de estados
+  is_active: boolean;  // Campo legacy
   created_at: string;
   full_name: string;
   initials: string;
@@ -195,8 +197,13 @@ export const Users: React.FC = () => {
 
     // Filtro por estado
     const matchesStatus = statusFilter === 'all' || 
+<<<<<<< HEAD
       (statusFilter === 'active' && user.status === 'ACTIVO') ||
       (statusFilter === 'inactive' && user.status === 'INACTIVO') ||
+=======
+      (statusFilter === 'active' && (user.status === 'ACTIVO' || (user.status === undefined && user.is_active))) ||
+      (statusFilter === 'inactive' && (user.status === 'INACTIVO' || (user.status === undefined && !user.is_active))) ||
+>>>>>>> 66167b7fd64549b4bab8bfb1cbc32f377e50f9d7
       (statusFilter === 'baja' && user.status === 'BAJA');
 
     // Filtro por rol
@@ -303,7 +310,11 @@ export const Users: React.FC = () => {
     handleCloseMenu();
   };
 
+<<<<<<< HEAD
   const handleSetUserBaja = async (id: number) => {
+=======
+  const handleSetUserStatus = async (id: number, status: 'ACTIVO' | 'INACTIVO' | 'BAJA') => {
+>>>>>>> 66167b7fd64549b4bab8bfb1cbc32f377e50f9d7
     // Verificar permisos de administrador
     if (!isAdmin) {
       setAlert({
@@ -315,12 +326,29 @@ export const Users: React.FC = () => {
     }
 
     try {
+<<<<<<< HEAD
       await usersAPI.setUserBaja(id);
       setAlert({ type: 'success', message: 'Usuario puesto en estado de baja correctamente' });
       await loadUsers(); // Recargar la lista
     } catch (error) {
       console.error('Error al poner usuario en baja:', error);
       setAlert({ type: 'error', message: 'Error al poner el usuario en baja' });
+=======
+      await usersAPI.setUserStatus(id, status);
+      const statusLabels = {
+        'ACTIVO': 'activo',
+        'INACTIVO': 'inactivo', 
+        'BAJA': 'de baja'
+      };
+      setAlert({ 
+        type: 'success', 
+        message: `Usuario establecido como ${statusLabels[status]} correctamente` 
+      });
+      await loadUsers(); // Recargar la lista
+    } catch (error) {
+      console.error('Error al cambiar estado del usuario:', error);
+      setAlert({ type: 'error', message: 'Error al cambiar el estado del usuario' });
+>>>>>>> 66167b7fd64549b4bab8bfb1cbc32f377e50f9d7
     }
     handleCloseMenu();
   };
@@ -920,7 +948,11 @@ export const Users: React.FC = () => {
                     <MenuItem value="all">Todos</MenuItem>
                     <MenuItem value="active">Activos</MenuItem>
                     <MenuItem value="inactive">Inactivos</MenuItem>
+<<<<<<< HEAD
                     <MenuItem value="baja">Baja</MenuItem>
+=======
+                    <MenuItem value="baja">De Baja</MenuItem>
+>>>>>>> 66167b7fd64549b4bab8bfb1cbc32f377e50f9d7
                   </Select>
                 </FormControl>
 
@@ -986,7 +1018,11 @@ export const Users: React.FC = () => {
               <Typography variant="body2" color="textSecondary">
                 Mostrando {((pagination.currentPage - 1) * pagination.itemsPerPage) + 1} - {Math.min(pagination.currentPage * pagination.itemsPerPage, filteredUsers.length)} de {filteredUsers.length} usuarios
                 {searchTerm && ` • Búsqueda: "${searchTerm}"`}
-                {statusFilter !== 'all' && ` • Estado: ${statusFilter === 'active' ? 'Activos' : 'Inactivos'}`}
+                {statusFilter !== 'all' && ` • Estado: ${
+                  statusFilter === 'active' ? 'Activos' : 
+                  statusFilter === 'baja' ? 'De Baja' : 
+                  'Inactivos'
+                }`}
                 {roleFilter !== 'all' && ` • Rol: ${getRoleText(roleFilter)}`}
               </Typography>
             </Box>
@@ -1185,6 +1221,7 @@ export const Users: React.FC = () => {
                         </TableCell>
                         <TableCell>
                           <Chip
+<<<<<<< HEAD
                             label={
                               user.status === 'ACTIVO' ? 'Activo' : 
                               user.status === 'BAJA' ? 'Baja' : 'Inactivo'
@@ -1198,6 +1235,24 @@ export const Users: React.FC = () => {
                             icon={
                               user.status === 'ACTIVO' ? <CheckCircle /> : 
                               user.status === 'BAJA' ? <RemoveCircle /> : <Block />
+=======
+                            label={user.status || (user.is_active ? 'Activo' : 'Inactivo')}
+                            size="small"
+                            color={
+                              user.status === 'ACTIVO' ? 'success' : 
+                              user.status === 'BAJA' ? 'warning' : 
+                              'error'
+                            }
+                            variant={
+                              user.status === 'ACTIVO' ? 'filled' : 
+                              user.status === 'BAJA' ? 'filled' : 
+                              'outlined'
+                            }
+                            icon={
+                              user.status === 'ACTIVO' ? <CheckCircle /> :
+                              user.status === 'BAJA' ? <RemoveCircle /> :
+                              <Block />
+>>>>>>> 66167b7fd64549b4bab8bfb1cbc32f377e50f9d7
                             }
                             sx={{
                               borderRadius: 2,
@@ -1277,15 +1332,38 @@ export const Users: React.FC = () => {
             </MenuItem>
           )}
           
-          {isAdmin && (
-            <MenuItem onClick={() => selectedUser && handleToggleStatus(selectedUser.id)}>
-              <ListItemIcon>
-                {selectedUser?.is_active ? <Block fontSize="small" /> : <CheckCircle fontSize="small" />}
-              </ListItemIcon>
-              <ListItemText>
-                {selectedUser?.is_active ? 'Desactivar' : 'Activar'}
-              </ListItemText>
-            </MenuItem>
+          {isAdmin && selectedUser && (
+            <>
+              <MenuItem 
+                onClick={() => handleSetUserStatus(selectedUser.id, 'ACTIVO')}
+                disabled={selectedUser.status === 'ACTIVO'}
+              >
+                <ListItemIcon>
+                  <CheckCircle fontSize="small" color={selectedUser.status === 'ACTIVO' ? 'success' : 'inherit'} />
+                </ListItemIcon>
+                <ListItemText>Establecer como Activo</ListItemText>
+              </MenuItem>
+              
+              <MenuItem 
+                onClick={() => handleSetUserStatus(selectedUser.id, 'INACTIVO')}
+                disabled={selectedUser.status === 'INACTIVO'}
+              >
+                <ListItemIcon>
+                  <Block fontSize="small" color={selectedUser.status === 'INACTIVO' ? 'error' : 'inherit'} />
+                </ListItemIcon>
+                <ListItemText>Establecer como Inactivo</ListItemText>
+              </MenuItem>
+              
+              <MenuItem 
+                onClick={() => handleSetUserStatus(selectedUser.id, 'BAJA')}
+                disabled={selectedUser.status === 'BAJA'}
+              >
+                <ListItemIcon>
+                  <RemoveCircle fontSize="small" color={selectedUser.status === 'BAJA' ? 'warning' : 'inherit'} />
+                </ListItemIcon>
+                <ListItemText>Establecer como Baja</ListItemText>
+              </MenuItem>
+            </>
           )}
           
           {isAdmin && selectedUser?.status === 'ACTIVO' && (
