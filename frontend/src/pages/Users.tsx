@@ -49,7 +49,6 @@ import {
   Visibility,
   VisibilityOff,
   Person,
-  RemoveCircle,
   Email,
   Badge,
   Business,
@@ -96,8 +95,8 @@ export const Users: React.FC = () => {
 
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(false);
-  // Estados para alerta/snackbar
-  const [alert, setAlert] = useState<{ type: 'success' | 'error', message: string } | null>(null);
+  
+  // Estado para notificaciones
   const [snackbar, setSnackbar] = useState<{
     open: boolean;
     message: string;
@@ -179,11 +178,31 @@ export const Users: React.FC = () => {
       setUsers(response.users || []);
     } catch (error) {
       console.error('Error cargando usuarios:', error);
-      setAlert({ type: 'error', message: 'Error al cargar los usuarios' });
+      setSnackbar({
+        open: true,
+        message: 'Error al cargar los usuarios',
+        severity: 'error'
+      });
     } finally {
       setLoading(false);
     }
   }, []);
+
+  // Función para actualizar un usuario específico sin recargar toda la lista
+  const updateSingleUser = useCallback(async (userId: number) => {
+    try {
+      const response = await usersAPI.getUserById(userId);
+      setUsers(prevUsers => 
+        prevUsers.map(user => 
+          user.id === userId ? response : user
+        )
+      );
+    } catch (error) {
+      console.error('Error actualizando usuario específico:', error);
+      // Si falla la actualización específica, recargar toda la lista como fallback
+      await loadUsers();
+    }
+  }, [loadUsers]);
 
   // Función para filtrar usuarios
   const filteredUsers = users.filter(user => {
@@ -224,14 +243,6 @@ export const Users: React.FC = () => {
     loadUsers();
   }, [loadUsers]);
 
-  // Auto-ocultar alertas
-  useEffect(() => {
-    if (alert) {
-      const timer = setTimeout(() => setAlert(null), 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [alert]);
-
   // Handlers para menú contextual
   const handleMenuClick = (event: React.MouseEvent<HTMLElement>, user: User) => {
     setAnchorEl(event.currentTarget);
@@ -247,9 +258,10 @@ export const Users: React.FC = () => {
   const handleDeleteUser = async (id: number) => {
     // Verificar permisos de administrador
     if (!isAdmin) {
-      setAlert({
-        type: 'error',
-        message: '❌ No tienes permisos para eliminar usuarios. Solo los administradores pueden realizar esta acción.'
+      setSnackbar({
+        open: true,
+        message: '❌ No tienes permisos para eliminar usuarios. Solo los administradores pueden realizar esta acción.',
+        severity: 'error'
       });
       handleCloseMenu();
       return;
@@ -272,49 +284,40 @@ export const Users: React.FC = () => {
     }
 
     try {
+      // Cerrar el menú después de las confirmaciones pero antes de la operación
+      handleCloseMenu();
+      
       await usersAPI.deleteUserPermanently(id);
       await loadUsers(); // Recargar la lista
-      setAlert({ type: 'success', message: 'Usuario y carpeta eliminados permanentemente' });
+      setSnackbar({
+        open: true,
+        message: 'Usuario y carpeta eliminados permanentemente',
+        severity: 'success'
+      });
     } catch (error) {
       console.error('Error al eliminar usuario:', error);
-      setAlert({ type: 'error', message: 'Error al eliminar el usuario' });
-    } finally {
-      handleCloseMenu();
-    }
-  };
-
-  const handleToggleStatus = async (id: number) => {
-    // Verificar permisos de administrador
-    if (!isAdmin) {
-      setAlert({
-        type: 'error',
-        message: '❌ No tienes permisos para cambiar el estado de usuarios. Solo los administradores pueden realizar esta acción.'
+      setSnackbar({
+        open: true,
+        message: 'Error al eliminar el usuario',
+        severity: 'error'
       });
-      handleCloseMenu();
-      return;
     }
-
-    try {
-      await usersAPI.toggleUserStatus(id);
-      setAlert({ type: 'success', message: 'Estado del usuario actualizado correctamente' });
-      await loadUsers(); // Recargar la lista
-    } catch (error) {
-      console.error('Error al cambiar estado del usuario:', error);
-      setAlert({ type: 'error', message: 'Error al cambiar el estado del usuario' });
-    }
-    handleCloseMenu();
   };
 
   const handleSetUserStatus = async (id: number, status: 'ACTIVO' | 'INACTIVO' | 'BAJA') => {
     // Verificar permisos de administrador
     if (!isAdmin) {
-      setAlert({
-        type: 'error',
-        message: '❌ No tienes permisos para cambiar el estado de usuarios. Solo los administradores pueden realizar esta acción.'
+      setSnackbar({
+        open: true,
+        message: '❌ No tienes permisos para cambiar el estado de usuarios. Solo los administradores pueden realizar esta acción.',
+        severity: 'error'
       });
       handleCloseMenu();
       return;
     }
+
+    // Cerrar el menú primero para evitar problemas de posicionamiento
+    handleCloseMenu();
 
     try {
       await usersAPI.setUserStatus(id, status);
@@ -323,24 +326,29 @@ export const Users: React.FC = () => {
         'INACTIVO': 'inactivo', 
         'BAJA': 'de baja'
       };
-      setAlert({ 
-        type: 'success', 
-        message: `Usuario establecido como ${statusLabels[status]} correctamente` 
+      setSnackbar({ 
+        open: true,
+        message: `Usuario establecido como ${statusLabels[status]} correctamente`,
+        severity: 'success'
       });
-      await loadUsers(); // Recargar la lista
+      await updateSingleUser(id); // Actualizar solo este usuario
     } catch (error) {
       console.error('Error al cambiar estado del usuario:', error);
-      setAlert({ type: 'error', message: 'Error al cambiar el estado del usuario' });
+      setSnackbar({
+        open: true,
+        message: 'Error al cambiar el estado del usuario',
+        severity: 'error'
+      });
     }
-    handleCloseMenu();
   };
 
   const handleResetPassword = async (user: User) => {
     // Verificar permisos de administrador
     if (!isAdmin) {
-      setAlert({
-        type: 'error',
-        message: '❌ No tienes permisos para restablecer contraseñas. Solo los administradores pueden realizar esta acción.'
+      setSnackbar({
+        open: true,
+        message: '❌ No tienes permisos para restablecer contraseñas. Solo los administradores pueden realizar esta acción.',
+        severity: 'error'
       });
       return;
     }
@@ -429,9 +437,6 @@ export const Users: React.FC = () => {
       
       handleCloseResetPasswordModal();
       
-      // Recargar los usuarios para reflejar cualquier cambio
-      await loadUsers();
-      
     } catch (error: any) {
       console.error('Error al restablecer contraseña:', error);
       
@@ -465,9 +470,10 @@ export const Users: React.FC = () => {
   const handleAddUser = () => {
     // Verificar permisos de administrador
     if (!isAdmin) {
-      setAlert({
-        type: 'error',
-        message: '❌ No tienes permisos para crear usuarios. Solo los administradores pueden realizar esta acción.'
+      setSnackbar({
+        open: true,
+        message: '❌ No tienes permisos para crear usuarios. Solo los administradores pueden realizar esta acción.',
+        severity: 'error'
       });
       return;
     }
@@ -479,9 +485,10 @@ export const Users: React.FC = () => {
   const handleEditUser = (user: any) => {
     // Verificar permisos de administrador
     if (!isAdmin) {
-      setAlert({
-        type: 'error',
-        message: '❌ No tienes permisos para editar usuarios. Solo los administradores pueden realizar esta acción.'
+      setSnackbar({
+        open: true,
+        message: '❌ No tienes permisos para editar usuarios. Solo los administradores pueden realizar esta acción.',
+        severity: 'error'
       });
       return;
     }
@@ -523,9 +530,10 @@ export const Users: React.FC = () => {
     // Validaciones básicas
     if (!editUserData.dni_nie.trim() || !editUserData.first_name.trim() || 
         !editUserData.last_name.trim() || !editUserData.email.trim()) {
-      setAlert({
-        type: 'error',
-        message: '❌ Por favor, completa todos los campos obligatorios (DNI/NIE, nombre, apellidos y email)'
+      setSnackbar({
+        open: true,
+        message: '❌ Por favor, completa todos los campos obligatorios (DNI/NIE, nombre, apellidos y email)',
+        severity: 'error'
       });
       return;
     }
@@ -533,9 +541,10 @@ export const Users: React.FC = () => {
     // Validar formato de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(editUserData.email)) {
-      setAlert({
-        type: 'error',
-        message: '❌ Por favor, ingresa un email válido'
+      setSnackbar({
+        open: true,
+        message: '❌ Por favor, ingresa un email válido',
+        severity: 'error'
       });
       return;
     }
@@ -544,18 +553,20 @@ export const Users: React.FC = () => {
     try {
       await usersAPI.updateUser(selectedUser.id, editUserData);
       
-      setAlert({
-        type: 'success',
-        message: `✅ Usuario ${editUserData.first_name} ${editUserData.last_name} actualizado exitosamente`
+      setSnackbar({
+        open: true,
+        message: `✅ Usuario ${editUserData.first_name} ${editUserData.last_name} actualizado exitosamente`,
+        severity: 'success'
       });
       
       handleCloseEditModal();
-      loadUsers(); // Recargar la lista de usuarios
+      await updateSingleUser(selectedUser.id); // Actualizar solo este usuario
     } catch (error) {
       console.error('Error al actualizar usuario:', error);
-      setAlert({
-        type: 'error',
-        message: '❌ Error al actualizar el usuario. Verifica tu conexión e inténtalo de nuevo'
+      setSnackbar({
+        open: true,
+        message: '❌ Error al actualizar el usuario. Verifica tu conexión e inténtalo de nuevo',
+        severity: 'error'
       });
     } finally {
       setEditUserLoading(false);
@@ -634,17 +645,29 @@ export const Users: React.FC = () => {
     // Validaciones básicas
     if (!createUserData.dni_nie || !createUserData.first_name || !createUserData.last_name || 
         !createUserData.email || !createUserData.department || !createUserData.password) {
-      setAlert({ type: 'error', message: 'Por favor, complete todos los campos obligatorios' });
+      setSnackbar({
+        open: true,
+        message: 'Por favor, complete todos los campos obligatorios',
+        severity: 'error'
+      });
       return;
     }
 
     if (createUserData.password !== createUserData.confirmPassword) {
-      setAlert({ type: 'error', message: 'Las contraseñas no coinciden' });
+      setSnackbar({
+        open: true,
+        message: 'Las contraseñas no coinciden',
+        severity: 'error'
+      });
       return;
     }
 
     if (createUserData.password.length < 8) {
-      setAlert({ type: 'error', message: 'La contraseña debe tener al menos 8 caracteres' });
+      setSnackbar({
+        open: true,
+        message: 'La contraseña debe tener al menos 8 caracteres',
+        severity: 'error'
+      });
       return;
     }
 
@@ -652,14 +675,22 @@ export const Users: React.FC = () => {
     const dniRegex = /^[0-9]{8}[TRWAGMYFPDXBNJZSQVHLCKE]$/i;
     const nieRegex = /^[XYZ][0-9]{7}[TRWAGMYFPDXBNJZSQVHLCKE]$/i;
     if (!dniRegex.test(createUserData.dni_nie) && !nieRegex.test(createUserData.dni_nie)) {
-      setAlert({ type: 'error', message: 'Formato de DNI/NIE inválido. Ejemplo: 12345678A o X1234567A' });
+      setSnackbar({
+        open: true,
+        message: 'Formato de DNI/NIE inválido. Ejemplo: 12345678A o X1234567A',
+        severity: 'error'
+      });
       return;
     }
 
     // Validación de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(createUserData.email)) {
-      setAlert({ type: 'error', message: 'Formato de email inválido' });
+      setSnackbar({
+        open: true,
+        message: 'Formato de email inválido',
+        severity: 'error'
+      });
       return;
     }
 
@@ -668,9 +699,10 @@ export const Users: React.FC = () => {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { confirmPassword, ...userData } = createUserData;
       await usersAPI.createUser(userData);
-      setAlert({ 
-        type: 'success', 
-        message: `Usuario ${createUserData.first_name} ${createUserData.last_name} creado exitosamente. Se ha creado automáticamente su carpeta personal para documentos.` 
+      setSnackbar({ 
+        open: true,
+        message: `Usuario ${createUserData.first_name} ${createUserData.last_name} creado exitosamente. Se ha creado automáticamente su carpeta personal para documentos.`,
+        severity: 'success'
       });
       handleCloseCreateModal();
       await loadUsers(); // Recargar la lista
@@ -691,11 +723,23 @@ export const Users: React.FC = () => {
       const errorMessage = apiError?.response?.data?.detail || apiError?.message;
       
       if (errorMessage?.includes('DNI/NIE')) {
-        setAlert({ type: 'error', message: '❌ Este DNI/NIE ya está registrado en el sistema. Cada DNI/NIE debe ser único.' });
+        setSnackbar({
+          open: true,
+          message: '❌ Este DNI/NIE ya está registrado en el sistema. Cada DNI/NIE debe ser único.',
+          severity: 'error'
+        });
       } else if (errorMessage?.includes('email')) {
-        setAlert({ type: 'error', message: '❌ Este email ya está registrado en el sistema. Use un email diferente.' });
+        setSnackbar({
+          open: true,
+          message: '❌ Este email ya está registrado en el sistema. Use un email diferente.',
+          severity: 'error'
+        });
       } else {
-        setAlert({ type: 'error', message: '❌ Error al crear el usuario. Verifique los datos e inténtelo de nuevo.' });
+        setSnackbar({
+          open: true,
+          message: '❌ Error al crear el usuario. Verifique los datos e inténtelo de nuevo.',
+          severity: 'error'
+        });
       }
     } finally {
       setCreateUserLoading(false);
@@ -836,25 +880,6 @@ export const Users: React.FC = () => {
               <Typography variant="body2" sx={{ fontWeight: 500 }}>
                 <strong>Acceso de solo lectura:</strong> Puedes consultar la información de usuarios, pero solo los administradores pueden crear, editar o gestionar usuarios.
               </Typography>
-            </Alert>
-          </Fade>
-        )}
-
-        {/* Alertas */}
-        {alert && (
-          <Fade in timeout={400}>
-            <Alert 
-              severity={alert.type} 
-              sx={{ 
-                mb: 3,
-                borderRadius: 2,
-                '& .MuiAlert-icon': {
-                  fontSize: 24
-                }
-              }} 
-              onClose={() => setAlert(null)}
-            >
-              {alert.message}
             </Alert>
           </Fade>
         )}
@@ -1029,7 +1054,7 @@ export const Users: React.FC = () => {
                 <People sx={{ color: '#501b36', fontSize: 28 }} />
                 <Box>
                   <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36' }}>
-                    Lista de Usuarios del Sistema
+                    Lista de usuarios
                   </Typography>
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                     {filteredUsers.length} usuario{filteredUsers.length !== 1 ? 's' : ''} encontrado{filteredUsers.length !== 1 ? 's' : ''}
@@ -2403,6 +2428,23 @@ export const Users: React.FC = () => {
           </Alert>
         </Snackbar>
       </ModernModal>
+
+      {/* Snackbar global para notificaciones */}
+      <Snackbar
+        open={snackbar.open}
+        autoHideDuration={6000}
+        onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      >
+        <Alert
+          onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
+          severity={snackbar.severity}
+          variant="filled"
+          sx={{ width: '100%' }}
+        >
+          {snackbar.message}
+        </Alert>
+      </Snackbar>
       </Box>
     </>
   );
