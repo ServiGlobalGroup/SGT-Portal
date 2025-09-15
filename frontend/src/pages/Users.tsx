@@ -54,7 +54,6 @@ import {
   Business,
   Key,
   People,
-  Refresh,
   SupervisorAccount,
 } from '@mui/icons-material';
 import { ModernModal } from '../components/ModernModal';
@@ -242,6 +241,41 @@ export const Users: React.FC = () => {
   useEffect(() => {
     loadUsers();
   }, [loadUsers]);
+
+  // Función para cargar usuarios de forma silenciosa (sin loading ni errores)
+  const loadUsersSilent = useCallback(async () => {
+    try {
+      const response = await usersAPI.getAllUsers({ per_page: 100, active_only: false });
+      setUsers(response.users || []);
+    } catch (error) {
+      console.warn('Error en auto-refresh silencioso de usuarios:', error);
+      // No mostrar notificación de error en auto-refresh
+    }
+  }, []);
+
+  // Auto-refresh silencioso para evitar parpadeos
+  useEffect(() => {
+    const intervalMs = 30000; // 30 segundos
+    const id = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadUsersSilent();
+      }
+    }, intervalMs);
+
+    // Refrescar cuando la ventana vuelve a estar visible
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadUsersSilent();
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [loadUsersSilent]);
 
   // Handlers para menú contextual
   const handleMenuClick = (event: React.MouseEvent<HTMLElement>, user: User) => {
@@ -993,26 +1027,7 @@ export const Users: React.FC = () => {
                   </Select>
                 </FormControl>
 
-                <Button
-                  variant="outlined"
-                  startIcon={<Refresh />}
-                  onClick={loadUsers}
-                  disabled={loading}
-                  sx={{
-                    borderRadius: 2,
-                    px: 3,
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    borderColor: '#501b36',
-                    color: '#501b36',
-                    '&:hover': {
-                      borderColor: '#3d1429',
-                      bgcolor: alpha('#501b36', 0.04),
-                    },
-                  }}
-                >
-                  {loading ? 'Actualizando...' : 'Actualizar'}
-                </Button>
+                {/* Botón Actualizar eliminado: hay auto-refresh silencioso */}
               </Stack>
             </Box>
 
