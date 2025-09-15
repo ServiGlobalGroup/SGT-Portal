@@ -5,7 +5,7 @@ import { useAuth } from '../hooks/useAuth';
 import { hasPermission, Permission } from '../utils/permissions';
 import { tripsAPI, type TripRecord } from '../services/api';
 
-interface TripEntry { id: string; orderNumber: string; pernocta: boolean; festivo: boolean; nota: string; createdAt: string; eventDate: string; userName: string; }
+interface TripEntry { id: string; orderNumber: string; pernocta: boolean; festivo: boolean; canonTti: boolean; nota: string; createdAt: string; eventDate: string; userName: string; }
 
 export const Trips: React.FC = () => {
   const { user } = useAuth();
@@ -14,6 +14,7 @@ export const Trips: React.FC = () => {
   const [orderNumber, setOrderNumber] = useState('');
   const [pernocta, setPernocta] = useState(false);
   const [festivo, setFestivo] = useState(false);
+  const [canonTti, setCanonTti] = useState(false);
   const [nota, setNota] = useState('');
   const [eventDate, setEventDate] = useState<string>(new Date().toISOString().slice(0,10));
   const [entries, setEntries] = useState<TripEntry[]>([]);
@@ -45,6 +46,7 @@ export const Trips: React.FC = () => {
       orderNumber: t.order_number,
       pernocta: t.pernocta,
       festivo: t.festivo,
+      canonTti: t.canon_tti,
       nota: t.note || '',
       createdAt: t.created_at,
       eventDate: t.event_date,
@@ -83,6 +85,7 @@ export const Trips: React.FC = () => {
         order_number: orderNumber.trim(),
         pernocta,
         festivo,
+        canon_tti: canonTti,
         event_date: eventDate,
         note: nota.trim() || undefined
       } as any);
@@ -91,18 +94,19 @@ export const Trips: React.FC = () => {
         orderNumber: created.order_number,
         pernocta: created.pernocta,
         festivo: created.festivo,
+        canonTti: created.canon_tti,
         nota: created.note || '',
         createdAt: created.created_at,
         eventDate: created.event_date,
         userName: created.user_name || user?.full_name || '—'
       };
       setEntries(p => [entry, ...p]);
-      setOrderNumber(''); setPernocta(false); setFestivo(false); setNota(''); setEventDate(new Date().toISOString().slice(0,10)); setSuccess('Registro guardado'); setTimeout(() => setSuccess(null), 3000);
+      setOrderNumber(''); setPernocta(false); setFestivo(false); setCanonTti(false); setNota(''); setEventDate(new Date().toISOString().slice(0,10)); setSuccess('Registro guardado'); setTimeout(() => setSuccess(null), 3000);
     } catch (e: any) {
       setError(e?.response?.data?.detail || 'Error guardando');
     }
   };
-  const handleClear = () => { setOrderNumber(''); setPernocta(false); setFestivo(false); setNota(''); setEventDate(new Date().toISOString().slice(0,10)); setError(null); };
+  const handleClear = () => { setOrderNumber(''); setPernocta(false); setFestivo(false); setCanonTti(false); setNota(''); setEventDate(new Date().toISOString().slice(0,10)); setError(null); };
   const handleDelete = async (id: string) => {
     const prev = entries;
     setEntries(p => p.filter(e => e.id !== id));
@@ -141,9 +145,11 @@ export const Trips: React.FC = () => {
   const indicatorValues: string[] = [];
   if (pernocta) indicatorValues.push('pernocta');
   if (festivo) indicatorValues.push('festivo');
+  if (canonTti) indicatorValues.push('canonTti');
   const handleIndicator = useCallback((_: React.SyntheticEvent, values: string[]) => {
     setPernocta(values.includes('pernocta'));
     setFestivo(values.includes('festivo'));
+    setCanonTti(values.includes('canonTti'));
   }, []);
 
   return (<>
@@ -347,6 +353,7 @@ export const Trips: React.FC = () => {
                   >
                     <ToggleButton value="pernocta">Pernocta</ToggleButton>
                     <ToggleButton value="festivo">Festivo</ToggleButton>
+                    <ToggleButton value="canonTti">Canon TTI</ToggleButton>
                   </ToggleButtonGroup>
                 </Stack>
               </Box>
@@ -454,6 +461,7 @@ export const Trips: React.FC = () => {
                     <TableCell>Albarán / OC</TableCell>
                     <TableCell>Pernocta</TableCell>
                     <TableCell>Festivo</TableCell>
+                    <TableCell>Canon TTI</TableCell>
                     <TableCell>Fecha Evento</TableCell>
                     <TableCell>Fecha Registro</TableCell>
                     <TableCell>Nota</TableCell>
@@ -463,7 +471,7 @@ export const Trips: React.FC = () => {
                 <TableBody>
                   {entries.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={8} align="center" sx={{ py:6 }}>
+                      <TableCell colSpan={10} align="center" sx={{ py:6 }}>
                         <Typography variant="body2" sx={{ opacity:0.7 }}>Sin registros todavía</Typography>
                       </TableCell>
                     </TableRow>
@@ -477,6 +485,9 @@ export const Trips: React.FC = () => {
                       </TableCell>
                       <TableCell>
                         <Chip size="small" label={e.festivo ? 'Sí' : 'No'} sx={{ bgcolor: e.festivo ? '#d4a574' : '#e4e4e4', color: e.festivo ? '#4a2c12' : '#555', fontWeight:500 }} />
+                      </TableCell>
+                      <TableCell>
+                        <Chip size="small" label={e.canonTti ? 'Sí' : 'No'} sx={{ bgcolor: e.canonTti ? '#388e3c' : '#e4e4e4', color: e.canonTti ? '#fff' : '#555', fontWeight:500 }} />
                       </TableCell>
                       <TableCell>{new Date(e.eventDate + 'T00:00:00').toLocaleDateString('es-ES', { day:'2-digit', month:'2-digit', year:'2-digit' })}</TableCell>
                       <TableCell>{new Date(e.createdAt).toLocaleString('es-ES', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' })}</TableCell>

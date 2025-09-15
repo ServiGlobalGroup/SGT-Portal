@@ -647,6 +647,7 @@ export interface TripRecord {
   order_number: string;
   pernocta: boolean;
   festivo: boolean;
+  canon_tti: boolean;
   event_date: string; // YYYY-MM-DD
   note?: string;
   created_at: string;
@@ -657,7 +658,7 @@ export interface TripRecord {
 export interface TripPage { total: number; page: number; page_size: number; items: TripRecord[] }
 
 export const tripsAPI = {
-  create: (data: { order_number: string; pernocta: boolean; festivo: boolean; event_date: string; note?: string; }): Promise<TripRecord> =>
+  create: (data: { order_number: string; pernocta: boolean; festivo: boolean; canon_tti: boolean; event_date: string; note?: string; }): Promise<TripRecord> =>
     api.post('/api/trips/', data).then(r=>r.data),
   listAll: (params?: { user_id?: number; start?: string; end?: string; page?: number; page_size?: number; }): Promise<TripPage> => {
     const sp = new URLSearchParams();

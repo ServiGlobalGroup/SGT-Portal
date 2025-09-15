@@ -6,6 +6,7 @@ class TripBase(BaseModel):
     order_number: str = Field(..., max_length=100, description="Albarán / OC")
     pernocta: bool = False
     festivo: bool = False
+    canon_tti: bool = False
     event_date: date
     note: Optional[str] = Field(None, max_length=500)
 
