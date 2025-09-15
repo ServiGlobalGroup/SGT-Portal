@@ -4,7 +4,7 @@ from app.models.schemas import DashboardStats
 from app.services.payroll_pdf_service import PayrollPDFProcessor
 from sqlalchemy.orm import Session
 from app.database.connection import get_db
-from app.models.user import User, UserRole
+from app.models.user import User, UserRole, UserStatus
 from app.models.vacation import VacationRequest, VacationStatus
 from sqlalchemy import and_
 from app.config import settings
@@ -71,7 +71,7 @@ async def get_available_workers(
 
     base_query = db.query(User).filter(
         User.role == UserRole.TRABAJADOR,
-        User.is_active == True,  # noqa: E712
+        User.status == UserStatus.ACTIVO,  # Solo usuarios ACTIVOS (no BAJA ni INACTIVO)
     )
     if vacation_user_ids:
         base_query = base_query.filter(User.id.notin_(vacation_user_ids))
@@ -81,7 +81,7 @@ async def get_available_workers(
     # Obtener posiciones (todas las de trabajadores activos, independientemente de vacaciones o filtro position)
     raw_positions = db.query(User.position).filter(
         User.role == UserRole.TRABAJADOR,
-        User.is_active == True,  # noqa: E712
+        User.status == UserStatus.ACTIVO,  # Solo usuarios ACTIVOS para posiciones
         User.position.isnot(None),
         User.position != ''
     ).all()

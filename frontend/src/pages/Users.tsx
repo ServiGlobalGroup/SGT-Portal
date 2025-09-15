@@ -43,6 +43,7 @@ import {
   Lock,
   Block,
   CheckCircle,
+  RemoveCircle,
   Search,
   PersonAdd,
   Visibility,
@@ -107,7 +108,7 @@ export const Users: React.FC = () => {
   
   // Estados para filtros
   const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'baja'>('all');
   const [roleFilter, setRoleFilter] = useState<'all' | 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR'>('all');
   
   // Estados para modal de creación de usuario
@@ -194,8 +195,9 @@ export const Users: React.FC = () => {
 
     // Filtro por estado
     const matchesStatus = statusFilter === 'all' || 
-      (statusFilter === 'active' && user.is_active) ||
-      (statusFilter === 'inactive' && !user.is_active);
+      (statusFilter === 'active' && user.status === 'ACTIVO') ||
+      (statusFilter === 'inactive' && user.status === 'INACTIVO') ||
+      (statusFilter === 'baja' && user.status === 'BAJA');
 
     // Filtro por rol
     const matchesRole = roleFilter === 'all' || user.role === roleFilter;
@@ -297,6 +299,28 @@ export const Users: React.FC = () => {
     } catch (error) {
       console.error('Error al cambiar estado del usuario:', error);
       setAlert({ type: 'error', message: 'Error al cambiar el estado del usuario' });
+    }
+    handleCloseMenu();
+  };
+
+  const handleSetUserBaja = async (id: number) => {
+    // Verificar permisos de administrador
+    if (!isAdmin) {
+      setAlert({
+        type: 'error',
+        message: '❌ No tienes permisos para cambiar el estado de usuarios. Solo los administradores pueden realizar esta acción.'
+      });
+      handleCloseMenu();
+      return;
+    }
+
+    try {
+      await usersAPI.setUserBaja(id);
+      setAlert({ type: 'success', message: 'Usuario puesto en estado de baja correctamente' });
+      await loadUsers(); // Recargar la lista
+    } catch (error) {
+      console.error('Error al poner usuario en baja:', error);
+      setAlert({ type: 'error', message: 'Error al poner el usuario en baja' });
     }
     handleCloseMenu();
   };
@@ -878,7 +902,7 @@ export const Users: React.FC = () => {
                   <Select
                     value={statusFilter}
                     label="Estado"
-                    onChange={(e: SelectChangeEvent) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive')}
+                    onChange={(e: SelectChangeEvent) => setStatusFilter(e.target.value as 'all' | 'active' | 'inactive' | 'baja')}
                     sx={{
                       borderRadius: 2,
                       '&:hover': {
@@ -896,6 +920,7 @@ export const Users: React.FC = () => {
                     <MenuItem value="all">Todos</MenuItem>
                     <MenuItem value="active">Activos</MenuItem>
                     <MenuItem value="inactive">Inactivos</MenuItem>
+                    <MenuItem value="baja">Baja</MenuItem>
                   </Select>
                 </FormControl>
 
@@ -1160,11 +1185,20 @@ export const Users: React.FC = () => {
                         </TableCell>
                         <TableCell>
                           <Chip
-                            label={user.is_active ? 'Activo' : 'Inactivo'}
+                            label={
+                              user.status === 'ACTIVO' ? 'Activo' : 
+                              user.status === 'BAJA' ? 'Baja' : 'Inactivo'
+                            }
                             size="small"
-                            color={user.is_active ? 'success' : 'error'}
-                            variant={user.is_active ? 'filled' : 'outlined'}
-                            icon={user.is_active ? <CheckCircle /> : <Block />}
+                            color={
+                              user.status === 'ACTIVO' ? 'success' : 
+                              user.status === 'BAJA' ? 'warning' : 'error'
+                            }
+                            variant={user.status === 'INACTIVO' ? 'outlined' : 'filled'}
+                            icon={
+                              user.status === 'ACTIVO' ? <CheckCircle /> : 
+                              user.status === 'BAJA' ? <RemoveCircle /> : <Block />
+                            }
                             sx={{
                               borderRadius: 2,
                               fontWeight: 600,
@@ -1251,6 +1285,15 @@ export const Users: React.FC = () => {
               <ListItemText>
                 {selectedUser?.is_active ? 'Desactivar' : 'Activar'}
               </ListItemText>
+            </MenuItem>
+          )}
+          
+          {isAdmin && selectedUser?.status === 'ACTIVO' && (
+            <MenuItem onClick={() => selectedUser && handleSetUserBaja(selectedUser.id)}>
+              <ListItemIcon>
+                <RemoveCircle fontSize="small" sx={{ color: 'warning.main' }} />
+              </ListItemIcon>
+              <ListItemText sx={{ color: 'warning.main' }}>Poner en Baja</ListItemText>
             </MenuItem>
           )}
           

@@ -55,7 +55,7 @@ def user_to_response(user, is_master=False) -> UserResponse:
             postal_code=user.postal_code,
             emergency_contact_name=user.emergency_contact_name,
             emergency_contact_phone=user.emergency_contact_phone,
-            is_active=user.is_active,
+            status=user.status,
             is_verified=user.is_verified,
             avatar=user.avatar,
             user_folder_path="",  # Sin carpeta física
@@ -88,7 +88,7 @@ def user_to_response(user, is_master=False) -> UserResponse:
             "postal_code": user.postal_code,
             "emergency_contact_name": user.emergency_contact_name,
             "emergency_contact_phone": user.emergency_contact_phone,
-            "is_active": user.is_active,
+            "status": user.status,
             "is_verified": user.is_verified,
             "avatar": user.avatar,
             "user_folder_path": f"{settings.user_files_base_path}/{user.dni_nie}",

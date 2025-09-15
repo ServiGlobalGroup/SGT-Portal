@@ -85,7 +85,8 @@ export interface User {
   postal_code?: string;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
-  is_active: boolean;
+  status: 'ACTIVO' | 'INACTIVO' | 'BAJA';
+  is_active: boolean; // Propiedad de compatibilidad
   is_verified: boolean;
   avatar?: string;
   user_folder_path?: string;

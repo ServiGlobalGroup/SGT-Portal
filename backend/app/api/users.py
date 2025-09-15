@@ -4,7 +4,7 @@ from sqlalchemy import or_
 from typing import List, Optional
 from app.database.connection import get_db
 from app.services.user_service import UserService
-from app.models.user import User, UserRole
+from app.models.user import User, UserRole, UserStatus
 from app.models.user_schemas import (
     UserCreate, UserUpdate, UserResponse, UserList, 
     UserListResponse, PasswordChange, AdminPasswordReset
@@ -73,7 +73,7 @@ async def get_users(
     if role:
         query = query.filter(User.role == role)
     if active_only:
-        query = query.filter(User.is_active == True)  # noqa: E712
+        query = query.filter(User.status.in_([UserStatus.ACTIVO, UserStatus.BAJA]))  # Usuarios que pueden hacer login
 
     # Total antes de paginar
     total_users = query.count()
@@ -268,6 +268,24 @@ async def activate_user(
     user = UserService.get_user_by_id(db, user_id)
     return user
 
+@router.post("/users/{user_id}/baja", response_model=UserResponse)
+async def set_user_baja(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Poner un usuario en estado de baja.
+    """
+    success = UserService.set_user_baja(db, user_id)
+    if not success:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado"
+        )
+    
+    user = UserService.get_user_by_id(db, user_id)
+    return user
+
 @router.post("/users/{user_id}/verify", response_model=UserResponse)
 async def verify_user_email(
     user_id: int,
@@ -309,7 +327,7 @@ async def get_user_stats(db: Session = Depends(get_db)):
     Obtener estadísticas generales de usuarios.
     """
     total_users = db.query(User).count()
-    active_users = db.query(User).filter(User.is_active == True).count()  # noqa: E712
+    active_users = db.query(User).filter(User.status.in_([UserStatus.ACTIVO, UserStatus.BAJA])).count()  # Usuarios que pueden hacer login
     # Estadísticas por departamento (agrupación correcta)
     from sqlalchemy import func
     dept_counts = (

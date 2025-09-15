@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 from typing import Optional
 from datetime import datetime
-from app.models.user import UserRole
+from app.models.user import UserRole, UserStatus
 from app.utils.dni_validation import validate_dni_nie_format, sanitize_dni_nie_for_login
 
 # Esquemas base
@@ -58,7 +58,7 @@ class UserUpdate(BaseModel):
     postal_code: Optional[str] = Field(None, max_length=10)
     emergency_contact_name: Optional[str] = Field(None, max_length=200)
     emergency_contact_phone: Optional[str] = Field(None, max_length=20)
-    is_active: Optional[bool] = None
+    status: Optional[UserStatus] = None
 
 # Esquemas de respuesta
 class UserResponse(UserBase):
@@ -71,7 +71,7 @@ class UserResponse(UserBase):
     postal_code: Optional[str] = None
     emergency_contact_name: Optional[str] = None
     emergency_contact_phone: Optional[str] = None
-    is_active: bool
+    status: UserStatus
     is_verified: bool
     avatar: Optional[str] = None
     user_folder_path: Optional[str] = None
@@ -83,6 +83,12 @@ class UserResponse(UserBase):
     # Propiedades calculadas
     full_name: str = Field(..., description="Nombre completo")
     initials: str = Field(..., description="Iniciales para avatar")
+    
+    # Propiedad de compatibilidad
+    @property
+    def is_active(self) -> bool:
+        """Propiedad de compatibilidad: retorna True si el usuario está ACTIVO o en BAJA"""
+        return self.status in (UserStatus.ACTIVO, UserStatus.BAJA)
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -97,13 +103,19 @@ class UserList(BaseModel):
     position: Optional[str] = None
     role: UserRole
     worker_type: str = Field(..., pattern="^(antiguo|nuevo)$")
-    is_active: bool
+    status: UserStatus
     last_login: Optional[datetime] = None
     created_at: datetime
     
     # Propiedades calculadas
     full_name: str
     initials: str
+    
+    # Propiedad de compatibilidad
+    @property
+    def is_active(self) -> bool:
+        """Propiedad de compatibilidad: retorna True si el usuario está ACTIVO o en BAJA"""
+        return self.status in (UserStatus.ACTIVO, UserStatus.BAJA)
     
     model_config = ConfigDict(from_attributes=True)
 

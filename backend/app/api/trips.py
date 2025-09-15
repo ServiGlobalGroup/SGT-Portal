@@ -6,7 +6,7 @@ from datetime import date
 
 from app.database.connection import get_db  # fixed
 from app.models.trip import TripRecord
-from app.models.user import User, UserRole
+from app.models.user import User, UserRole, UserStatus
 from app.schemas.trips import TripCreate, TripOut, TripPage
 from app.api.auth import get_current_user  # fixed
 
@@ -91,7 +91,7 @@ async def user_suggestions(q: str = Query(..., min_length=2), limit: int = Query
         return []
     pattern = f"%{q.lower()}%"
     rows = (db.query(User)
-              .filter(User.is_active == True)  # noqa: E712
+              .filter(User.status.in_([UserStatus.ACTIVO, UserStatus.BAJA]))  # Usuarios que pueden hacer login
               .filter(or_(User.first_name.ilike(pattern), User.last_name.ilike(pattern), (User.first_name + ' ' + User.last_name).ilike(pattern), User.dni_nie.ilike(pattern)))
               .order_by(User.first_name.asc())
               .limit(limit)

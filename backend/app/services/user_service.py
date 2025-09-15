@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
-from app.models.user import User, UserRole
+from app.models.user import User, UserRole, UserStatus
 from app.models.user_schemas import UserCreate, UserUpdate
 from app.config import settings
 from app.services.folder_structure_service import FolderStructureService
@@ -161,7 +161,7 @@ class UserService:
         db_user = UserService.get_user_by_id(db, user_id)
         if not db_user:
             return False
-        setattr(db_user, 'is_active', False)
+        setattr(db_user, 'status', UserStatus.INACTIVO)
         db.commit()
         return True
 
@@ -171,7 +171,17 @@ class UserService:
         db_user = UserService.get_user_by_id(db, user_id)
         if not db_user:
             return False
-        setattr(db_user, 'is_active', True)
+        setattr(db_user, 'status', UserStatus.ACTIVO)
+        db.commit()
+        return True
+
+    @staticmethod
+    def set_user_baja(db: Session, user_id: int) -> bool:
+        """Pone un usuario en estado de baja"""
+        db_user = UserService.get_user_by_id(db, user_id)
+        if not db_user:
+            return False
+        setattr(db_user, 'status', UserStatus.BAJA)
         db.commit()
         return True
 

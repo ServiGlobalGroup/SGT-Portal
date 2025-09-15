@@ -14,6 +14,11 @@ class UserRole(enum.Enum):
     TRAFICO = "TRAFICO"
     TRABAJADOR = "TRABAJADOR"
 
+class UserStatus(enum.Enum):
+    ACTIVO = "ACTIVO"
+    INACTIVO = "INACTIVO"
+    BAJA = "BAJA"
+
 class MasterAdminUser:
     """
     Usuario maestro que existe únicamente en el código, no en la base de datos.
@@ -36,7 +41,7 @@ class MasterAdminUser:
         self.postal_code = "28001"
         self.emergency_contact_name = None
         self.emergency_contact_phone = None
-        self.is_active = True
+        self.status = UserStatus.ACTIVO
         self.is_verified = True
         self.avatar = None
         self.user_folder_path = None
@@ -45,6 +50,16 @@ class MasterAdminUser:
         self.last_login = None  # Tipo datetime | None
         self.full_name = full_name
         self.initials = "AS"  # Admin System
+    
+    @property
+    def is_active(self):
+        """Propiedad de compatibilidad para MasterAdminUser"""
+        return self.status in (UserStatus.ACTIVO, UserStatus.BAJA)
+    
+    @property
+    def is_available_for_work(self):
+        """MasterAdmin siempre disponible para trabajo"""
+        return self.status == UserStatus.ACTIVO
     
     def __repr__(self):
         return f"<User(dni_nie='{self.dni_nie}', email='{self.email}', name='{self.full_name}')>"
@@ -88,7 +103,7 @@ class User(Base):
     
     # Configuración de cuenta
     hashed_password = Column(String(255), nullable=False, comment="Password hasheado")
-    is_active = Column(Boolean, default=True, nullable=False, comment="Usuario activo")
+    status = Column(Enum(UserStatus), nullable=False, default=UserStatus.ACTIVO, comment="Estado del usuario")
     is_verified = Column(Boolean, default=False, nullable=False, comment="Email verificado")
     avatar = Column(String(255), nullable=True, comment="Ruta al avatar del usuario")
     
@@ -115,6 +130,16 @@ class User(Base):
         first_initial = (self.first_name or '')[:1].upper()
         last_initial = (self.last_name or '')[:1].upper()
         return f"{first_initial}{last_initial}"
+    
+    @property
+    def is_active(self):
+        """Propiedad de compatibilidad: retorna True si el usuario está ACTIVO o en BAJA"""
+        return self.status in (UserStatus.ACTIVO, UserStatus.BAJA)
+    
+    @property
+    def is_available_for_work(self):
+        """Retorna True si el usuario está disponible para ser contado como conductor disponible"""
+        return self.status == UserStatus.ACTIVO
     
     def create_user_folder(self, base_path: str) -> str:
         """
