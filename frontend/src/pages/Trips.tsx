@@ -10,6 +10,7 @@ interface TripEntry { id: string; orderNumber: string; pernocta: boolean; festiv
 export const Trips: React.FC = () => {
   const { user } = useAuth();
   const isAdmin = !!user && hasPermission(user, Permission.MANAGE_TRIPS);
+  const canViewAllTrips = !!user && (hasPermission(user, Permission.MANAGE_TRIPS) || hasPermission(user, Permission.VIEW_TRIPS));
   const [orderNumber, setOrderNumber] = useState('');
   const [pernocta, setPernocta] = useState(false);
   const [festivo, setFestivo] = useState(false);
@@ -49,7 +50,7 @@ export const Trips: React.FC = () => {
       eventDate: t.event_date,
       userName: t.user_name || '—'
     });
-    if (isAdmin) {
+    if (canViewAllTrips) {
       tripsAPI.listAll({
         user_id: filterUserId ? Number(filterUserId) : undefined,
         start: filterStart || undefined,
@@ -71,7 +72,7 @@ export const Trips: React.FC = () => {
       }).catch(err => { if(active) setError(err?.response?.data?.detail || 'Error cargando registros'); }).finally(()=> active && setLoading(false));
     }
     return () => { active = false; };
-  }, [isAdmin, page, filterUserId, filterStart, filterEnd, pageSize]);
+  }, [canViewAllTrips, page, filterUserId, filterStart, filterEnd, pageSize]);
 
   const handleAdd = async () => {
     if (!orderNumber.trim()) { setError('El número de Albarán / OC es obligatorio'); return; }
@@ -114,9 +115,9 @@ export const Trips: React.FC = () => {
   };
   const handleChangeTab = (_: React.SyntheticEvent, v: number) => { if(v!==null) setTab(v); };
 
-  // Autocomplete usuarios (solo admin)
+  // Autocomplete usuarios (solo admin o quienes pueden ver todos los viajes)
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!canViewAllTrips) return;
     const term = userSearch.trim();
     if (searchTimeoutRef.current) window.clearTimeout(searchTimeoutRef.current);
     if (term.length < 2) { setUserOptions([]); setLoadingUsers(false); lastQueryRef.current=''; return; }
@@ -134,7 +135,7 @@ export const Trips: React.FC = () => {
       }
     }, 300);
     return () => { if (searchTimeoutRef.current) window.clearTimeout(searchTimeoutRef.current); };
-  }, [userSearch, isAdmin]);
+  }, [userSearch, canViewAllTrips]);
 
   // Valores y manejador de indicadores (pill multi-select)
   const indicatorValues: string[] = [];
@@ -245,7 +246,7 @@ export const Trips: React.FC = () => {
             <ToggleButton value={0}>
               <Calculate sx={{ mr:0.6, fontSize:18 }} /> Nuevo Registro
             </ToggleButton>
-            {isAdmin && <ToggleButton value={1}>
+            {canViewAllTrips && <ToggleButton value={1}>
               <History sx={{ mr:0.6, fontSize:18 }} /> {`Registros (${total})`}
             </ToggleButton>}
           </ToggleButtonGroup>
@@ -371,7 +372,7 @@ export const Trips: React.FC = () => {
         </Fade>
       )}
 
-      {isAdmin && tab === 1 && (
+      {canViewAllTrips && tab === 1 && (
         <Fade in timeout={800}>
           <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3, borderRadius: 3, border: '1px solid #e0e0e0', position: 'relative' }}>
             <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>Registros de Viajes</Typography>
@@ -485,9 +486,11 @@ export const Trips: React.FC = () => {
                         </Tooltip>
                       </TableCell>
                       <TableCell align="right">
-                        <IconButton size="small" onClick={() => handleDelete(e.id)}>
-                          <DeleteOutline fontSize="small" />
-                        </IconButton>
+                        {isAdmin && (
+                          <IconButton size="small" onClick={() => handleDelete(e.id)}>
+                            <DeleteOutline fontSize="small" />
+                          </IconButton>
+                        )}
                       </TableCell>
                     </TableRow>
                   ))}

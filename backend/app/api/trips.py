@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/trips", tags=["trips"])  # harmonize with other 
 
 # Roles que pueden gestionar (crear / borrar) y roles que pueden ver todos
 MANAGE_ROLES = {UserRole.ADMINISTRADOR, UserRole.MASTER_ADMIN}
-VIEW_ALL_ROLES = {UserRole.ADMINISTRADOR, UserRole.MASTER_ADMIN}
+VIEW_ALL_ROLES = {UserRole.ADMINISTRADOR, UserRole.MASTER_ADMIN, UserRole.ADMINISTRACION}
 
 @router.post("/", response_model=TripOut, status_code=status.HTTP_201_CREATED)
 async def create_trip(payload: TripCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
