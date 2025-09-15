@@ -24,12 +24,12 @@ async def get_documentation_users(db: Session = Depends(get_db), current_user: U
         
         if not user_files_path.exists():
             return []
-        
+
         users_data = []
         
         # Consultar usuarios de la base de datos
         result = db.execute(text("""
-            SELECT dni_nie, first_name, last_name, email, role, is_active 
+            SELECT dni_nie, first_name, last_name, email, role, status 
             FROM users 
             ORDER BY last_name, first_name
         """))
@@ -39,14 +39,18 @@ async def get_documentation_users(db: Session = Depends(get_db), current_user: U
         # Crear un diccionario para mapear DNI a información del usuario
         user_info_map = {}
         for user in db_users:
-            dni_nie = user[0]  # dni_nie es la primera columna
-            user_info_map[dni_nie] = {
-                'first_name': user[1],
-                'last_name': user[2], 
-                'email': user[3],
-                'role': user[4],
-                'is_active': bool(user[5])
-            }
+            try:
+                dni_nie = user[0]  # dni_nie es la primera columna
+                user_info_map[dni_nie] = {
+                    'first_name': user[1],
+                    'last_name': user[2], 
+                    'email': user[3],
+                    'role': str(user[4]),  # Convertir enum a string
+                    'status': str(user[5]),  # Usar status en lugar de is_active
+                    'is_active': str(user[5]) == 'ACTIVO'  # Derivar is_active de status
+                }
+            except Exception as e:
+                continue
         
         # Recorrer cada carpeta de usuario
         for user_folder in user_files_path.iterdir():
@@ -92,27 +96,26 @@ async def get_documentation_users(db: Session = Depends(get_db), current_user: U
                                     # Si hay error al acceder al archivo, continuar
                                     continue
                 
-        # Crear objeto usuario
-        user_data = {
-            'id': dni_nie,
-            'dni': dni_nie,
-            'first_name': user_info['first_name'],
-            'last_name': user_info['last_name'],
-            'email': user_info['email'],
-            'role': user_info['role'],
-            'is_active': user_info['is_active'],
-            # Nuevo: agregar información de estado si está disponible
-            'status': getattr(user, 'status', 'ACTIVO' if user_info['is_active'] else 'INACTIVO'),
-            'is_available_driver': (
-                user_info['is_active'] and 
-                user_info['role'] == 'TRABAJADOR'
-            ),
-            'total_documents': len(documents),
-            'total_size': total_size,
-            'documents': documents
-        }
-        
-        users_data.append(user_data)
+                # Crear objeto usuario
+                user_data = {
+                    'id': dni_nie,
+                    'dni': dni_nie,
+                    'first_name': user_info['first_name'],
+                    'last_name': user_info['last_name'],
+                    'email': user_info['email'],
+                    'role': user_info['role'],
+                    'is_active': user_info['is_active'],
+                    'status': user_info['status'],
+                    'is_available_driver': (
+                        user_info['is_active'] and 
+                        user_info['role'] == 'TRABAJADOR'  # Usar TRABAJADOR que es el valor real en la BD
+                    ),
+                    'total_documents': len(documents),
+                    'total_size': total_size,
+                    'documents': documents
+                }
+                
+                users_data.append(user_data)
         
         return users_data
         
