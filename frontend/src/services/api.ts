@@ -475,6 +475,10 @@ export const usersAPI = {
   toggleUserStatus: (id: number) => 
     api.patch(`/api/users/${id}/toggle-status`).then(res => res.data),
 
+  // Establecer estado específico de usuario (ACTIVO, INACTIVO, BAJA)
+  setUserStatus: (id: number, status: 'ACTIVO' | 'INACTIVO' | 'BAJA') => 
+    api.patch(`/api/users/${id}/set-status`, { status }).then(res => res.data),
+
   // Cambiar contraseña de usuario
   changePassword: (id: number, passwordData: {
     new_password: string;

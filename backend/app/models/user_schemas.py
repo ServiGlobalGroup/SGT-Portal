@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 from typing import Optional
 from datetime import datetime
-from app.models.user import UserRole
+from app.models.user import UserRole, UserStatus
 from app.utils.dni_validation import validate_dni_nie_format, sanitize_dni_nie_for_login
 
 # Esquemas base
@@ -58,6 +58,7 @@ class UserUpdate(BaseModel):
     postal_code: Optional[str] = Field(None, max_length=10)
     emergency_contact_name: Optional[str] = Field(None, max_length=200)
     emergency_contact_phone: Optional[str] = Field(None, max_length=20)
+    status: Optional[UserStatus] = None
     is_active: Optional[bool] = None
 
 # Esquemas de respuesta
@@ -71,6 +72,7 @@ class UserResponse(UserBase):
     postal_code: Optional[str] = None
     emergency_contact_name: Optional[str] = None
     emergency_contact_phone: Optional[str] = None
+    status: UserStatus
     is_active: bool
     is_verified: bool
     avatar: Optional[str] = None
@@ -97,6 +99,7 @@ class UserList(BaseModel):
     position: Optional[str] = None
     role: UserRole
     worker_type: str = Field(..., pattern="^(antiguo|nuevo)$")
+    status: UserStatus
     is_active: bool
     last_login: Optional[datetime] = None
     created_at: datetime

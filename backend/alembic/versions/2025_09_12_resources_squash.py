@@ -1,7 +1,7 @@
 """Squash: crear tablas fuel_cards y via_t_devices (unificada)
 
 Revision ID: 20250912_resources_squash
-Revises: 20250908_admin_role, 2025_09_11_add_absence_type
+Revises: 2025_09_08_add_role_administracion, 2025_09_11_add_absence_type
 Create Date: 2025-09-12
 
 Motivo:
@@ -11,7 +11,7 @@ Se unifican las migraciones previas relacionadas con resources:
  - fix_resources_tables_20250912 (idempotente)
 
 Para producción sólo se aplicará esta migración después de que existan las revisiones
-"20250908_admin_role" y "2025_09_11_add_absence_type". En entornos donde ya se
+"2025_09_08_add_role_administracion" y "2025_09_11_add_absence_type". En entornos donde ya se
 aplicaron las anteriores, NO ejecutar esta (o hacer stamp manual) para evitar duplicados.
 """
 from typing import Sequence, Union
@@ -21,7 +21,7 @@ from sqlalchemy import inspect
 
 # revision identifiers, used by Alembic.
 revision: str = '20250912_resources_squash'
-down_revision: Union[str, Sequence[str], None] = ('20250908_admin_role', '2025_09_11_add_absence_type')
+down_revision: Union[str, Sequence[str], None] = ('2025_09_08_add_role_administracion', '2025_09_11_add_absence_type')
 branch_labels = None
 depends_on: Union[str, Sequence[str], None] = None
 

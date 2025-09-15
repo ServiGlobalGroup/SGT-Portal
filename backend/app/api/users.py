@@ -49,10 +49,13 @@ async def get_users(
     department: Optional[str] = Query(None, description="Filtrar por departamento"),
     role: Optional[UserRole] = Query(None, description="Filtrar por rol"),
     active_only: bool = Query(True, description="Solo usuarios activos"),
+    available_drivers_only: bool = Query(False, description="Solo conductores disponibles (activos, no de baja)"),
     db: Session = Depends(get_db)
 ):
     """
     Obtener lista de usuarios con paginación y filtros.
+    - active_only: incluye usuarios ACTIVOS y BAJA (pueden hacer login)
+    - available_drivers_only: solo usuarios ACTIVOS con rol TRABAJADOR (conductores disponibles)
     """
     skip = (page - 1) * per_page
 
@@ -72,8 +75,22 @@ async def get_users(
         query = query.filter(User.department == department)
     if role:
         query = query.filter(User.role == role)
-    if active_only:
+    
+    # Nueva lógica de filtros de estado
+    if available_drivers_only:
+        # Solo conductores disponibles: ACTIVOS con rol TRABAJADOR
+        # Por ahora usar is_active hasta que se aplique la migración
+        from sqlalchemy import and_
+        query = query.filter(and_(
+            User.is_active == True,  # noqa: E712
+            User.role == UserRole.TRABAJADOR
+        ))
+    elif active_only:
+        # Por ahora usar is_active hasta que se aplique la migración
+        # En el futuro: usuarios que pueden hacer login (ACTIVOS o BAJA)
         query = query.filter(User.is_active == True)  # noqa: E712
+    
+    # Si no se especifica ningún filtro, mostrar todos (incluyendo INACTIVOS)
 
     # Total antes de paginar
     total_users = query.count()
@@ -177,14 +194,27 @@ async def delete_user_permanently(
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No se puede eliminar: usuario tiene dietas asociadas")
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Usuario no encontrado")
 
-@router.patch("/users/{user_id}/toggle-status", response_model=UserResponse)
-async def toggle_user_status(
+@router.patch("/users/{user_id}/set-status", response_model=UserResponse)
+async def set_user_status(
     user_id: int,
+    status_data: dict,
     db: Session = Depends(get_db)
 ):
     """
-    Alternar el estado (activar/desactivar) de un usuario.
+    Cambiar el estado de un usuario (ACTIVO, INACTIVO, BAJA).
     """
+    from app.models.user import UserStatus
+    
+    # Validar que el status sea válido
+    new_status_str = status_data.get('status')
+    if new_status_str not in ['ACTIVO', 'INACTIVO', 'BAJA']:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Estado inválido. Debe ser ACTIVO, INACTIVO o BAJA"
+        )
+    
+    new_status = UserStatus(new_status_str)
+    
     user = UserService.get_user_by_id(db, user_id)
     if not user:
         raise HTTPException(
@@ -192,17 +222,45 @@ async def toggle_user_status(
             detail="Usuario no encontrado"
         )
     
-    # Alternar estado
-    if bool(user.is_active):
-        success = UserService.delete_user(db, user_id)  # Desactivar
-    else:
-        success = UserService.activate_user(db, user_id)  # Activar
+    # Usar el método del modelo para cambiar el estado
+    user.set_status(new_status)
+    db.commit()
     
-    if not success:
+    # Retornar usuario actualizado
+    updated_user = UserService.get_user_by_id(db, user_id)
+    return updated_user
+
+@router.patch("/users/{user_id}/toggle-status", response_model=UserResponse)
+async def toggle_user_status(
+    user_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Alternar el estado del usuario entre ACTIVO e INACTIVO (compatibilidad con frontend legacy).
+    """
+    from app.models.user import UserStatus
+    
+    user = UserService.get_user_by_id(db, user_id)
+    if not user:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Error al cambiar el estado del usuario"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado"
         )
+    
+    # Refrescar la instancia para obtener los valores actuales de la BD
+    db.refresh(user)
+    
+    # Alternar entre ACTIVO e INACTIVO basándose en el estado actual
+    current_status = getattr(user, 'status', UserStatus.ACTIVO)
+    if current_status == UserStatus.ACTIVO:
+        new_status = UserStatus.INACTIVO
+    else:
+        # Si está INACTIVO o BAJA, cambiar a ACTIVO
+        new_status = UserStatus.ACTIVO
+    
+    # Usar el método del modelo para cambiar el estado
+    user.set_status(new_status)
+    db.commit()
     
     # Retornar usuario actualizado
     updated_user = UserService.get_user_by_id(db, user_id)
@@ -308,8 +366,10 @@ async def get_user_stats(db: Session = Depends(get_db)):
     """
     Obtener estadísticas generales de usuarios.
     """
+    from app.models.user import UserStatus
+    
     total_users = db.query(User).count()
-    active_users = db.query(User).filter(User.is_active == True).count()  # noqa: E712
+    active_users = db.query(User).filter(User.status == UserStatus.ACTIVO).count()
     # Estadísticas por departamento (agrupación correcta)
     from sqlalchemy import func
     dept_counts = (

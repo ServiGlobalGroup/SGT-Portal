@@ -85,7 +85,9 @@ export interface User {
   postal_code?: string;
   emergency_contact_name?: string;
   emergency_contact_phone?: string;
-  is_active: boolean;
+  // Campos de estado
+  status: 'ACTIVO' | 'INACTIVO' | 'BAJA';  // Nuevo sistema de estados
+  is_active: boolean;  // Campo legacy para compatibilidad
   is_verified: boolean;
   avatar?: string;
   user_folder_path?: string;
