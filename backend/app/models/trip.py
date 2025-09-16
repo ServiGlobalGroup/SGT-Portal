@@ -4,8 +4,8 @@ from sqlalchemy.orm import relationship
 from app.database.connection import Base
 
 class TripRecord(Base):
-    """Registro de viaje con pernocta / festivo.
-    Guarda el número de albarán/OC asociado, indicadores de pernocta y festivo, fecha del evento y nota.
+    """Registro de viaje con pernocta / festivo / Canon TTI.
+    Guarda el número de albarán/OC asociado, indicadores de pernocta, festivo y Canon TTI, fecha del evento y nota.
     """
     __tablename__ = "trips"
 
@@ -14,6 +14,7 @@ class TripRecord(Base):
     order_number = Column(String(100), nullable=False, index=True, comment="Albarán / OC")
     pernocta = Column(Boolean, nullable=False, default=False)
     festivo = Column(Boolean, nullable=False, default=False)
+    canon_tti = Column(Boolean, nullable=False, default=False, comment="Canon TTI")
     event_date = Column(Date, nullable=False, comment="Fecha del viaje / pernocta / festivo")
     note = Column(String(500), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)

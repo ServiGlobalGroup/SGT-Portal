@@ -27,6 +27,7 @@ async def create_trip(payload: TripCreate, db: Session = Depends(get_db), curren
         order_number=payload.order_number,
         pernocta=payload.pernocta,
         festivo=payload.festivo,
+        canon_tti=payload.canon_tti,
         event_date=payload.event_date,
         note=payload.note,
     )
