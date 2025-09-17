@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, Header
 from fastapi.responses import FileResponse, StreamingResponse
 from app.models.schemas import PayrollDocument, User as UserSchema, PayrollStats
 from app.models.user import UploadHistory, User
@@ -13,6 +13,8 @@ from pathlib import Path
 import io
 import tempfile
 from app.api.auth import get_current_active_user
+from app.utils.company_context import effective_company_for_request
+from app.models.company_enum import Company
 
 router = APIRouter()
 
@@ -270,7 +272,8 @@ async def process_multiple_payrolls(
                 total_pages=results["total_pages"],
                 successful_pages=results["successful_assignments"],
                 failed_pages=results["failed_assignments"],
-                status="completed" if results["failed_assignments"] == 0 else "partial"
+                status="completed" if results["failed_assignments"] == 0 else "partial",
+                company=getattr(current_user, 'company', None)
             )
             db.add(upload_history)
             db.commit()
@@ -396,7 +399,8 @@ async def process_multiple_dietas(
                 total_pages=results["total_pages"],
                 successful_pages=results["successful_assignments"],
                 failed_pages=results["failed_assignments"],
-                status="completed" if results["failed_assignments"] == 0 else "partial"
+                status="completed" if results["failed_assignments"] == 0 else "partial",
+                company=getattr(current_user, 'company', None)
             )
             db.add(upload_history)
             db.commit()
@@ -458,12 +462,41 @@ async def get_processing_status(process_id: str, current_user: User = Depends(ge
 
 # Endpoints de administrador
 @router.get("/admin/users", response_model=List[UserSchema])
-async def get_all_users(current_user: User = Depends(get_current_active_user)):
+async def get_all_users(
+    current_user: User = Depends(get_current_active_user),
+    db: Session = Depends(get_db),
+    x_company: Optional[str] = Header(default=None, alias="X-Company"),
+):
     """Obtener todos los usuarios (solo admins)"""
     if not _is_admin(current_user):
         raise HTTPException(status_code=403, detail="Acceso denegado: se requieren permisos de administrador")
-    
-    return users_db
+
+    # Consultar usuarios reales desde la base de datos y aplicar scoping por empresa efectiva
+    comp: Optional[Company] = effective_company_for_request(current_user, x_company)
+    q = db.query(User)
+    if comp is not None:
+        q = q.filter(User.company == comp)
+    db_users = q.order_by(User.id.asc()).all()
+
+    # Mapear a esquema simplificado esperado por el frontend de payroll
+    result: List[UserSchema] = []
+    for u in db_users:
+        try:
+            name = (getattr(u, 'full_name', None) or f"{getattr(u, 'first_name', '')} {getattr(u, 'last_name', '')}").strip()
+            role_val = getattr(getattr(u, 'role', None), 'value', str(getattr(u, 'role', '')))
+            is_active = bool(getattr(u, 'is_active', True))
+            result.append(UserSchema(
+                id=getattr(u, 'id', None),
+                name=name or 'Usuario',
+                email=getattr(u, 'email', ''),
+                role=role_val,
+                department=getattr(u, 'department', '') or '',
+                is_active=is_active,
+            ))
+        except Exception:
+            # Si hay un usuario corrupto, lo omitimos para no romper la lista
+            continue
+    return result
 
 @router.get("/admin/users/{user_id}/documents", response_model=List[PayrollDocument])
 async def get_user_documents(user_id: int, month: Optional[str] = None, current_user: User = Depends(get_current_active_user)):

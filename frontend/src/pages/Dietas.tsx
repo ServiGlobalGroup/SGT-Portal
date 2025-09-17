@@ -54,7 +54,7 @@ export const Dietas: React.FC = () => {
     // Polyfill simple (suficiente para keys temporales en UI, no para seguridad)
     return 'tmp-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10);
   }, []);
-  const { user, token } = useAuth();
+  const { user, token, selectedCompany } = useAuth();
   const canView = !!user && hasPermission(user, Permission.VIEW_DIETAS);
 
   // Estado pestañas con persistencia en localStorage para recordar la última pestaña usada
@@ -543,7 +543,7 @@ export const Dietas: React.FC = () => {
       })
       .catch(() => {})
       .finally(() => setLoadingDrivers(false));
-  }, [canView]);
+  }, [canView, selectedCompany]);
 
   const driverType = useMemo<'nuevo'|'antiguo'>(() => (selectedDriver?.worker_type === 'nuevo' ? 'nuevo' : 'antiguo'), [selectedDriver]);
 
@@ -652,7 +652,28 @@ export const Dietas: React.FC = () => {
       })
       .catch(()=>{})
       .finally(()=> setLoadingDist(false));
-  },[tab, selectedDriver, driverType, distGrouped.length]);
+  },[tab, selectedDriver, driverType, distGrouped.length, selectedCompany]);
+
+  // Si cambia de empresa, limpiar datos dependientes y refrescar registros cuando estemos en pestaña Registros
+  useEffect(() => {
+    // Reset de selección de conductor y rutas de cálculo para evitar inconsistencias cross-company
+    setSelectedDriver(undefined);
+    setRows([]);
+    setResult(null);
+    setOrderNumber('');
+    setKmsAntiguo('');
+    setCalcClient('');
+    setCalcRoutes([]);
+    setSelectedCalcRoute(undefined);
+    setSelectedClient('');
+    setClientRoutes([]);
+    setDistGrouped([]);
+    // Refrescar registros si estamos en la pestaña de registros
+    if (tab === 1) {
+      loadRecords();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCompany]);
 
   const availableRates = useMemo(() => DIETA_RATES.filter(r => (!r.onlyFor || r.onlyFor === driverType)), [driverType]);
 
@@ -833,6 +854,7 @@ export const Dietas: React.FC = () => {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
+          'X-Company': (selectedCompany || localStorage.getItem('selected_company') || '') as string,
           'Content-Type': 'application/json'
         }
       });

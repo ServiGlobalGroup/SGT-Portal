@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, Query, status
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Depends, Query, status, Header
 from fastapi.responses import JSONResponse
 from app.models.schemas import DashboardStats
 from app.services.payroll_pdf_service import PayrollPDFProcessor
@@ -12,15 +12,26 @@ from datetime import datetime
 import tempfile
 import os
 from app.api.auth import get_current_user
+from app.utils.company_context import effective_company_for_request
+from typing import Any, cast
 from app.utils.permissions import require_role
 
 router = APIRouter()
 
 @router.get("/stats", response_model=DashboardStats)
-async def get_dashboard_stats(db: Session = Depends(get_db)):
+async def get_dashboard_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    x_company: str | None = Header(default=None, alias="X-Company"),
+):
     """Pequeño resumen "hero". total_users debe venir de la base de datos."""
     try:
-        total_users = db.query(User).count()
+        # Aplicar scoping por empresa si corresponde
+        comp = effective_company_for_request(current_user, x_company)
+        q = db.query(User)
+        if comp is not None:
+            q = q.filter(User.company == comp)
+        total_users = q.count()
     except Exception:
         total_users = 0
     # Los otros datos no están implementados aún; dejamos 0 para no confundir
@@ -35,8 +46,9 @@ async def get_dashboard_stats(db: Session = Depends(get_db)):
 @router.get("/available-workers")
 async def get_available_workers(
     target_date: str | None = Query(None, description="(Opcional) Fecha objetivo YYYY-MM-DD. Si se omite se usa hoy."),
-    position: str | None = Query(None, description="(Opcional) Filtrar por valor exacto de position"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    x_company: str | None = Header(default=None, alias="X-Company"),
 ):
     """Devuelve trabajadores disponibles el día indicado (o hoy) con filtro opcional por *position*.
 
@@ -50,7 +62,7 @@ async def get_available_workers(
     from datetime import datetime, date as date_cls
 
     # Resolver fecha (si no viene -> hoy en zona UTC naive)
-    day: datetime.date
+    day: date_cls
     if target_date:
         try:
             day = datetime.strptime(target_date, "%Y-%m-%d").date()
@@ -60,31 +72,41 @@ async def get_available_workers(
         day = datetime.utcnow().date()
         target_date = day.strftime("%Y-%m-%d")
 
-    # IDs de usuarios de vacaciones ese día
-    vacation_user_ids = [
-        uid for (uid,) in db.query(VacationRequest.user_id).filter(
-            VacationRequest.status == VacationStatus.APPROVED,
-            VacationRequest.start_date <= day,
-            VacationRequest.end_date >= day,
-        ).all()
-    ]
+    # Scoping por empresa
+    comp = effective_company_for_request(current_user, x_company)
+
+    # IDs de usuarios de vacaciones ese día (acotado por empresa cuando aplique)
+    vac_query = db.query(VacationRequest.user_id).filter(
+        VacationRequest.status == VacationStatus.APPROVED,
+        VacationRequest.start_date <= day,
+        VacationRequest.end_date >= day,
+    )
+    if comp is not None:
+        # Unir con User para filtrar por empresa del usuario
+        vac_query = vac_query.join(User, User.id == VacationRequest.user_id).filter(User.company == comp)
+    vacation_user_ids = [uid for (uid,) in vac_query.all()]
 
     base_query = db.query(User).filter(
         User.role == UserRole.TRABAJADOR,
-        User.status == UserStatus.ACTIVO,  # Solo usuarios ACTIVOS (no BAJA ni INACTIVO)
+        cast(Any, User.status == UserStatus.ACTIVO),  # Solo usuarios ACTIVOS (no BAJA ni INACTIVO)
     )
+    if comp is not None:
+        base_query = base_query.filter(User.company == comp)
     if vacation_user_ids:
         base_query = base_query.filter(User.id.notin_(vacation_user_ids))
 
     # Obtener lista de posiciones únicas (sin None) para poblar el selector
     # (se obtiene antes de aplicar filtro especifico para que el usuario vea todas las opciones)
     # Obtener posiciones (todas las de trabajadores activos, independientemente de vacaciones o filtro position)
-    raw_positions = db.query(User.position).filter(
+    pos_query = db.query(User.position).filter(
         User.role == UserRole.TRABAJADOR,
-        User.status == UserStatus.ACTIVO,  # Solo usuarios ACTIVOS para posiciones
+        cast(Any, User.status == UserStatus.ACTIVO),  # Solo usuarios ACTIVOS para posiciones
         User.position.isnot(None),
         User.position != ''
-    ).all()
+    )
+    if comp is not None:
+        pos_query = pos_query.filter(User.company == comp)
+    raw_positions = pos_query.all()
     # Normalizar en Python para evitar issues de DISTINCT + ORDER BY en algunos motores
     norm_positions_set = {}
     for (pos,) in raw_positions:
@@ -96,11 +118,8 @@ async def get_available_workers(
         norm_positions_set[key] = True
     distinct_positions = sorted(norm_positions_set.keys(), key=lambda x: x.lower())
 
-    query_workers = base_query
-    if position:
-        query_workers = query_workers.filter(User.position == position)
-
-    workers = query_workers.order_by(User.last_name.asc(), User.first_name.asc()).all()
+    # El filtro por "position" ha sido eliminado del dashboard; siempre devolvemos todos los disponibles
+    workers = base_query.order_by(User.last_name.asc(), User.first_name.asc()).all()
 
     return {
         "date": target_date,

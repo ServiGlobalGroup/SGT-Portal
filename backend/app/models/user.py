@@ -6,6 +6,7 @@ import enum
 import os
 from datetime import datetime, timezone
 from typing import Optional
+from app.models.company_enum import Company
 
 class UserRole(enum.Enum):
     MASTER_ADMIN = "MASTER_ADMIN"  # Usuario maestro oculto
@@ -42,7 +43,6 @@ class MasterAdminUser:
         self.emergency_contact_name = None
         self.emergency_contact_phone = None
         self.status = UserStatus.ACTIVO
-        self.is_active = True
         self.is_verified = True
         self.avatar = None
         self.user_folder_path = None
@@ -123,6 +123,8 @@ class User(Base):
     last_login = Column(DateTime(timezone=True), nullable=True, comment="Último inicio de sesión")
     # Forzar cambio de contraseña al primer inicio (o tras reseteo admin)
     must_change_password = Column(Boolean, nullable=False, server_default='0', comment="Debe cambiar contraseña en próximo login")
+    # Nueva columna opcional para identificar la empresa
+    company = Column(Enum(Company, name="company"), nullable=True, comment="Empresa asociada: SERVIGLOBAL o EMATRA")
     
     def __repr__(self):
         return f"<User(dni_nie='{self.dni_nie}', email='{self.email}', name='{self.first_name} {self.last_name}')>"
@@ -138,10 +140,8 @@ class User(Base):
         last_initial = (self.last_name or '')[:1].upper()
         return f"{first_initial}{last_initial}"
     
-    @property
-    def is_active(self):
-        """Propiedad de compatibilidad: retorna True si el usuario está ACTIVO o en BAJA"""
-        return self.status in (UserStatus.ACTIVO, UserStatus.BAJA)
+    # Nota: usamos la columna booleana is_active para compatibilidad.
+    # Si en el futuro se desea calcularla desde status, cree un método/propiedad con otro nombre.
     
     @property
     def is_available_for_work(self):
@@ -333,3 +333,5 @@ class UploadHistory(Base):
     # Timestamps
     created_at = Column(DateTime, nullable=False, default=func.now(), comment="Fecha de creación")
     updated_at = Column(DateTime, nullable=False, default=func.now(), onupdate=func.now(), comment="Fecha de actualización")
+    # Nueva columna opcional para identificar la empresa
+    company = Column(Enum(Company, name="company"), nullable=True, comment="Empresa asociada: SERVIGLOBAL o EMATRA")

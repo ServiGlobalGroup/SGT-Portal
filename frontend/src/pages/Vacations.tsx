@@ -65,9 +65,9 @@ import { ModernField, InfoCard, StatusChip } from '../components/ModernFormCompo
 import { PaginationComponent } from '../components/PaginationComponent';
 import { usePagination } from '../hooks/usePagination';
 import { vacationService } from '../services/vacationService';
+import { useAuth } from '../hooks/useAuth';
 import { usersAPI } from '../services/api';
 import type { VacationRequestCreate, AbsenceType } from '../types/vacation';
-import { useAuth } from '../hooks/useAuth';
 import { useDeviceType } from '../hooks/useDeviceType';
 import { MobileVacations } from './mobile/MobileVacations';
 
@@ -115,6 +115,7 @@ const formatMonthYear = (date: Date) => {
 };
 
 export const Vacations: React.FC = () => {
+  const { selectedCompany } = useAuth();
   const { user } = useAuth();
   const role = user?.role || '';
   const isAdminRole = role === 'ADMINISTRADOR' || role === 'MASTER_ADMIN';
@@ -428,7 +429,7 @@ export const Vacations: React.FC = () => {
   useEffect(() => {
     loadRequests();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [scope, user?.id, isAdminRole, viewMode]);
+  }, [scope, user?.id, isAdminRole, viewMode, selectedCompany]);
 
   // Buscar usuarios con debounce cuando se escribe en el Autocomplete
   useEffect(() => {
@@ -480,7 +481,7 @@ export const Vacations: React.FC = () => {
       }
     }, intervalMs);
     return () => window.clearInterval(id);
-  }, [scope, user?.id, isAdminRole]);
+  }, [scope, user?.id, isAdminRole, selectedCompany]);
 
   // Para administradores: si el alcance es 'mine', forzar vista tabla y ocultar controles de calendario/notificaciones
   // Funciones para navegar en el calendario

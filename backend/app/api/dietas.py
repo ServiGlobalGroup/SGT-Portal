@@ -4,6 +4,8 @@ from typing import List, Optional
 from app.database.connection import get_db
 from app.api.auth import get_current_user
 from app.models.user import User
+from fastapi import Header
+from app.utils.company_context import effective_company_for_request
 from app.models.schemas import DietaRecordCreate, DietaRecordResponse
 from app.services.dieta_service import DietaService
 from decimal import Decimal
@@ -19,7 +21,8 @@ router = APIRouter()
 async def create_dieta_record(
     payload: DietaRecordCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    x_company: str | None = Header(default=None, alias="X-Company"),
 ):
     # Solo admins pueden crear registros de dietas (ajustar si se desea otro permiso)
     role_value = getattr(current_user.role, 'value', current_user.role)
@@ -60,7 +63,9 @@ async def create_dieta_record(
     if (Decimal(str(payload.total_amount)) - recomputed_total).copy_abs() > Decimal('0.02'):
         raise HTTPException(status_code=422, detail='total_amount no coincide con la suma de subtotales de conceptos')
 
-    record = DietaService.create(db, payload)
+    # Determinar compañía desde el usuario actual
+    comp_obj = effective_company_for_request(current_user, x_company)
+    record = DietaService.create(db, payload, company=comp_obj)
     # Asegurar carga de usuario para user_name
     user = target_user
     full_name = None
@@ -80,13 +85,16 @@ async def list_dietas(
     worker_type: Optional[str] = None,
     order_number: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    x_company: str | None = Header(default=None, alias="X-Company"),
 ):
     # Trabajadores y rol ADMINISTRACION solo ven sus registros
     role_value = str(getattr(current_user.role, 'value', current_user.role))
     if role_value in ('TRABAJADOR', 'ADMINISTRACION'):
         user_id = getattr(current_user, 'id')
-    records = DietaService.list(db, user_id, start_date, end_date, worker_type, order_number)
+    # Filtrar por compañía efectiva (permite override vía X-Company para admins)
+    comp_obj = effective_company_for_request(current_user, x_company)
+    records = DietaService.list(db, user_id, start_date, end_date, worker_type, order_number, company=comp_obj)
     resp_list: List[DietaRecordResponse] = []
     for r in records:
         user = getattr(r, 'user', None)
@@ -104,10 +112,15 @@ async def list_dietas(
 async def get_dieta_record(
     record_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    x_company: str | None = Header(default=None, alias="X-Company"),
 ):
     record = DietaService.get(db, record_id)
     if not record:
+        raise HTTPException(status_code=404, detail='Registro no encontrado')
+    # Restringir por compañía (usar compañía efectiva con posible override para admins)
+    comp_obj = effective_company_for_request(current_user, x_company)
+    if comp_obj is not None and getattr(record, 'company', None) not in (None, comp_obj):
         raise HTTPException(status_code=404, detail='Registro no encontrado')
     role_value = str(getattr(current_user.role, 'value', current_user.role))
     if role_value == 'TRABAJADOR' and record.user_id != getattr(current_user, 'id'):

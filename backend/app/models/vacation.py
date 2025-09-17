@@ -4,6 +4,7 @@ from sqlalchemy.orm import relationship
 from app.database.connection import Base
 import enum
 from datetime import datetime
+from app.models.company_enum import Company
 
 class VacationStatus(enum.Enum):
     PENDING = "PENDING"
@@ -44,6 +45,8 @@ class VacationRequest(Base):
     # Metadatos
     created_at = Column(DateTime(timezone=True), server_default=func.now(), comment="Fecha de creación")
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), comment="Fecha de última actualización")
+    # Nueva columna opcional para identificar la empresa
+    company = Column(Enum(Company, name="company"), nullable=True, comment="Empresa asociada: SERVIGLOBAL o EMATRA")
     
     # Relaciones
     user = relationship("User", foreign_keys=[user_id], back_populates="vacation_requests")

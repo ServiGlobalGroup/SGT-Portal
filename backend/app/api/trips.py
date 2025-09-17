@@ -1,5 +1,5 @@
 from typing import List, Optional, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import or_  # para filtros de texto
 from datetime import date
@@ -9,6 +9,7 @@ from app.models.trip import TripRecord
 from app.models.user import User, UserRole, UserStatus
 from app.schemas.trips import TripCreate, TripOut, TripPage
 from app.api.auth import get_current_user  # fixed
+from app.utils.company_context import effective_company_for_request
 
 router = APIRouter(prefix="/api/trips", tags=["trips"])  # harmonize with other routes
 
@@ -17,7 +18,7 @@ MANAGE_ROLES = {UserRole.ADMINISTRADOR, UserRole.MASTER_ADMIN}
 VIEW_ALL_ROLES = {UserRole.ADMINISTRADOR, UserRole.MASTER_ADMIN, UserRole.ADMINISTRACION}
 
 @router.post("/", response_model=TripOut, status_code=status.HTTP_201_CREATED)
-async def create_trip(payload: TripCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def create_trip(payload: TripCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), x_company: str | None = Header(default=None, alias="X-Company")):
     """Crear un registro de viaje.
     Cualquier usuario autenticado puede crear su propio registro (conductores).
     Eliminamos restricción para permitir a TRABAJADOR usar el formulario.
@@ -30,6 +31,7 @@ async def create_trip(payload: TripCreate, db: Session = Depends(get_db), curren
         canon_tti=payload.canon_tti,
         event_date=payload.event_date,
         note=payload.note,
+        company=effective_company_for_request(current_user, x_company),
     )
     db.add(trip)
     db.commit()
@@ -40,6 +42,7 @@ async def create_trip(payload: TripCreate, db: Session = Depends(get_db), curren
 async def list_trips(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    x_company: str | None = Header(default=None, alias="X-Company"),
     user_id: Optional[int] = Query(None),
     start: Optional[date] = Query(None),
     end: Optional[date] = Query(None),
@@ -53,6 +56,10 @@ async def list_trips(
         q = db.query(TripRecord)
         if user_id:
             q = q.filter(TripRecord.user_id == user_id)
+    # Filtro por empresa del usuario actual
+    comp_obj = effective_company_for_request(current_user, x_company)
+    if comp_obj is not None:
+        q = q.filter(TripRecord.company == comp_obj)
     if start:
         q = q.filter(TripRecord.event_date >= start)
     if end:
@@ -68,16 +75,23 @@ async def list_trips(
     return TripPage(total=total, page=page, page_size=page_size, items=trip_out_items)
 
 @router.get("/mine", response_model=List[TripOut])
-async def my_trips(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def my_trips(db: Session = Depends(get_db), current_user: User = Depends(get_current_user), x_company: str | None = Header(default=None, alias="X-Company")):
     q = db.query(TripRecord).filter(TripRecord.user_id == current_user.id)
+    comp_obj = effective_company_for_request(current_user, x_company)
+    if comp_obj is not None:
+        q = q.filter(TripRecord.company == comp_obj)
     return q.order_by(TripRecord.event_date.desc(), TripRecord.id.desc()).all()
 
 @router.delete("/{trip_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_trip(trip_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def delete_trip(trip_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), x_company: str | None = Header(default=None, alias="X-Company")):
     if current_user.role not in MANAGE_ROLES:
         raise HTTPException(status_code=403, detail="Permiso denegado")
     trip = db.query(TripRecord).get(trip_id)
     if not trip:
+        raise HTTPException(status_code=404, detail="Registro no encontrado")
+    # Restringir por empresa
+    comp_obj = effective_company_for_request(current_user, x_company)
+    if comp_obj is not None and getattr(trip, 'company', None) not in (None, comp_obj):
         raise HTTPException(status_code=404, detail="Registro no encontrado")
     db.delete(trip)
     db.commit()
@@ -92,7 +106,7 @@ async def user_suggestions(q: str = Query(..., min_length=2), limit: int = Query
         return []
     pattern = f"%{q.lower()}%"
     rows = (db.query(User)
-              .filter(User.status.in_([UserStatus.ACTIVO, UserStatus.BAJA]))  # Usuarios que pueden hacer login
+              .filter(User.status.in_([UserStatus.ACTIVO, UserStatus.BAJA]))  # type: ignore[arg-type]
               .filter(or_(User.first_name.ilike(pattern), User.last_name.ilike(pattern), (User.first_name + ' ' + User.last_name).ilike(pattern), User.dni_nie.ilike(pattern)))
               .order_by(User.first_name.asc())
               .limit(limit)

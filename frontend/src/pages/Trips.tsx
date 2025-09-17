@@ -8,7 +8,7 @@ import { tripsAPI, type TripRecord } from '../services/api';
 interface TripEntry { id: string; orderNumber: string; pernocta: boolean; festivo: boolean; canonTti: boolean; nota: string; createdAt: string; eventDate: string; userName: string; }
 
 export const Trips: React.FC = () => {
-  const { user } = useAuth();
+  const { user, selectedCompany } = useAuth();
   const isAdmin = !!user && hasPermission(user, Permission.MANAGE_TRIPS);
   const canViewAllTrips = !!user && (hasPermission(user, Permission.MANAGE_TRIPS) || hasPermission(user, Permission.VIEW_TRIPS));
   const [orderNumber, setOrderNumber] = useState('');
@@ -74,7 +74,15 @@ export const Trips: React.FC = () => {
       }).catch(err => { if(active) setError(err?.response?.data?.detail || 'Error cargando registros'); }).finally(()=> active && setLoading(false));
     }
     return () => { active = false; };
-  }, [canViewAllTrips, page, filterUserId, filterStart, filterEnd, pageSize]);
+  }, [canViewAllTrips, page, filterUserId, filterStart, filterEnd, pageSize, selectedCompany]);
+
+  // Cuando cambia la empresa seleccionada, reiniciar paginación y limpiar filtro de usuario
+  useEffect(() => {
+    // Si el usuario cambia de empresa, conviene reiniciar a página 1 y limpiar el conductor seleccionado
+    setPage(1);
+    setSelectedUser(null);
+    setFilterUserId('');
+  }, [selectedCompany]);
 
   const handleAdd = async () => {
     if (!orderNumber.trim()) { setError('El número de Albarán / OC es obligatorio'); return; }
@@ -139,7 +147,7 @@ export const Trips: React.FC = () => {
       }
     }, 300);
     return () => { if (searchTimeoutRef.current) window.clearTimeout(searchTimeoutRef.current); };
-  }, [userSearch, canViewAllTrips]);
+  }, [userSearch, canViewAllTrips, selectedCompany]);
 
   // Valores y manejador de indicadores (pill multi-select)
   const indicatorValues: string[] = [];

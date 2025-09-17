@@ -1,12 +1,13 @@
 from sqlalchemy.orm import Session, joinedload
 from typing import List, Optional
 from app.models.dieta import DietaRecord
+from app.models.company_enum import Company
 from app.models.user import User
 from app.models.schemas import DietaRecordCreate
 
 class DietaService:
     @staticmethod
-    def create(db: Session, data: DietaRecordCreate) -> DietaRecord:
+    def create(db: Session, data: DietaRecordCreate, company: Company | None = None) -> DietaRecord:
         record = DietaRecord(
             user_id=data.user_id,
             worker_type=data.worker_type,
@@ -15,6 +16,7 @@ class DietaService:
             total_amount=data.total_amount,
             concepts=[c.dict() for c in data.concepts],  # quantity ahora float
             notes=data.notes,
+            company=company,
         )
         db.add(record)
         db.commit()
@@ -33,8 +35,11 @@ class DietaService:
         end_date: Optional[str] = None,
         worker_type: Optional[str] = None,
         order_number: Optional[str] = None,
+        company: Optional[Company] = None,
     ) -> List[DietaRecord]:
         q = db.query(DietaRecord).options(joinedload(DietaRecord.user))
+        if company is not None:
+            q = q.filter(DietaRecord.company == company)
         if user_id:
             q = q.filter(DietaRecord.user_id == user_id)
         if worker_type:

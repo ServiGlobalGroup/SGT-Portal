@@ -218,8 +218,18 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
     
     # Crear token de acceso
     access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
+    # Incluir compañía en el token si el usuario de BD la tiene asignada
+    try:
+        company_claim = None
+        comp_obj = getattr(user, 'company', None)
+        # comp_obj puede ser un Enum o None
+        if comp_obj is not None:
+            company_claim = getattr(comp_obj, 'value', str(comp_obj))
+    except Exception:
+        company_claim = None
+
     access_token = create_access_token(
-        data={"sub": user.dni_nie}, expires_delta=access_token_expires
+        data={"sub": user.dni_nie, "company": company_claim}, expires_delta=access_token_expires
     )
     
     # Usar la función auxiliar para crear la respuesta
@@ -283,7 +293,15 @@ async def refresh_token(current_user = Depends(get_current_active_user)):
     """
     # Emitimos un nuevo access token con la ventana estándar
     access_token_expires = timedelta(minutes=settings.access_token_expire_minutes)
-    new_token = create_access_token(data={"sub": current_user.dni_nie}, expires_delta=access_token_expires)
+    # Reemitir token con la misma compañía (si aplica)
+    try:
+        company_claim = None
+        comp_obj = getattr(current_user, 'company', None)
+        if comp_obj is not None:
+            company_claim = getattr(comp_obj, 'value', str(comp_obj))
+    except Exception:
+        company_claim = None
+    new_token = create_access_token(data={"sub": current_user.dni_nie, "company": company_claim}, expires_delta=access_token_expires)
     user_response = user_to_response(current_user, isinstance(current_user, MasterAdminUser))
     return Token(
         access_token=new_token,

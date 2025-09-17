@@ -7,7 +7,6 @@ class FuelCardBase(BaseModel):
     pan: str = Field(..., max_length=64)
     matricula: str = Field(..., max_length=16)
     caducidad: Optional[date] = None
-    compania: Optional[str] = Field(None, max_length=64)
 
 class FuelCardCreate(FuelCardBase):
     pin: str = Field(..., min_length=1, max_length=32)
@@ -26,7 +25,6 @@ class FuelCardOut(FuelCardBase):
             pan=obj.pan,
             matricula=obj.matricula,
             caducidad=obj.caducidad,
-            compania=getattr(obj, 'compania', None),
             created_at=obj.created_at,
             masked_pin='•' * len(pin_val),
             pin=pin_val
@@ -39,7 +37,6 @@ class FuelCardOut(FuelCardBase):
 class ViaTDeviceBase(BaseModel):
     numero_telepeaje: str = Field(..., max_length=64)
     pan: str = Field(..., max_length=64)
-    compania: Optional[str] = Field(None, max_length=64)
     matricula: str = Field(..., max_length=16)
     caducidad: Optional[date] = None
 

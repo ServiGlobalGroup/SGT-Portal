@@ -1,10 +1,13 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Header
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from typing import List, Optional
 from app.database.connection import get_db
 from app.services.user_service import UserService
 from app.models.user import User, UserRole, UserStatus
+from app.api.auth import get_current_user
+from app.utils.company_context import effective_company_for_request
+from app.models.company_enum import Company
 from app.models.user_schemas import (
     UserCreate, UserUpdate, UserResponse, UserList, 
     UserListResponse, PasswordChange, AdminPasswordReset
@@ -16,7 +19,9 @@ router = APIRouter()
 @router.post("/users", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def create_user(
     user_data: UserCreate,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    x_company: Optional[str] = Header(None, alias="X-Company"),
 ):
     """
     Crear un nuevo usuario.
@@ -28,7 +33,9 @@ async def create_user(
     - Automáticamente crea la carpeta personal del usuario
     """
     try:
-        user = UserService.create_user(db, user_data)
+        # Resolver empresa efectiva para la petición
+        company: Optional[Company] = effective_company_for_request(current_user, x_company)
+        user = UserService.create_user(db, user_data, company=company)
         return user
     except ValueError as e:
         raise HTTPException(
@@ -50,7 +57,9 @@ async def get_users(
     role: Optional[UserRole] = Query(None, description="Filtrar por rol"),
     active_only: bool = Query(True, description="Solo usuarios activos"),
     available_drivers_only: bool = Query(False, description="Solo conductores disponibles (activos, no de baja)"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    x_company: Optional[str] = Header(None, alias="X-Company"),
 ):
     """
     Obtener lista de usuarios con paginación y filtros.
@@ -61,6 +70,11 @@ async def get_users(
 
     # Construir query base
     query = db.query(User)
+
+    # Filtrar por empresa efectiva si aplica
+    company: Optional[Company] = effective_company_for_request(current_user, x_company)
+    if company is not None:
+        query = query.filter(User.company == company)
 
     # Filtros
     if search:
@@ -374,12 +388,21 @@ async def verify_user_email(
     return user
 
 @router.get("/departments", response_model=List[str])
-async def get_departments(db: Session = Depends(get_db)):
+async def get_departments(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    x_company: Optional[str] = Header(None, alias="X-Company"),
+):
     """
     Obtener lista de todos los departamentos únicos.
     """
     # Esta consulta necesitaría ser implementada en el UserService
-    departments = db.query(User.department).distinct().all()
+    # Filtrar por empresa efectiva si está disponible
+    company: Optional[Company] = effective_company_for_request(current_user, x_company)
+    q = db.query(User.department)
+    if company is not None:
+        q = q.filter(User.company == company)
+    departments = q.distinct().all()
     return [dept[0] for dept in departments if dept[0]]
 
 @router.get("/roles", response_model=List[str])
@@ -391,25 +414,37 @@ async def get_roles():
 
 # Endpoints de estadísticas
 @router.get("/users/stats/summary")
-async def get_user_stats(db: Session = Depends(get_db)):
+async def get_user_stats(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    x_company: Optional[str] = Header(None, alias="X-Company"),
+):
     """
     Obtener estadísticas generales de usuarios.
     """
     from app.models.user import UserStatus
     
-    total_users = db.query(User).count()
-    active_users = db.query(User).filter(User.status == UserStatus.ACTIVO).count()
+    # Aplicar scoping por empresa si aplica
+    company: Optional[Company] = effective_company_for_request(current_user, x_company)
+    base_q = db.query(User)
+    if company is not None:
+        base_q = base_q.filter(User.company == company)
+
+    total_users = base_q.count()
+    active_users = base_q.filter(User.status == UserStatus.ACTIVO).count()  # type: ignore[arg-type]
     # Estadísticas por departamento (agrupación correcta)
     from sqlalchemy import func
-    dept_counts = (
-        db.query(User.department, func.count(User.id))
-        .group_by(User.department)
-        .all()
-    )
+    dept_q = db.query(User.department, func.count(User.id))
+    if company is not None:
+        dept_q = dept_q.filter(User.company == company)
+    dept_counts = dept_q.group_by(User.department).all()
     departments = {dept: cnt for dept, cnt in dept_counts if dept}
 
     # Estadísticas por rol (usar value si es Enum)
-    role_counts = db.query(User.role, func.count(User.id)).group_by(User.role).all()
+    role_q = db.query(User.role, func.count(User.id))
+    if company is not None:
+        role_q = role_q.filter(User.company == company)
+    role_counts = role_q.group_by(User.role).all()
     roles = {getattr(role, 'value', str(role)): cnt for role, cnt in role_counts}
     
     return {

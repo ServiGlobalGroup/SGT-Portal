@@ -3,6 +3,9 @@ import type { ReactNode } from 'react';
 import type { User } from '../types';
 import { } from '../types';
 
+// Definición de códigos de empresa soportados en frontend
+export type CompanyCode = 'SERVIGLOBAL' | 'EMATRA';
+
 // Base de API compartida con services/api.ts
 const envUrl = (import.meta as any)?.env?.VITE_API_BASE_URL as string | undefined;
 const API_BASE_URL = envUrl && envUrl.trim() !== ''
@@ -16,9 +19,12 @@ interface AuthContextType {
   isLoading: boolean;
   mustChangePassword: boolean;
   login: (username: string, password: string) => Promise<void>;
+  availableCompanies: CompanyCode[];
+  selectedCompany: CompanyCode | null;
   logout: () => void;
   checkAuth: () => Promise<boolean>;
   updatePasswordChanged: () => void;
+  selectCompany: (company: CompanyCode) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -34,6 +40,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [mustChangePassword, setMustChangePassword] = useState(false);
+  const [availableCompanies, setAvailableCompanies] = useState<CompanyCode[]>(['SERVIGLOBAL', 'EMATRA']);
+  const [selectedCompany, setSelectedCompany] = useState<CompanyCode | null>(null);
   const refreshTimerRef = useRef<number | null>(null);
   const inactivityTimerRef = useRef<number | null>(null);
   const heartbeatRef = useRef<number | null>(null);
@@ -46,8 +54,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const logout = useCallback(() => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('user_data');
+    localStorage.removeItem('selected_company');
+    try { sessionStorage.removeItem('session_company_override'); } catch {}
     setToken(null);
     setUser(null);
+    setSelectedCompany(null);
+    setAvailableCompanies(['SERVIGLOBAL', 'EMATRA']);
     if (token) {
       fetch(`${API_BASE_URL}/api/auth/logout`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } }).catch(()=>{});
     }
@@ -69,6 +81,37 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch {
       return null;
     }
+  };
+
+  // Decodifica el payload del token (sin verificar firma), para leer claims como company
+  const decodeTokenPayload = (jwtToken: string): any | null => {
+    try {
+      const base64 = jwtToken.split('.')[1];
+      if (!base64) return null;
+      return JSON.parse(atob(base64.replace(/-/g,'+').replace(/_/g,'/')));
+    } catch {
+      return null;
+    }
+  };
+
+  // Normaliza valores de empresa provenientes del backend/JWT/objetos
+  const normalizeCompanyValue = (val: any): CompanyCode | null => {
+    try {
+      if (!val) return null;
+      if (typeof val === 'string') {
+        const U = val.toUpperCase();
+        if (U === 'SERVIGLOBAL' || U === 'EMATRA') return U as CompanyCode;
+        if (U.includes('SERVIGLOBAL')) return 'SERVIGLOBAL';
+        if (U.includes('EMATRA')) return 'EMATRA';
+      } else if (typeof val === 'object') {
+        const v = (val as any).value ?? (val as any).name ?? '';
+        const U = String(v).toUpperCase();
+        if (U === 'SERVIGLOBAL' || U === 'EMATRA') return U as CompanyCode;
+        if (U.includes('SERVIGLOBAL')) return 'SERVIGLOBAL';
+        if (U.includes('EMATRA')) return 'EMATRA';
+      }
+    } catch { /* noop */ }
+    return null;
   };
 
   const scheduleTokenExpiryWatch = useCallback((jwtToken: string) => {
@@ -102,13 +145,63 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Verificar si hay un token guardado al cargar la aplicación
     const savedToken = localStorage.getItem('access_token');
     const savedUser = localStorage.getItem('user_data');
+    const savedCompany = localStorage.getItem('selected_company');
     
     if (savedToken && savedUser) {
       try {
         const userData = JSON.parse(savedUser);
         setToken(savedToken);
         setUser(userData);
-  setMustChangePassword(!!userData.must_change_password);
+        setMustChangePassword(!!userData.must_change_password);
+
+        // Normalizar rol y empresa del usuario (con respaldo al claim del token)
+        const rawRole = (userData as any)?.role;
+        const roleVal = ((): string => {
+          try {
+            if (!rawRole) return '';
+            if (typeof rawRole === 'string') return rawRole.toUpperCase();
+            const v = (rawRole as any).value ?? (rawRole as any).name ?? '';
+            return String(v).toUpperCase();
+          } catch { return ''; }
+        })();
+        const userCompany = normalizeCompanyValue((userData as any)?.company);
+        const tokenPayload = decodeTokenPayload(savedToken);
+        const tokenCompany = normalizeCompanyValue(tokenPayload?.company);
+        const normalized: CompanyCode | null = userCompany || tokenCompany;
+
+        const isAdminRole = ['ADMINISTRADOR','ADMINISTRACION','MASTER_ADMIN'].includes(roleVal);
+        if (isAdminRole) {
+          // Permitir override de sesión para admins (cambio temporal durante la sesión)
+          let sessionOverride: CompanyCode | null = null;
+          try {
+            const ov = sessionStorage.getItem('session_company_override');
+            if (ov === 'SERVIGLOBAL' || ov === 'EMATRA') sessionOverride = ov as CompanyCode;
+          } catch { /* noop */ }
+
+          if (sessionOverride) {
+            setSelectedCompany(sessionOverride);
+            localStorage.setItem('selected_company', sessionOverride);
+          } else if (normalized) {
+            // Si no hay override, arrancar con su empresa base
+            setSelectedCompany(normalized);
+            localStorage.setItem('selected_company', normalized);
+          } else if (savedCompany === 'SERVIGLOBAL' || savedCompany === 'EMATRA') {
+            // fallback si no hay company en usuario por algún motivo
+            setSelectedCompany(savedCompany as CompanyCode);
+          } else {
+            // Último recurso: valor por defecto
+            setSelectedCompany('SERVIGLOBAL');
+            localStorage.setItem('selected_company', 'SERVIGLOBAL');
+          }
+        } else {
+          // No admin: respetar localStorage si existe, si no usar la del usuario
+          if (savedCompany === 'SERVIGLOBAL' || savedCompany === 'EMATRA') {
+            setSelectedCompany(savedCompany as CompanyCode);
+          } else if (normalized) {
+            setSelectedCompany(normalized);
+            localStorage.setItem('selected_company', normalized);
+          }
+        }
         
         // Verificar si el token sigue siendo válido
         verifyToken(savedToken).then((valid) => {
@@ -286,17 +379,63 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       
       setToken(data.access_token);
       setUser(data.user);
-  setMustChangePassword(!!data.user?.must_change_password);
-  if (data.expires_in) scheduleRefresh(data.expires_in);
-  if (data.access_token) scheduleTokenExpiryWatch(data.access_token);
-  scheduleInactivityLogout();
-  startHeartbeat();
+      setMustChangePassword(!!data.user?.must_change_password);
+      // Rol y empresa base del usuario
+      const rawRole = (data.user as any)?.role;
+      const roleVal = ((): string => {
+        try {
+          if (!rawRole) return '';
+          if (typeof rawRole === 'string') return rawRole.toUpperCase();
+          const v = (rawRole as any).value ?? (rawRole as any).name ?? '';
+          return String(v).toUpperCase();
+        } catch { return ''; }
+      })();
+      const userCompany = normalizeCompanyValue((data.user as any)?.company);
+      const payload = decodeTokenPayload(data.access_token);
+      const tokenCompany = normalizeCompanyValue(payload?.company);
+      const normalized: CompanyCode | null = userCompany || tokenCompany;
+
+      const isAdminRole = ['ADMINISTRADOR','ADMINISTRACION','MASTER_ADMIN'].includes(roleVal);
+      // Al iniciar sesión, limpiar cualquier override de sesión previo
+      try { sessionStorage.removeItem('session_company_override'); } catch {}
+      if (isAdminRole) {
+        // Admin: siempre arrancar con su empresa base
+        if (normalized) {
+          setSelectedCompany(normalized);
+          localStorage.setItem('selected_company', normalized);
+        } else {
+          // Si no viene en el usuario, usar la previa si existe o un valor por defecto
+          const savedCompany = localStorage.getItem('selected_company');
+          if (savedCompany === 'SERVIGLOBAL' || savedCompany === 'EMATRA') {
+            setSelectedCompany(savedCompany as CompanyCode);
+          } else {
+            setSelectedCompany('SERVIGLOBAL');
+            localStorage.setItem('selected_company', 'SERVIGLOBAL');
+          }
+        }
+      } else {
+        // No admin: solo fijar si no hay una previa en localStorage
+        try {
+          const existingCompany = localStorage.getItem('selected_company');
+          if (existingCompany !== 'SERVIGLOBAL' && existingCompany !== 'EMATRA' && normalized) {
+            setSelectedCompany(normalized);
+            localStorage.setItem('selected_company', normalized);
+          }
+        } catch { /* noop */ }
+      }
+      if (data.expires_in) scheduleRefresh(data.expires_in);
+      if (data.access_token) scheduleTokenExpiryWatch(data.access_token);
+      scheduleInactivityLogout();
+      startHeartbeat();
     } catch (error) {
       // Limpiar cualquier dato previo en caso de error
       localStorage.removeItem('access_token');
       localStorage.removeItem('user_data');
+      localStorage.removeItem('selected_company');
       setToken(null);
       setUser(null);
+      setSelectedCompany(null);
+      setAvailableCompanies(['SERVIGLOBAL', 'EMATRA']);
       throw error;
     } finally {
       setIsLoading(false);
@@ -333,16 +472,45 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (token) scheduleTokenExpiryWatch(token);
   }, [token, scheduleTokenExpiryWatch]);
 
+  const selectCompany = useCallback((company: CompanyCode) => {
+    // Roles permitidos a cambiar empresa: ADMINISTRADOR, ADMINISTRACION, MASTER_ADMIN
+    const rawRole = (user as any)?.role;
+    const isAdmin = (() => {
+      try {
+        if (!rawRole) return false;
+        if (typeof rawRole === 'string') {
+          const R = rawRole.toUpperCase();
+          return R === 'ADMINISTRADOR' || R === 'ADMINISTRACION' || R === 'MASTER_ADMIN';
+        }
+        const v = (rawRole as any).value ?? (rawRole as any).name ?? '';
+        const R = String(v).toUpperCase();
+        return R === 'ADMINISTRADOR' || R === 'ADMINISTRACION' || R === 'MASTER_ADMIN';
+      } catch { return false; }
+    })();
+    if (!isAdmin) return; // bloquear para TRABAJADOR, TRÁFICO u otros perfiles no admin
+    if (selectedCompany === company) return; // no-op si no hay cambio
+
+    setSelectedCompany(company);
+    localStorage.setItem('selected_company', company);
+    try { sessionStorage.setItem('session_company_override', company); } catch {}
+    if (typeof window !== 'undefined') {
+      window.setTimeout(() => window.location.reload(), 50);
+    }
+  }, [selectedCompany, user]);
+
   const value: AuthContextType = {
     user,
     token,
     isAuthenticated,
     isLoading,
     mustChangePassword,
+    availableCompanies,
+    selectedCompany,
     login,
     logout,
     checkAuth,
     updatePasswordChanged,
+    selectCompany,
   };  return (
     <AuthContext.Provider value={value}>
       {children}

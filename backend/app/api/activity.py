@@ -6,6 +6,8 @@ from app.database.connection import get_db
 from app.models.activity_log import ActivityLog
 from app.api.auth import get_current_user
 from app.models.user import User
+from fastapi import Header
+from app.utils.company_context import effective_company_for_request
 
 router = APIRouter()
 
@@ -16,6 +18,7 @@ def get_recent_activity(
     event_type: str | None = Query(None, description="Filtrar por tipo de evento (enum)"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
+    x_company: str | None = Header(default=None, alias="X-Company"),
 ):
     """Devuelve actividad reciente (admins ven todo, usuarios solo propios)."""
     query = db.query(ActivityLog)
@@ -32,6 +35,10 @@ def get_recent_activity(
 
     if event_type:
         query = query.filter(ActivityLog.event_type == event_type)
+    # Filtrar por empresa del usuario, si está definida
+    comp_obj = effective_company_for_request(current_user, x_company)
+    if comp_obj is not None:
+        query = query.filter(ActivityLog.company == comp_obj)
 
     total = query.count()
     rows: List[ActivityLog] = (
