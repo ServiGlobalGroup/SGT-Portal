@@ -108,9 +108,6 @@ class User(Base):
     # Estado del usuario (nuevo sistema)
     status = Column(Enum(UserStatus), default=UserStatus.ACTIVO, nullable=False, comment="Estado del usuario")
     
-    # Campo legacy para compatibilidad (se mantendrá sincronizado con status)
-    is_active = Column(Boolean, default=True, nullable=False, comment="Usuario activo (legacy)")
-    
     is_verified = Column(Boolean, default=False, nullable=False, comment="Email verificado")
     avatar = Column(String(255), nullable=True, comment="Ruta al avatar del usuario")
     
@@ -140,8 +137,6 @@ class User(Base):
         last_initial = (self.last_name or '')[:1].upper()
         return f"{first_initial}{last_initial}"
     
-    # Nota: usamos la columna booleana is_active para compatibilidad.
-    # Si en el futuro se desea calcularla desde status, cree un método/propiedad con otro nombre.
     
     @property
     def is_available_for_work(self):
@@ -160,11 +155,9 @@ class User(Base):
     
     def set_status(self, new_status: UserStatus):
         """
-        Actualiza el estado del usuario. 
-        El campo is_active se calcula automáticamente como una propiedad.
+        Actualiza el estado del usuario.
         """
         self.status = new_status
-        # No necesitamos asignar is_active manualmente - es una propiedad calculada
     
     def create_user_folder(self, base_path: str) -> str:
         """

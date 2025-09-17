@@ -99,7 +99,6 @@ class UserService:
             emergency_contact_name=user_create.emergency_contact_name,
             emergency_contact_phone=user_create.emergency_contact_phone,
             hashed_password=hashed_password,
-            is_active=True,
             is_verified=False,
             must_change_password=True,
         )

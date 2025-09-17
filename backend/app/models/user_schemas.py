@@ -59,7 +59,6 @@ class UserUpdate(BaseModel):
     emergency_contact_name: Optional[str] = Field(None, max_length=200)
     emergency_contact_phone: Optional[str] = Field(None, max_length=20)
     status: Optional[UserStatus] = None
-    is_active: Optional[bool] = None
 
 # Esquemas de respuesta
 class UserResponse(UserBase):
@@ -73,7 +72,6 @@ class UserResponse(UserBase):
     emergency_contact_name: Optional[str] = None
     emergency_contact_phone: Optional[str] = None
     status: UserStatus
-    is_active: bool
     is_verified: bool
     avatar: Optional[str] = None
     user_folder_path: Optional[str] = None
@@ -106,7 +104,6 @@ class UserList(BaseModel):
     role: UserRole
     worker_type: str = Field(..., pattern="^(antiguo|nuevo)$")
     status: UserStatus
-    is_active: bool
     last_login: Optional[datetime] = None
     created_at: datetime
     

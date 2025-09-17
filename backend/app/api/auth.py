@@ -90,7 +90,6 @@ def user_to_response(user, is_master=False) -> UserResponse:
             "emergency_contact_name": user.emergency_contact_name,
             "emergency_contact_phone": user.emergency_contact_phone,
             "status": getattr(user, 'status', UserStatus.ACTIVO),  # Default ACTIVO si no existe
-            "is_active": user.is_active,
             "is_verified": user.is_verified,
             "avatar": user.avatar,
             "user_folder_path": f"{settings.user_files_base_path}/{user.dni_nie}",

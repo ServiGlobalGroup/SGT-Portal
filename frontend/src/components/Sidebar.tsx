@@ -110,10 +110,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
     } catch { return false; }
   }, [user]);
 
-  // Filtrar elementos del menú según los permisos del usuario
+  // Filtrar elementos del menú según los permisos del usuario y dispositivo
   const allowedMenuItems = useMemo(() => {
     const filterMenuItems = (items: MenuItem[]): MenuItem[] => {
       return items.filter(item => {
+        // Ocultar Dietas en versión móvil
+        if (isMobile && item.path === '/dietas') {
+          return false;
+        }
+        
         if (item.path) {
           return canAccessRoute(user, item.path);
         }
@@ -134,7 +139,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     };
     
     return filterMenuItems(menuItems);
-  }, [user]);
+  }, [user, isMobile]);
 
   const handleProfileClick = (event: React.MouseEvent<HTMLElement>) => {
     setAnchorEl(event.currentTarget);

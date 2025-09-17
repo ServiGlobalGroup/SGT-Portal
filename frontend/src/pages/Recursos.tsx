@@ -3,13 +3,14 @@ import {
   Box, Paper, Typography, Fade, GlobalStyles, ToggleButtonGroup, ToggleButton, 
   Button, TextField, Stack, 
   Table, TableHead, TableRow, TableCell, TableBody, Chip,
-  Pagination, Card, CardContent, Divider, CircularProgress, Snackbar, Alert, Skeleton
+  Pagination, Card, CardContent, Divider, CircularProgress, Snackbar, Alert, Skeleton,
+  Dialog, DialogTitle, DialogContent, DialogActions
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { ModernModal, ModernButton } from '../components/ModernModal';
 import { useAuth } from '../hooks/useAuth';
 import { useDeviceType } from '../hooks/useDeviceType';
-import { LocalGasStation, CreditCard, Info, Add } from '@mui/icons-material';
+import { LocalGasStation, CreditCard, Info, Add, Construction } from '@mui/icons-material';
 import { resourcesAPI, FuelCardRecord, ViaTRecord } from '../services/api';
 
 // Página de Recursos: base inicial con banner y estructura de pestañas (Gasoil, Via T)
@@ -38,6 +39,9 @@ export const Recursos: React.FC = () => {
   const [savingGas, setSavingGas] = React.useState(false);
   const [savingViaT, setSavingViaT] = React.useState(false);
   const [snack, setSnack] = React.useState<{open:boolean; msg:string; type:'success'|'error'}>({open:false,msg:'',type:'success'});
+
+  // Modal de mantenimiento
+  const [maintenanceModalOpen, setMaintenanceModalOpen] = React.useState(false);
 
   // Búsquedas (draft vs applied)
   const [gasSearchDraft, setGasSearchDraft] = React.useState({ pan:'', matricula:'' });
@@ -264,6 +268,15 @@ export const Recursos: React.FC = () => {
     };
     load();
   }, [user]);
+
+  // Mostrar modal de mantenimiento al cargar la página
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setMaintenanceModalOpen(true);
+    }, 1000); // Mostrar después de 1 segundo para permitir que se cargue la página
+    
+    return () => clearTimeout(timer);
+  }, []);
 
   const anyGasFilters = !!(gasSearch.pan || gasSearch.matricula);
   const anyViaTFilters = viaTSearch.numeroTelepeaje || viaTSearch.pan || viaTSearch.matricula;
@@ -1050,6 +1063,93 @@ export const Recursos: React.FC = () => {
           />
         </Stack>
       </ModernModal>
+
+      {/* Modal de Mantenimiento */}
+      <Dialog
+        open={maintenanceModalOpen}
+        onClose={() => setMaintenanceModalOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            background: 'linear-gradient(135deg, #fff 0%, #f8f9fa 100%)',
+            border: '1px solid #e0e0e0',
+            boxShadow: '0 10px 30px rgba(0,0,0,0.15)'
+          }
+        }}
+      >
+        <DialogTitle sx={{ 
+          textAlign: 'center', 
+          pb: 2,
+          borderBottom: '1px solid #e0e0e0',
+          background: 'linear-gradient(135deg, #501b36 0%, #6d2548 100%)',
+          color: 'white',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: 2
+        }}>
+          <Box
+            sx={{
+              p: 2,
+              bgcolor: 'rgba(255,255,255,0.15)',
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <Construction sx={{ fontSize: 32 }} />
+          </Box>
+          <Typography variant="h5" sx={{ fontWeight: 700 }}>
+            Página en Mantenimiento
+          </Typography>
+        </DialogTitle>
+        
+        <DialogContent sx={{ p: 4, textAlign: 'center' }}>
+          <Typography variant="body1" sx={{ mb: 2, fontSize: '1.1rem', lineHeight: 1.6 }}>
+            Esta sección está temporalmente en mantenimiento para mejorar la experiencia del usuario.
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+            Estamos trabajando en nuevas funcionalidades y mejoras. Por favor, inténtalo más tarde.
+          </Typography>
+          <Box sx={{ 
+            p: 2, 
+            bgcolor: 'rgba(80,27,54,0.05)', 
+            borderRadius: 2, 
+            border: '1px solid rgba(80,27,54,0.1)' 
+          }}>
+            <Typography variant="caption" color="text.secondary">
+              Si necesitas acceso urgente a esta funcionalidad, contacta con el administrador del sistema.
+            </Typography>
+          </Box>
+        </DialogContent>
+        
+        <DialogActions sx={{ p: 3, justifyContent: 'center', borderTop: '1px solid #e0e0e0' }}>
+          <Button
+            onClick={() => setMaintenanceModalOpen(false)}
+            variant="contained"
+            sx={{
+              px: 4,
+              py: 1.5,
+              borderRadius: 3,
+              background: 'linear-gradient(135deg, #501b36 0%, #6d2548 100%)',
+              textTransform: 'none',
+              fontWeight: 600,
+              fontSize: '1rem',
+              '&:hover': {
+                background: 'linear-gradient(135deg, #3d1429 0%, #5a1d3a 100%)',
+                transform: 'translateY(-1px)',
+                boxShadow: '0 4px 12px rgba(80,27,54,0.3)'
+              }
+            }}
+          >
+            Entendido
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       <Snackbar open={snack.open} autoHideDuration={4000} onClose={()=> setSnack(s=>({...s, open:false}))} anchorOrigin={{ vertical:'bottom', horizontal:'center' }}>
         <Alert severity={snack.type} variant="filled" onClose={()=> setSnack(s=>({...s, open:false}))}>{snack.msg}</Alert>
       </Snackbar>

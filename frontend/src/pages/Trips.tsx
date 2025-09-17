@@ -394,7 +394,27 @@ export const Trips: React.FC = () => {
             <Stack spacing={2} sx={{ mb:3 }}>
               <Stack direction={{ xs:'column', sm:'row' }} spacing={2}>
                 <Autocomplete
-                  sx={{ minWidth: 260 }}
+                  sx={{ 
+                    minWidth: 260,
+                    '& .MuiAutocomplete-popupIndicator': {
+                      backgroundColor: 'transparent',
+                      boxShadow: 'none',
+                      borderRadius: 0,
+                      '&:hover': {
+                        backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                        boxShadow: 'none'
+                      }
+                    },
+                    '& .MuiAutocomplete-clearIndicator': {
+                      backgroundColor: 'transparent',
+                      boxShadow: 'none',
+                      borderRadius: 0,
+                      '&:hover': {
+                        backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                        boxShadow: 'none'
+                      }
+                    }
+                  }}
                   size="small"
                   options={userOptions}
                   loading={loadingUsers}
@@ -506,7 +526,22 @@ export const Trips: React.FC = () => {
                       </TableCell>
                       <TableCell align="right">
                         {isAdmin && (
-                          <IconButton size="small" onClick={() => handleDelete(e.id)}>
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleDelete(e.id)}
+                            sx={{
+                              backgroundColor: 'transparent',
+                              boxShadow: 'none',
+                              border: 'none',
+                              '&:hover': {
+                                backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                                boxShadow: 'none'
+                              },
+                              '&:focus': {
+                                boxShadow: 'none'
+                              }
+                            }}
+                          >
                             <DeleteOutline fontSize="small" />
                           </IconButton>
                         )}
