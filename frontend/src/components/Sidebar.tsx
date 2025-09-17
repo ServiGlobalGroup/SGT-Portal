@@ -19,6 +19,8 @@ import {
   Collapse,
 } from '@mui/material';
 import {
+  Business,
+  Check,
   Traffic,
   EventNote,
   Description,
@@ -35,6 +37,7 @@ import {
   Assignment,
   Dashboard,
   Info,
+  KeyboardArrowRight,
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
@@ -85,10 +88,27 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, availableCompanies, selectedCompany, selectCompany } = useAuth();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const [companyAnchorEl, setCompanyAnchorEl] = useState<null | HTMLElement>(null);
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
   const open = Boolean(anchorEl);
+  const companyOpen = Boolean(companyAnchorEl);
+
+  // Sólo administradores pueden cambiar de empresa
+  const canChangeCompany = useMemo(() => {
+    const raw = (user as any)?.role;
+    try {
+      if (!raw) return false;
+      if (typeof raw === 'string') {
+        const R = raw.toUpperCase();
+        return R === 'ADMINISTRADOR' || R === 'ADMINISTRACION' || R === 'MASTER_ADMIN';
+      }
+      const v = (raw as any).value ?? (raw as any).name ?? '';
+      const R = String(v).toUpperCase();
+      return R === 'ADMINISTRADOR' || R === 'ADMINISTRACION' || R === 'MASTER_ADMIN';
+    } catch { return false; }
+  }, [user]);
 
   // Filtrar elementos del menú según los permisos del usuario
   const allowedMenuItems = useMemo(() => {
@@ -122,6 +142,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const handleClose = () => {
     setAnchorEl(null);
+    setCompanyAnchorEl(null);
   };
 
   const handleMenuAction = (action: string) => {
@@ -469,6 +490,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
               '& .user-text': {
                 color: '#ffffff',
               },
+              '& .company-text': {
+                color: '#ffffff',
+              },
               '& .role-text': {
                 color: '#ffffff',
               },
@@ -513,6 +537,24 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 {user?.full_name || user?.first_name || 'Usuario'}
               </Typography>
+              {selectedCompany && (
+                <Typography
+                  variant="caption"
+                  className="company-text"
+                  sx={{
+                    color: '#ffb347',
+                    fontSize: '0.75rem',
+                    display: 'block',
+                    lineHeight: 1.2,
+                    fontWeight: 500,
+                    textTransform: 'uppercase',
+                    letterSpacing: 0.3,
+                    transition: 'color 0.2s ease',
+                  }}
+                >
+                  {selectedCompany}
+                </Typography>
+              )}
               <Typography 
                 variant="caption" 
                 className="role-text"
@@ -589,6 +631,80 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </MenuItem>
           )}
           
+          {/* Empresa con submenú (sólo para roles administradores) */}
+          {canChangeCompany && (
+            <>
+              <MenuItem
+                onClick={(e) => setCompanyAnchorEl(e.currentTarget)}
+                sx={{
+                  py: 1.25,
+                  '&:hover': {
+                    backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                  },
+                }}
+              >
+                <ListItemIcon>
+                  <Business sx={{ color: '#501b36' }} />
+                </ListItemIcon>
+                <ListItemText
+                  primary="Empresa"
+                  secondary={selectedCompany ? `Actual: ${selectedCompany}` : undefined}
+                  primaryTypographyProps={{ fontSize: '0.95rem', fontWeight: 500 }}
+                  secondaryTypographyProps={{ fontSize: '0.75rem', color: 'text.secondary' }}
+                />
+                <KeyboardArrowRight sx={{ color: '#501b36' }} />
+              </MenuItem>
+
+              <Menu
+                anchorEl={companyAnchorEl}
+                open={companyOpen}
+                onClose={() => setCompanyAnchorEl(null)}
+                anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
+                transformOrigin={{ vertical: 'top', horizontal: 'left' }}
+                sx={{
+                  '& .MuiPaper-root': {
+                    borderRadius: '8px',
+                    minWidth: 200,
+                    boxShadow: '0 4px 16px rgba(0, 0, 0, 0.1)',
+                    border: '1px solid rgba(0, 0, 0, 0.1)',
+                    background: '#ffffff',
+                    paddingY: 0.5,
+                  },
+                }}
+              >
+                {availableCompanies.map((code) => (
+                  <MenuItem
+                    key={code}
+                    onClick={() => {
+                      selectCompany(code as any);
+                      setCompanyAnchorEl(null);
+                      handleClose();
+                    }}
+                    sx={{
+                      py: 1.1,
+                      '&:hover': { backgroundColor: 'rgba(0, 0, 0, 0.04)' },
+                    }}
+                  >
+                    <ListItemIcon>
+                      {selectedCompany === code ? (
+                        <Check sx={{ color: '#501b36' }} />
+                      ) : (
+                        <Box sx={{ width: 18, height: 18 }} />
+                      )}
+                    </ListItemIcon>
+                    <ListItemText
+                      primary={code}
+                      primaryTypographyProps={{
+                        fontSize: '0.95rem',
+                        fontWeight: selectedCompany === code ? 600 : 500,
+                      }}
+                    />
+                  </MenuItem>
+                ))}
+              </Menu>
+            </>
+          )}
+
           {hasPermission(user, Permission.VIEW_SETTINGS) && (
             <Divider sx={{ my: 1 }} />
           )}

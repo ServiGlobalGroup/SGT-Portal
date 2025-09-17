@@ -57,7 +57,7 @@ class UserService:
         return db.query(User).offset(skip).limit(limit).all()
     
     @staticmethod
-    def create_user(db: Session, user_create: UserCreate) -> User:
+    def create_user(db: Session, user_create: UserCreate, company=None) -> User:
         """
         Crea un nuevo usuario en la base de datos y su carpeta personal
         """
@@ -103,6 +103,17 @@ class UserService:
             is_verified=False,
             must_change_password=True,
         )
+
+        # Asignar empresa si se proporcionó
+        try:
+            if company is not None and hasattr(db_user, 'company'):
+                setattr(db_user, 'company', company)
+        except Exception:
+            # En caso de que el tipo no coincida (Enum vs str), intentar asignación segura
+            try:
+                setattr(db_user, 'company', company)
+            except Exception:
+                pass
 
         # Crear la carpeta del usuario con la nueva estructura
         try:

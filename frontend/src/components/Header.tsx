@@ -218,7 +218,7 @@ export const Header: React.FC<HeaderProps> = ({ isCollapsed }) => {
               },
             }}
           >
-  // case 'perfil': eliminado: ya no hay página de perfil
+            {/* case 'perfil': eliminado: ya no hay página de perfil */}
             
             {/* Solo mostrar Configuración si el usuario tiene permisos */}
             {hasPermission(user, Permission.VIEW_SETTINGS) && (
@@ -244,6 +244,8 @@ export const Header: React.FC<HeaderProps> = ({ isCollapsed }) => {
               </MenuItem>
             )}
             
+            
+
             <Divider sx={{ my: 1 }} />
             
             <MenuItem 

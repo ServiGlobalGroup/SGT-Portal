@@ -1,7 +1,8 @@
-from sqlalchemy import Column, Integer, String, Date, DateTime, Numeric, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, Date, DateTime, Numeric, ForeignKey, JSON, Enum
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database.connection import Base
+from app.models.company_enum import Company
 
 class DietaRecord(Base):
     """Registro de cálculo de dietas guardado.
@@ -19,6 +20,8 @@ class DietaRecord(Base):
     concepts = Column(JSON, nullable=False, comment="Lista de conceptos (cantidad puede ser decimal p.ej. 0.5) con importes")
     notes = Column(String(500), nullable=True, comment="Notas adicionales")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    # Nueva columna opcional para identificar la empresa
+    company = Column(Enum(Company, name="company"), nullable=True, comment="Empresa asociada: SERVIGLOBAL o EMATRA")
 
     user = relationship("User")
 

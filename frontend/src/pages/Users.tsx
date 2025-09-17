@@ -87,7 +87,7 @@ export const Users: React.FC = () => {
   if (!authContext) {
     throw new Error('Users must be used within an AuthProvider');
   }
-  const { user: currentUser } = authContext;
+  const { user: currentUser, selectedCompany } = authContext;
 
   // Helper para verificar si el usuario actual es administrador o maestro
   const isAdmin = currentUser?.role === 'ADMINISTRADOR' || currentUser?.role === 'MASTER_ADMIN';
@@ -126,6 +126,13 @@ export const Users: React.FC = () => {
     password: '',
     confirmPassword: ''
   });
+  // Empresa seleccionada para la creación (solo visible para admins)
+  const initialCreateCompany = (selectedCompany === 'SERVIGLOBAL' || selectedCompany === 'EMATRA')
+    ? selectedCompany
+    : ((typeof window !== 'undefined' && (localStorage.getItem('selected_company') === 'SERVIGLOBAL' || localStorage.getItem('selected_company') === 'EMATRA'))
+        ? (localStorage.getItem('selected_company') as 'SERVIGLOBAL' | 'EMATRA')
+        : 'SERVIGLOBAL');
+  const [createUserCompany, setCreateUserCompany] = useState<'SERVIGLOBAL' | 'EMATRA'>(initialCreateCompany);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [createUserLoading, setCreateUserLoading] = useState(false);
@@ -512,6 +519,10 @@ export const Users: React.FC = () => {
       return;
     }
     
+    // Al abrir, sincronizar la empresa por defecto con la empresa activa en la app
+    if (selectedCompany === 'SERVIGLOBAL' || selectedCompany === 'EMATRA') {
+      setCreateUserCompany(selectedCompany);
+    }
     setOpenCreateModal(true);
   };
 
@@ -625,6 +636,12 @@ export const Users: React.FC = () => {
       password: '',
       confirmPassword: ''
     });
+    // Reset empresa al valor activo global
+    if (selectedCompany === 'SERVIGLOBAL' || selectedCompany === 'EMATRA') {
+      setCreateUserCompany(selectedCompany);
+    } else {
+      setCreateUserCompany('SERVIGLOBAL');
+    }
   };
 
   // Función para verificar DNI en tiempo real
@@ -732,7 +749,8 @@ export const Users: React.FC = () => {
     try {
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { confirmPassword, ...userData } = createUserData;
-      await usersAPI.createUser(userData);
+  // Enviar header X-Company solo para esta petición (sin cambiar selección global)
+  await usersAPI.createUser(userData, createUserCompany);
       setSnackbar({ 
         open: true,
         message: `Usuario ${createUserData.first_name} ${createUserData.last_name} creado exitosamente. Se ha creado automáticamente su carpeta personal para documentos.`,
@@ -2226,6 +2244,20 @@ export const Users: React.FC = () => {
           </Box>
           {/* Campo Cargo (nuevo) */}
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 3 }}>
+            {/* Selector de Empresa (solo admins) */}
+            {isAdmin && (
+              <ModernField
+                label="Empresa"
+                type="select"
+                value={createUserCompany}
+                onChange={(value) => setCreateUserCompany((value as 'SERVIGLOBAL' | 'EMATRA'))}
+                options={[
+                  { value: 'SERVIGLOBAL', label: 'SERVIGLOBAL' },
+                  { value: 'EMATRA', label: 'EMATRA' },
+                ]}
+                helperText="La empresa a la que se asignará el usuario"
+              />
+            )}
             <ModernField
               label="Cargo"
               value={createUserData.position}
@@ -2407,6 +2439,11 @@ export const Users: React.FC = () => {
                   icon: <Business sx={{ fontSize: 16 }} />,
                   label: "Departamento",
                   value: createUserData.department || "No especificado"
+                },
+                {
+                  icon: <Business sx={{ fontSize: 16 }} />,
+                  label: "Empresa",
+                  value: createUserCompany
                 },
                 {
                   icon: <Badge sx={{ fontSize: 16 }} />,

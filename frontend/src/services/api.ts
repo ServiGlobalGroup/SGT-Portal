@@ -47,11 +47,41 @@ const api = axios.create({
   },
 });
 
-// Interceptor para agregar el token de autenticación
+// Interceptor para agregar el token de autenticación y la empresa seleccionada
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('access_token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
+  }
+  // No sobrescribir X-Company si ya viene definido explícitamente en la petición
+  const hasCompanyHeader = (config.headers as any)['X-Company'] !== undefined;
+  if (!hasCompanyHeader) {
+    // 1) Intentar con selected_company de localStorage
+    const selectedCompany = localStorage.getItem('selected_company');
+    if (selectedCompany === 'SERVIGLOBAL' || selectedCompany === 'EMATRA') {
+      (config.headers as any)['X-Company'] = selectedCompany;
+    } else {
+      // 2) Fallback: extraer company desde user_data (objeto o string)
+      try {
+        const rawUser = localStorage.getItem('user_data');
+        if (rawUser) {
+          const user = JSON.parse(rawUser);
+          const rawCompany = user?.company;
+          let normalized: string | null = null;
+          if (typeof rawCompany === 'string') {
+            const U = rawCompany.toUpperCase();
+            if (U === 'SERVIGLOBAL' || U === 'EMATRA') normalized = U;
+          } else if (rawCompany && typeof rawCompany === 'object') {
+            const val = rawCompany.value ?? rawCompany.name ?? '';
+            const U = String(val).toUpperCase();
+            if (U === 'SERVIGLOBAL' || U === 'EMATRA') normalized = U;
+          }
+          if (normalized) {
+            (config.headers as any)['X-Company'] = normalized;
+          }
+        }
+      } catch { /* noop */ }
+    }
   }
   return config;
 });
@@ -424,7 +454,7 @@ export const usersAPI = {
     };
   },
 
-  // Crear nuevo usuario
+  // Crear nuevo usuario (permite override de empresa vía header en esta llamada)
   createUser: (userData: {
     dni_nie: string;
     first_name: string;
@@ -443,7 +473,13 @@ export const usersAPI = {
     emergency_contact_name?: string;
     emergency_contact_phone?: string;
     password: string;
-  }) => api.post('/api/users', userData).then(res => res.data),
+  }, companyOverride?: 'SERVIGLOBAL' | 'EMATRA') => {
+    const headers: Record<string, string> = {};
+    if (companyOverride === 'SERVIGLOBAL' || companyOverride === 'EMATRA') {
+      headers['X-Company'] = companyOverride;
+    }
+    return api.post('/api/users', userData, { headers }).then(res => res.data);
+  },
 
   // Obtener usuario por ID
   getUserById: (id: number) => 

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Header
 from fastapi import status as http_status
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import extract
@@ -17,6 +17,7 @@ from app.api.auth import get_current_user
 from datetime import datetime, date
 from typing import List, Optional, Any, cast
 import calendar
+from app.utils.company_context import effective_company_for_request
 
 router = APIRouter()
 
@@ -26,7 +27,8 @@ async def get_vacation_requests(
     user_id: Optional[int] = None,
     year: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    x_company: str | None = Header(default=None, alias="X-Company")
 ):
     """
     Obtiene solicitudes de vacaciones con filtros opcionales.
@@ -37,6 +39,10 @@ async def get_vacation_requests(
         joinedload(VacationRequest.user),
         joinedload(VacationRequest.reviewer)
     )
+    # Filtro por empresa del usuario actual
+    comp_obj = effective_company_for_request(current_user, x_company)
+    if comp_obj is not None:
+        query = query.filter(VacationRequest.company == comp_obj)
     
     # Si no es admin pleno, solo puede ver sus propias solicitudes
     if current_user.role.value not in ['ADMINISTRADOR', 'MASTER_ADMIN']:
@@ -93,7 +99,8 @@ async def get_vacation_requests(
 async def create_vacation_request(
     request: VacationRequestCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    x_company: str | None = Header(default=None, alias="X-Company")
 ):
     """
     Crea una nueva solicitud de vacaciones.
@@ -135,7 +142,11 @@ async def create_vacation_request(
         end_date=request.end_date,
         reason=request.reason,
         status=VacationStatus.PENDING,
-        absence_type=ModelAbsenceType(request.absence_type)
+           # Asegurar conversión correcta de Enum Pydantic a Enum del modelo
+           absence_type=ModelAbsenceType(
+               request.absence_type.value if hasattr(request.absence_type, 'value') else str(request.absence_type)
+           ),
+           company=effective_company_for_request(current_user, x_company)
     )
     
     db.add(db_request)
@@ -193,7 +204,8 @@ async def update_vacation_request(
     request_id: int,
     request_update: VacationRequestUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    x_company: str | None = Header(default=None, alias="X-Company")
 ):
     """
     Actualiza una solicitud de vacaciones.
@@ -206,6 +218,13 @@ async def update_vacation_request(
     ).first()
     
     if not db_request:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail="Solicitud no encontrada"
+        )
+    # Restringir por empresa
+    comp_obj = effective_company_for_request(current_user, x_company)
+    if comp_obj is not None and getattr(db_request, 'company', None) not in (None, comp_obj):
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail="Solicitud no encontrada"
@@ -313,7 +332,8 @@ async def update_vacation_request(
 async def delete_vacation_request(
     request_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    x_company: str | None = Header(default=None, alias="X-Company")
 ):
     """
     Elimina una solicitud de vacaciones.
@@ -326,6 +346,13 @@ async def delete_vacation_request(
     ).first()
     
     if not db_request:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail="Solicitud no encontrada"
+        )
+    # Restringir por empresa
+    comp_obj = effective_company_for_request(current_user, x_company)
+    if comp_obj is not None and getattr(db_request, 'company', None) not in (None, comp_obj):
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail="Solicitud no encontrada"
@@ -372,7 +399,8 @@ async def update_vacation_status(
     status: str,
     admin_response: Optional[str] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    x_company: str | None = Header(default=None, alias="X-Company")
 ):
     """
     Actualiza el estado de una solicitud de vacaciones.
@@ -401,6 +429,13 @@ async def update_vacation_status(
     ).first()
     
     if not db_request:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail="Solicitud no encontrada"
+        )
+    # Restringir por empresa efectiva: el admin solo debe actualizar solicitudes de la empresa activa
+    comp_obj = effective_company_for_request(current_user, x_company)
+    if comp_obj is not None and getattr(db_request, 'company', None) not in (None, comp_obj):
         raise HTTPException(
             status_code=http_status.HTTP_404_NOT_FOUND,
             detail="Solicitud no encontrada"
@@ -445,7 +480,8 @@ async def update_vacation_status(
 async def get_vacation_stats(
     year: Optional[int] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    x_company: str | None = Header(default=None, alias="X-Company")
 ):
     """
     Obtiene estadísticas de las solicitudes de vacaciones.
@@ -456,6 +492,10 @@ async def get_vacation_stats(
     
     # Base query
     query = db.query(VacationRequest)
+    # Filtrar por empresa
+    comp_obj = effective_company_for_request(current_user, x_company)
+    if comp_obj is not None:
+        query = query.filter(VacationRequest.company == comp_obj)
     
     # Si no es admin pleno, solo sus propias solicitudes
     if current_user.role.value not in ['ADMINISTRADOR', 'MASTER_ADMIN']:
@@ -488,7 +528,8 @@ async def get_vacation_stats(
 @router.get("/pending-for-admin", response_model=List[VacationRequestResponse])
 async def get_pending_requests_for_admin(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    x_company: str | None = Header(default=None, alias="X-Company")
 ):
     """
     Obtiene solicitudes pendientes para el centro de notificaciones de administradores.
@@ -502,11 +543,15 @@ async def get_pending_requests_for_admin(
         )
     
     # Obtener solicitudes pendientes
-    requests = db.query(VacationRequest).options(
+    q = db.query(VacationRequest).options(
         joinedload(VacationRequest.user)
     ).filter(
         VacationRequest.status == VacationStatus.PENDING
-    ).order_by(VacationRequest.created_at.desc()).all()
+    )
+    comp_obj = effective_company_for_request(current_user, x_company)
+    if comp_obj is not None:
+        q = q.filter(VacationRequest.company == comp_obj)
+    requests = q.order_by(VacationRequest.created_at.desc()).all()
     
     response = []
     for req in requests:
@@ -537,7 +582,8 @@ async def get_vacation_usage(
     year: int | None = None,
     absence_type: str | None = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
+    x_company: str | None = Header(default=None, alias="X-Company")
 ):
     """
     Devuelve el uso anual de días de vacaciones de un usuario.
@@ -569,6 +615,9 @@ async def get_vacation_usage(
         VacationRequest.user_id == target_user_id_val,
         extract('year', VacationRequest.start_date) == target_year
     )
+    comp_obj = effective_company_for_request(current_user, x_company)
+    if comp_obj is not None:
+        q = q.filter(VacationRequest.company == comp_obj)
 
     # Filtro opcional por tipo de ausencia
     if absence_type:
@@ -585,6 +634,9 @@ async def get_vacation_usage(
         extract('year', VacationRequest.start_date) == target_year,
         VacationRequest.status == VacationStatus.PENDING
     )
+    # Restringir por empresa también en pendientes
+    if comp_obj is not None:
+        pending_q = pending_q.filter(VacationRequest.company == comp_obj)
     if absence_type:
         pending_q = pending_q.filter(VacationRequest.absence_type == at)
     pending_requests = pending_q.all()

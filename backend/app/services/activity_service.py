@@ -1,6 +1,7 @@
 from typing import Optional, Any, Dict
 from sqlalchemy.orm import Session
 from app.models.activity_log import ActivityLog
+from app.models.company_enum import Company
 
 
 class ActivityService:
@@ -48,10 +49,21 @@ class ActivityService:
         if actor_id == -1 or (actor_dni and 'ADMIN' in actor_dni.upper()):
             # Crear un objeto dummy para mantener compatibilidad
             dummy_entry = ActivityLog()
-            dummy_entry.id = -1
+            setattr(dummy_entry, 'id', -1)
             return dummy_entry
             
         try:
+            # Determinar compañía si viene en meta o como valor aparte en meta['company']
+            company_val = None
+            if meta and isinstance(meta, dict):
+                mc = meta.get('company')
+                try:
+                    if isinstance(mc, Company):
+                        company_val = mc
+                    elif isinstance(mc, str) and mc:
+                        company_val = Company(mc)
+                except Exception:
+                    company_val = None
             entry = ActivityLog(
                 event_type=event_type,
                 message=message[:255],  # proteger longitud
@@ -61,6 +73,7 @@ class ActivityService:
                 entity_type=entity_type,
                 entity_id=entity_id,
                 meta=meta,
+                company=company_val,
             )
             db.add(entry)
             if auto_commit:
@@ -92,6 +105,16 @@ class ActivityService:
             first_name = getattr(user, "first_name", "")
             last_name = getattr(user, "last_name", "")
             full_name = (first_name + " " + last_name).strip() or None
+        # Añadir compañía a meta si está disponible en el usuario y no está ya
+        try:
+            if meta is None:
+                meta = {}
+            if 'company' not in meta:
+                comp_obj = getattr(user, 'company', None)
+                if comp_obj is not None:
+                    meta['company'] = getattr(comp_obj, 'value', str(comp_obj))
+        except Exception:
+            pass
         return ActivityService.log(
             db,
             event_type=event_type,

@@ -15,9 +15,6 @@ import {
   ListItem,
   ListItemText,
   MenuItem,
-  Select,
-  FormControl,
-  InputLabel,
   LinearProgress,
   Skeleton,
   Tooltip,
@@ -55,6 +52,9 @@ import { DashboardStats as IDashboardStats, AvailableWorkersResponse, UserStatsS
 
 export const Dashboard: React.FC = () => {
   const { user } = useAuth();
+  // selectedCompany lo usa el interceptor para X-Company, pero aquí lo usamos
+  // para re-disparar cargas cuando cambie la empresa activa
+  const { selectedCompany } = useAuth() as any;
   const [stats, setStats] = useState<IDashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -66,8 +66,7 @@ export const Dashboard: React.FC = () => {
     | null
   >(null);
   const [availableLoading, setAvailableLoading] = useState<boolean>(false);
-  // Filtro de puesto (position). '' => todos
-  const [selectedPosition, setSelectedPosition] = useState<string>('');
+  // Se elimina el filtro de puesto (position) del dashboard
   // Fecha de hoy fija (como antes pero sin permitir cambiarla)
   const todayDate = useMemo(() => {
     const now = new Date();
@@ -136,9 +135,8 @@ export const Dashboard: React.FC = () => {
   dashboardService.getStats(),
         vacationService.getVacationStats().catch(() => null),
         usersAPI.getUserStats().catch(() => null),
-  // En la carga inicial usamos "todos" los puestos; los cambios de filtro
-  // actualizan el panel mediante el efecto específico de selectedPosition.
-  dashboardService.getAvailableWorkers(todayDate, '').catch(() => null),
+  // Carga inicial de trabajadores disponibles (sin filtro de puesto)
+  dashboardService.getAvailableWorkers(todayDate).catch(() => null),
       ]);
 
   setStats(statsRes);
@@ -190,13 +188,13 @@ export const Dashboard: React.FC = () => {
     };
   }, [user?.role]);
 
-  // Refrescar sólo la lista de disponibles cuando cambia el filtro de posición
+  // Refrescar lista de disponibles cuando cambie la fecha (hoy fijo por ahora)
   useEffect(() => {
     let cancelled = false;
     const run = async () => {
       try {
         setAvailableLoading(true);
-  const res = await dashboardService.getAvailableWorkers(todayDate, selectedPosition);
+  const res = await dashboardService.getAvailableWorkers(todayDate);
         if (!cancelled) setAvailableWorkers(res);
       } catch (e) {
         console.error('Error cargando disponibles:', e);
@@ -209,7 +207,7 @@ export const Dashboard: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [selectedPosition, todayDate]);
+  }, [todayDate, selectedCompany]);
 
   return (
     <>
@@ -477,27 +475,6 @@ export const Dashboard: React.FC = () => {
                   </Typography>
                 </Box>
                 <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }} sx={{ width: { xs: '100%', sm: 'auto' } }}>
-                  {/* Selector de puesto */}
-                  <FormControl size="small" sx={{ minWidth: isXs ? '100%' : 180 }}>
-                    <InputLabel id="position-filter-label">Puesto</InputLabel>
-                    <Select
-                      labelId="position-filter-label"
-                      label="Puesto"
-                      value={selectedPosition}
-                      onChange={(e) => setSelectedPosition(e.target.value)}
-                    >
-                      <MenuItem value="">
-                        <em>Todos</em>
-                      </MenuItem>
-                      {(availableWorkers?.positions && availableWorkers.positions.length > 0
-                        ? availableWorkers.positions
-                        : Array.from(new Set((availableWorkers?.available || []).map(a => a.position).filter(Boolean as any)))
-                        ).map((raw) => {
-                          const p = String(raw);
-                          return <MenuItem key={p} value={p}>{p}</MenuItem>;
-                        })}
-                    </Select>
-                  </FormControl>
                   <ModernButton
                     size="small"
                     startIcon={<ListAlt />}
@@ -531,13 +508,8 @@ export const Dashboard: React.FC = () => {
                       <Box sx={{ textAlign: 'center', py: 6, color: 'text.secondary' }}>
                         <TruckIcon sx={{ fontSize: 48, opacity: 0.25, mb: 1 }} />
                         <Typography variant="body2" sx={{ mb: 1 }}>
-                          {selectedPosition
-                            ? 'No hay trabajadores disponibles con el filtro seleccionado'
-                            : 'No hay trabajadores disponibles hoy'}
+                          {'No hay trabajadores disponibles hoy'}
                         </Typography>
-                        {selectedPosition && (
-                          <Button size="small" variant="outlined" onClick={() => setSelectedPosition('')}>Quitar filtro</Button>
-                        )}
                       </Box>
                     ) : (
                       availableWorkers.available.map((u) => (

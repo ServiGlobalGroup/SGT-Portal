@@ -1,7 +1,8 @@
-from sqlalchemy import Column, Integer, String, Boolean, Date, DateTime, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, Date, DateTime, ForeignKey, Enum
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from app.database.connection import Base
+from app.models.company_enum import Company
 
 class TripRecord(Base):
     """Registro de viaje con pernocta / festivo / Canon TTI.
@@ -18,6 +19,8 @@ class TripRecord(Base):
     event_date = Column(Date, nullable=False, comment="Fecha del viaje / pernocta / festivo")
     note = Column(String(500), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    # Nueva columna opcional para identificar la empresa
+    company = Column(Enum(Company, name="company"), nullable=True, comment="Empresa asociada: SERVIGLOBAL o EMATRA")
 
     user = relationship("User")
 

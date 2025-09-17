@@ -6,7 +6,32 @@ const API_BASE = '/api/vacations/';
 // Configurar token de autorización
 const getAuthHeaders = () => {
   const token = localStorage.getItem('access_token');
-  return token ? { Authorization: `Bearer ${token}` } : {};
+  const headers: Record<string, string> = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  // X-Company: usar selected_company si está, sino intentar desde user_data
+  try {
+    const selected = localStorage.getItem('selected_company');
+    if (selected === 'SERVIGLOBAL' || selected === 'EMATRA') {
+      headers['X-Company'] = selected;
+    } else {
+      const raw = localStorage.getItem('user_data');
+      if (raw) {
+        const u = JSON.parse(raw);
+        const c = u?.company;
+        let norm: string | null = null;
+        if (typeof c === 'string') {
+          const U = c.toUpperCase();
+          if (U === 'SERVIGLOBAL' || U === 'EMATRA') norm = U;
+        } else if (c && typeof c === 'object') {
+          const v = c.value ?? c.name ?? '';
+          const U = String(v).toUpperCase();
+          if (U === 'SERVIGLOBAL' || U === 'EMATRA') norm = U;
+        }
+        if (norm) headers['X-Company'] = norm;
+      }
+    }
+  } catch { /* noop */ }
+  return headers;
 };
 
 export const vacationService = {

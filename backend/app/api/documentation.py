@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Header
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import List
@@ -10,11 +10,17 @@ from sqlalchemy import text
 from app.config import settings  # Usar configuración centralizada
 from app.api.auth import get_current_user
 from app.models.user import User
+from app.utils.company_context import effective_company_for_request
+from app.models.company_enum import Company
 
 router = APIRouter()
 
 @router.get("/users")
-async def get_documentation_users(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+async def get_documentation_users(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    x_company: str | None = Header(default=None, alias="X-Company"),
+):
     """
     Obtiene todos los usuarios con sus carpetas de documentos desde el sistema de archivos
     """
@@ -28,11 +34,47 @@ async def get_documentation_users(db: Session = Depends(get_db), current_user: U
         users_data = []
         
         # Consultar usuarios de la base de datos
-        result = db.execute(text("""
-            SELECT dni_nie, first_name, last_name, email, role, status 
-            FROM users 
-            ORDER BY last_name, first_name
-        """))
+        # Aplicar filtro por empresa efectiva si está disponible
+        comp = effective_company_for_request(current_user, x_company)
+        bind = db.get_bind()
+        is_pg = False
+        try:
+            is_pg = getattr(bind.dialect, "name", "") == "postgresql"
+        except Exception:
+            is_pg = False
+
+        if comp is not None:
+            company_param = comp.value if hasattr(comp, "value") else str(comp)
+            if is_pg:
+                # En Postgres, castear al tipo enum "company" para evitar problemas de comparación
+                sql = text(
+                    """
+                    SELECT dni_nie, first_name, last_name, email, role, status
+                    FROM users
+                    WHERE company = CAST(:company AS company)
+                    ORDER BY last_name, first_name
+                    """
+                )
+            else:
+                sql = text(
+                    """
+                    SELECT dni_nie, first_name, last_name, email, role, status
+                    FROM users
+                    WHERE company = :company
+                    ORDER BY last_name, first_name
+                    """
+                )
+            result = db.execute(sql, {"company": company_param})
+        else:
+            result = db.execute(
+                text(
+                    """
+                    SELECT dni_nie, first_name, last_name, email, role, status
+                    FROM users
+                    ORDER BY last_name, first_name
+                    """
+                )
+            )
         
         db_users = result.fetchall()
         
@@ -123,11 +165,29 @@ async def get_documentation_users(db: Session = Depends(get_db), current_user: U
         raise HTTPException(status_code=500, detail=f"Error al cargar usuarios: {str(e)}")
 
 @router.get("/user/{dni}/folders")
-async def get_user_folders(dni: str, current_user: User = Depends(get_current_user)):
+async def get_user_folders(
+    dni: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    x_company: str | None = Header(default=None, alias="X-Company"),
+):
     """
-    Obtiene las carpetas de un usuario específico
+    Obtiene las carpetas de un usuario específico (restringido a la empresa efectiva)
     """
     try:
+        # Verificar que el usuario pertenece a la empresa efectiva
+        comp = effective_company_for_request(current_user, x_company)
+        db_user = db.query(User).filter(User.dni_nie == dni).first()
+        if not db_user:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        if comp is not None:
+            u_comp = getattr(db_user, "company", None)
+            # Normalizar a string para comparar con comp
+            u_comp_val = getattr(u_comp, "value", None) or (str(u_comp) if u_comp is not None else None)
+            comp_val = getattr(comp, "value", None) or str(comp)
+            if not u_comp_val or u_comp_val != comp_val:
+                raise HTTPException(status_code=403, detail="Usuario fuera del ámbito de la empresa seleccionada")
+
         user_path = Path(settings.user_files_base_path) / dni
         
         if not user_path.exists():
@@ -150,11 +210,30 @@ async def get_user_folders(dni: str, current_user: User = Depends(get_current_us
 
 
 @router.get("/download/{user_dni}/{folder}/{filename}")
-async def download_document(user_dni: str, folder: str, filename: str, current_user: User = Depends(get_current_user)):
+async def download_document(
+    user_dni: str,
+    folder: str,
+    filename: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    x_company: str | None = Header(default=None, alias="X-Company"),
+):
     """
-    Descarga un documento específico de un usuario
+    Descarga un documento específico de un usuario (restringido a la empresa efectiva)
     """
     try:
+        # Verificar scoping por empresa
+        comp = effective_company_for_request(current_user, x_company)
+        db_user = db.query(User).filter(User.dni_nie == user_dni).first()
+        if not db_user:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        if comp is not None:
+            u_comp = getattr(db_user, "company", None)
+            u_comp_val = getattr(u_comp, "value", None) or (str(u_comp) if u_comp is not None else None)
+            comp_val = getattr(comp, "value", None) or str(comp)
+            if not u_comp_val or u_comp_val != comp_val:
+                raise HTTPException(status_code=403, detail="Usuario fuera del ámbito de la empresa seleccionada")
+
         # Construir la ruta al archivo
         user_files_path = Path(settings.user_files_base_path)
         file_path = user_files_path / user_dni / folder / filename
@@ -189,11 +268,30 @@ async def download_document(user_dni: str, folder: str, filename: str, current_u
 
 
 @router.get("/preview/{user_dni}/{folder}/{filename}")
-async def preview_document(user_dni: str, folder: str, filename: str, current_user: User = Depends(get_current_user)):
+async def preview_document(
+    user_dni: str,
+    folder: str,
+    filename: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    x_company: str | None = Header(default=None, alias="X-Company"),
+):
     """
-    Previsualiza un documento (especialmente PDFs) en el navegador
+    Previsualiza un documento (especialmente PDFs) en el navegador (restringido a la empresa efectiva)
     """
     try:
+        # Verificar scoping por empresa
+        comp = effective_company_for_request(current_user, x_company)
+        db_user = db.query(User).filter(User.dni_nie == user_dni).first()
+        if not db_user:
+            raise HTTPException(status_code=404, detail="Usuario no encontrado")
+        if comp is not None:
+            u_comp = getattr(db_user, "company", None)
+            u_comp_val = getattr(u_comp, "value", None) or (str(u_comp) if u_comp is not None else None)
+            comp_val = getattr(comp, "value", None) or str(comp)
+            if not u_comp_val or u_comp_val != comp_val:
+                raise HTTPException(status_code=403, detail="Usuario fuera del ámbito de la empresa seleccionada")
+
         # Construir la ruta al archivo
         user_files_path = Path(settings.user_files_base_path)
         file_path = user_files_path / user_dni / folder / filename

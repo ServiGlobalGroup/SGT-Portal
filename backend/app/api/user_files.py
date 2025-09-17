@@ -6,7 +6,7 @@ from app.models.schemas import UploadHistoryItem, UploadHistoryResponse
 from app.database.connection import get_db
 from app.config import settings
 from sqlalchemy.orm import Session
-from typing import List, Optional
+from typing import List, Optional, cast
 import os
 from pathlib import Path
 from datetime import datetime
@@ -91,7 +91,7 @@ async def download_file(
     
     # Verificar permisos: solo el propio usuario o administradores plenos pueden descargar
     user_role = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
-    if user_role not in ("ADMINISTRADOR", "MASTER_ADMIN") and current_user.dni_nie != dni_nie:
+    if user_role not in ("ADMINISTRADOR", "MASTER_ADMIN") and cast(str, current_user.dni_nie) != dni_nie:
         raise HTTPException(status_code=403, detail="No tienes permisos para acceder a estos archivos")
     
     # Validar tipo de carpeta - solo nóminas y dietas
@@ -161,7 +161,7 @@ async def upload_file(
     try:
         # Guardar el archivo
         content = await file.read()
-        with open(file_path, "wb") as f:
+        with open(str(file_path), "wb") as f:
             f.write(content)
         
         file_stat = file_path.stat()
@@ -387,7 +387,8 @@ async def create_upload_history(
         total_pages=history_item.total_pages,
         successful_pages=history_item.successful_pages,
         failed_pages=history_item.failed_pages,
-        status=history_item.status
+        status=history_item.status,
+        company=getattr(current_user, 'company', None)
     )
     
     db.add(db_history)
@@ -413,6 +414,12 @@ async def get_upload_history(
     Obtiene el historial de subidas del usuario actual (o todos si es admin).
     """
     query = db.query(UploadHistory)
+
+    # Filtrar por empresa (si el usuario tiene empresa asignada)
+    if getattr(current_user, "company", None) is not None:
+        query = query.filter(
+            (UploadHistory.company == current_user.company) | (UploadHistory.company.is_(None))
+        )
     
     # Si no es admin, solo mostrar sus propios registros
     if current_user.role.value != "ADMINISTRADOR":
@@ -439,20 +446,20 @@ async def get_upload_history(
     history_items = []
     for item in items:
         history_items.append(UploadHistoryItem(
-            id=item.id,
-            file_name=item.file_name,
-            upload_date=item.upload_date,
-            user_dni=item.user_dni,
-            user_name=item.user_name,
-            document_type=item.document_type,
-            month=item.month,
-            year=item.year,
-            total_pages=item.total_pages,
-            successful_pages=item.successful_pages,
-            failed_pages=item.failed_pages,
-            status=item.status,
-            created_at=item.created_at,
-            updated_at=item.updated_at
+            id=cast(int, item.id),
+            file_name=cast(str, item.file_name),
+            upload_date=cast(datetime, item.upload_date),
+            user_dni=cast(str, item.user_dni),
+            user_name=cast(str, item.user_name),
+            document_type=cast(str, item.document_type),
+            month=cast(str, item.month),
+            year=cast(str, item.year),
+            total_pages=cast(int, item.total_pages),
+            successful_pages=cast(int, item.successful_pages),
+            failed_pages=cast(int, item.failed_pages),
+            status=cast(str, item.status),
+            created_at=cast(Optional[datetime], item.created_at),
+            updated_at=cast(Optional[datetime], item.updated_at)
         ))
     
     return UploadHistoryResponse(
@@ -479,15 +486,16 @@ async def update_upload_history(
         raise HTTPException(status_code=404, detail="Registro de historial no encontrado")
     
     # Verificar permisos (solo el propietario o admin)
-    if current_user.role.value != "ADMINISTRADOR" and db_history.user_dni != current_user.dni_nie:
+    role_val = current_user.role.value if hasattr(current_user.role, 'value') else str(current_user.role)
+    if role_val != "ADMINISTRADOR" and cast(str, db_history.user_dni) != current_user.dni_nie:
         raise HTTPException(status_code=403, detail="Sin permisos para modificar este registro")
     
     # Actualizar campos
-    db_history.status = status
+    setattr(db_history, "status", status)
     if successful_pages is not None:
-        db_history.successful_pages = successful_pages
+        setattr(db_history, "successful_pages", successful_pages)
     if failed_pages is not None:
-        db_history.failed_pages = failed_pages
+        setattr(db_history, "failed_pages", failed_pages)
     
     db.commit()
     db.refresh(db_history)

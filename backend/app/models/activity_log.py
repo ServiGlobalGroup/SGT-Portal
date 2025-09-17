@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, DateTime, JSON
+from sqlalchemy import Column, Integer, String, DateTime, JSON, Enum
 from sqlalchemy.sql import func
 from app.database.connection import Base
+from app.models.company_enum import Company
 
 class ActivityLog(Base):
     """Modelo ORM alineado con la tabla activity_log real del DDL.
@@ -21,6 +22,8 @@ class ActivityLog(Base):
     entity_id = Column(String(50), nullable=True)
     message = Column(String(255), nullable=False)
     meta = Column(JSON, nullable=True)
+    # Nueva columna opcional para identificar la empresa
+    company = Column(Enum(Company, name="company"), nullable=True, comment="Empresa asociada: SERVIGLOBAL o EMATRA")
 
     def to_activity_item(self):
         """Convierte el registro al formato esperado por el frontend RecentActivity."""
