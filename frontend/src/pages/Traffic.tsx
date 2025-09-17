@@ -60,7 +60,7 @@ interface TrafficFolder {
   name: string;
   parentId: number | null;
   createdDate: string;
-  type: 'folder' | 'company' | 'vehicle_type' | 'vehicle';
+  type: 'folder' | 'location' | 'vehicle_type' | 'vehicle';
   description?: string;
 }
 
@@ -254,27 +254,27 @@ export const Traffic: React.FC = () => {
     return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
   };
 
-  const getTypeIcon = (type: 'folder' | 'company' | 'vehicle_type' | 'vehicle') => {
+  const getTypeIcon = (type: 'folder' | 'location' | 'vehicle_type' | 'vehicle') => {
     switch (type) {
-      case 'company': return <Business sx={{ fontSize: 28, color: '#501b36' }} />;
+      case 'location': return <Business sx={{ fontSize: 28, color: '#501b36' }} />;
       case 'vehicle_type': return <LocalShipping sx={{ fontSize: 28, color: '#43A047' }} />;
       case 'vehicle': return <DirectionsCar sx={{ fontSize: 28, color: '#FF9800' }} />;
       default: return <Folder sx={{ fontSize: 28, color: '#757575' }} />;
     }
   };
 
-  const getFolderTypeColor = (type: 'folder' | 'company' | 'vehicle_type' | 'vehicle') => {
+  const getFolderTypeColor = (type: 'folder' | 'location' | 'vehicle_type' | 'vehicle') => {
     switch (type) {
-      case 'company': return '#501b36';
+      case 'location': return '#501b36';
       case 'vehicle_type': return '#43A047';
       case 'vehicle': return '#FF9800';
       default: return '#757575';
     }
   };
 
-  const getFolderTypeText = (type: 'folder' | 'company' | 'vehicle_type' | 'vehicle') => {
+  const getFolderTypeText = (type: 'folder' | 'location' | 'vehicle_type' | 'vehicle') => {
     switch (type) {
-      case 'company': return 'Empresa';
+      case 'location': return 'Ubicación';
       case 'vehicle_type': return 'Tipo de Vehículo';
       case 'vehicle': return 'Vehículo';
       default: return 'Carpeta';

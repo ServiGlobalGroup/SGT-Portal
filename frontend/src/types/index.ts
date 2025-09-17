@@ -36,7 +36,7 @@ export interface Activity {
 export interface TrafficFolder {
   id: number;
   name: string;
-  type: 'company' | 'vehicle_type' | 'vehicle';
+  type: 'location' | 'vehicle_type' | 'vehicle';
   parent_id: number | null;
   created_date: string;
   children?: TrafficFolder[];
@@ -113,7 +113,6 @@ export interface PayrollStats {
 export interface Order {
   id: number;
   order_number: string;
-  company_name: string;
   email_received_from: string;
   subject: string;
   received_date: string;

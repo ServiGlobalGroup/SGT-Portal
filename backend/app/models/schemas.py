@@ -109,7 +109,7 @@ class Document(BaseModel):
 class TrafficFolder(BaseModel):
     id: Optional[int] = None
     name: str
-    type: str  # 'company', 'vehicle_type', 'vehicle'
+    type: str  # 'location', 'vehicle_type', 'vehicle'
     parent_id: Optional[int] = None
     created_date: Optional[datetime] = None
 
@@ -153,7 +153,6 @@ class PayrollStats(BaseModel):
 class Order(BaseModel):
     id: Optional[int] = None
     order_number: str
-    company_name: str
     email_received_from: str
     subject: str
     received_date: datetime
