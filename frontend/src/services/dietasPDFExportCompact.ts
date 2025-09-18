@@ -86,6 +86,26 @@ export class DietasPDFExporter {
   }
 
   /**
+   * Exporta las dietas a PDF y retorna como Blob (para subida masiva)
+   */
+  async exportContinuousPDFAsBlob(dietas: DietaRecord[], monthYear: string): Promise<Blob> {
+    if (!dietas.length) {
+      throw new Error('No hay dietas para exportar');
+    }
+
+    await this.loadLogos();
+    
+    // Crear un nuevo documento PDF
+    this.doc = new jsPDF('portrait', 'mm', 'a4');
+    
+    // Generar PDF continuo
+    this.generateContinuousDietasPDF(dietas, monthYear);
+
+    // Retornar como Blob en lugar de descargar
+    return this.doc.output('blob');
+  }
+
+  /**
    * Genera un PDF continuo con todas las dietas
    */
   private generateContinuousDietasPDF(dietas: DietaRecord[], monthYear: string): void {
@@ -112,7 +132,8 @@ export class DietasPDFExporter {
       }
 
       // Mostrar el nombre del usuario solo una vez al inicio
-      yPosition = this.addUserHeader(userDietas[0], yPosition, margin, groupIndex + 1, monthYear);
+      const userTotalAmount = userDietas.reduce((sum, dieta) => sum + dieta.total_amount, 0);
+      yPosition = this.addUserHeader(userDietas[0], yPosition, margin, groupIndex + 1, monthYear, userTotalAmount);
 
       // Procesar cada dieta del usuario
       userDietas.forEach((dieta) => {
@@ -219,7 +240,7 @@ export class DietasPDFExporter {
   /**
    * Agrega el header del usuario (nombre y DNI)
    */
-  private addUserHeader(dieta: DietaRecord, startY: number, margin: number, userIndex: number, monthYear: string): number {
+  private addUserHeader(dieta: DietaRecord, startY: number, margin: number, userIndex: number, monthYear: string, totalAmount: number): number {
     let yPosition = startY;
 
     // Fondo para el header del usuario
@@ -236,6 +257,10 @@ export class DietasPDFExporter {
     const formattedMonthYear = this.formatToMMYY(monthYear);
     const userInfo = `${userIndex}. ${dieta.user_name || 'N/A'} (${dniNie}) - ${formattedMonthYear}`;
     this.doc.text(userInfo, margin + 5, yPosition + 6);
+
+    // Total de dinero en el lado derecho
+    const totalText = `${totalAmount.toFixed(2)} €`;
+    this.doc.text(totalText, pageWidth - margin - 5, yPosition + 6, { align: 'right' });
 
     yPosition += 15;
     this.doc.setTextColor(0, 0, 0); // Reset color
