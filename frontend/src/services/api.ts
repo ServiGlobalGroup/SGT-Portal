@@ -465,7 +465,7 @@ export const usersAPI = {
     last_name: string;
     email: string;
     phone?: string;
-  role: 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR';
+  role: 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR' | 'P_TALLER';
     department: string;
     position?: string;
   worker_type?: 'antiguo' | 'nuevo';
