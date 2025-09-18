@@ -405,6 +405,7 @@ export const usersAPI = {
     department?: string;
     role?: string;
     active_only?: boolean;
+    available_drivers_only?: boolean;
   }) => {
     const searchParams = new URLSearchParams();
     if (params?.page) searchParams.append('page', params.page.toString());
@@ -413,6 +414,7 @@ export const usersAPI = {
     if (params?.department) searchParams.append('department', params.department);
     if (params?.role) searchParams.append('role', params.role);
     if (params?.active_only !== undefined) searchParams.append('active_only', params.active_only.toString());
+    if (params?.available_drivers_only !== undefined) searchParams.append('available_drivers_only', params.available_drivers_only.toString());
     
     return api.get(`/api/users?${searchParams.toString()}`).then(res => res.data);
   },
@@ -424,6 +426,7 @@ export const usersAPI = {
     department?: string;
     role?: string;
     active_only?: boolean;
+    available_drivers_only?: boolean;
   }): Promise<{ users: any[]; total: number; total_pages: number; per_page: number; page: number; }> => {
     const perPage = Math.min(params?.per_page || 100, 100); // el backend limita a 100
     const base = new URLSearchParams();
@@ -431,6 +434,7 @@ export const usersAPI = {
     if (params?.department) base.append('department', params.department);
     if (params?.role) base.append('role', params.role);
     if (params?.active_only !== undefined) base.append('active_only', String(params.active_only));
+    if (params?.available_drivers_only !== undefined) base.append('available_drivers_only', String(params.available_drivers_only));
     base.append('per_page', String(perPage));
 
     // Primera página para conocer total y total_pages

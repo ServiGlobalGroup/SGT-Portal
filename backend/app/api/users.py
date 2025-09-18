@@ -90,19 +90,16 @@ async def get_users(
     if role:
         query = query.filter(User.role == role)
     
-    # Nueva lógica de filtros de estado
+    # Nueva lógica de filtros de estado (sustituye antiguo is_active)
     if available_drivers_only:
-        # Solo conductores disponibles: ACTIVOS con rol TRABAJADOR
-        # Por ahora usar is_active hasta que se aplique la migración
-        from sqlalchemy import and_
-        query = query.filter(and_(
-            User.is_active == True,  # noqa: E712
+        # Solo conductores disponibles: estado ACTIVO y rol TRABAJADOR
+        query = query.filter(
+            User.status == UserStatus.ACTIVO,
             User.role == UserRole.TRABAJADOR
-        ))
+        )
     elif active_only:
-        # Por ahora usar is_active hasta que se aplique la migración
-        # En el futuro: usuarios que pueden hacer login (ACTIVOS o BAJA)
-        query = query.filter(User.is_active == True)  # noqa: E712
+        # Usuarios que pueden hacer login: ACTIVO o BAJA
+        query = query.filter(User.status.in_([UserStatus.ACTIVO, UserStatus.BAJA]))
     
     # Si no se especifica ningún filtro, mostrar todos (incluyendo INACTIVOS)
 
