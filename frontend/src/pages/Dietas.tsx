@@ -6,9 +6,9 @@ import { usersAPI } from '../services/api';
 import type { User } from '../types';
 import { calculateDietas, DIETA_RATES, DietaConceptInput, DietaCalculationResult, findKilometerRangeAntiguo } from '../config/dietas';
 import { dietasAPI, distancierosAPI } from '../services/api';
-import { Add, Delete, Calculate, RestaurantMenu, History, FiberNew, Close, ArrowUpward, ArrowDownward, PictureAsPdf, ArrowDropDown, Map, ArrowRightAlt, Flag, TripOrigin, Close as CloseIcon, Undo, Toll, RemoveCircleOutline, CheckCircle, Storage, Cloud, Save, SwapVert } from '@mui/icons-material';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import { Add, Delete, Calculate, RestaurantMenu, History, FiberNew, Close, ArrowUpward, ArrowDownward, ArrowDropDown, Map, ArrowRightAlt, Flag, TripOrigin, Close as CloseIcon, Undo, Toll, RemoveCircleOutline, CheckCircle, Storage, Cloud, Save, SwapVert, FileDownload } from '@mui/icons-material';
+
+import { DietasExportDialog } from '../components/DietasExportDialog';
 
 // Declaraciones suaves para evitar errores de TS si no se tienen @types/google.maps instalados
 // Se pueden reemplazar instalando: npm i -D @types/google.maps
@@ -194,6 +194,7 @@ export const Dietas: React.FC = () => {
   const exportingRef = useRef(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [snackbar, setSnackbar] = useState<{open: boolean; message: string; severity: 'success' | 'error' | 'info'}>({open: false, message: '', severity: 'success'});
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
 
   // Grid registros columnas y orden
   const [recordColumns, setRecordColumns] = useState<any[]>([
@@ -431,19 +432,6 @@ export const Dietas: React.FC = () => {
       link.download = `dietas_${fecha}.csv`;
       document.body.appendChild(link); link.click(); document.body.removeChild(link);
       setTimeout(()=> URL.revokeObjectURL(link.href), 2000);
-    } finally { exportingRef.current = false; }
-  };
-
-  const exportPDF = () => {
-    if(exportingRef.current) return; exportingRef.current = true;
-    try {
-      const doc = new jsPDF({ orientation: 'landscape' });
-      const rows = buildExportRows();
-      const head = [['#','Fecha','Conductor','Tipo','OC / Albarán','Creado','Total (€)','Conceptos']];
-      const body = rows.map(r => [r['#'], r['Fecha'], r['Conductor'], r['Tipo'], r['OC / Albarán'], r['Creado'], r['Total (€)'], r['Conceptos']]);
-      autoTable(doc, { head, body, styles:{ fontSize:8, cellPadding:2 }, headStyles:{ fillColor:[33,150,243] }, bodyStyles:{ valign:'top' }, columnStyles:{7:{ cellWidth:120 }} });
-      const fecha = new Date().toLocaleString();
-      doc.save(`dietas_${fecha.replace(/[:/]/g,'-')}.pdf`);
     } finally { exportingRef.current = false; }
   };
 
@@ -2841,17 +2829,18 @@ export const Dietas: React.FC = () => {
                           </IconButton>
                         </span>
                       </Tooltip>
-                      <Tooltip title="Exportar PDF">
+
+                      <Tooltip title="Exportar PDF Profesional (Compatible con Subida Masiva)">
                         <span>
                           <IconButton
                             size="medium"
-                            onClick={exportPDF}
+                            onClick={() => setExportDialogOpen(true)}
                             disabled={records.length===0}
                             disableRipple
                             disableFocusRipple
                             sx={{
-                              color:'#d32f2f',
-                              background:'rgba(211,47,47,0.08)',
+                              color:'#501b36',
+                              background:'rgba(80,27,54,0.08)',
                               boxShadow:'0 0 0 1px #cfd3d7',
                               border:'none',
                               width:46,
@@ -2861,14 +2850,14 @@ export const Dietas: React.FC = () => {
                               alignItems:'center',
                               justifyContent:'center',
                               '& svg':{ fontSize:24 },
-                              '&:hover':{ background:'rgba(211,47,47,0.12)', color:'#b71c1c' },
-                              '&:active':{ background:'rgba(211,47,47,0.18)', transform:'scale(0.94)' },
-                              '&:focus,&:focus-visible':{ outline:'none', background:'rgba(211,47,47,0.15)' },
+                              '&:hover':{ background:'rgba(80,27,54,0.12)', color:'#3c1329' },
+                              '&:active':{ background:'rgba(80,27,54,0.18)', transform:'scale(0.94)' },
+                              '&:focus,&:focus-visible':{ outline:'none', background:'rgba(80,27,54,0.15)' },
                               '& .MuiTouchRipple-root':{ display:'none' },
-                              '&.Mui-disabled':{ color:'#d32f2f55', background:'rgba(211,47,47,0.05)' }
+                              '&.Mui-disabled':{ color:'#501b3655', background:'rgba(80,27,54,0.05)' }
                             }}
                           >
-                            <PictureAsPdf fontSize="inherit" />
+                            <FileDownload fontSize="inherit" />
                           </IconButton>
                         </span>
                       </Tooltip>
@@ -3024,6 +3013,14 @@ export const Dietas: React.FC = () => {
           Registro guardado correctamente
         </MuiAlert>
       </Snackbar>
+
+      {/* Diálogo de exportación de PDFs profesional */}
+      <DietasExportDialog
+        open={exportDialogOpen}
+        onClose={() => setExportDialogOpen(false)}
+        dietas={records}
+        monthYear={filterStart || new Date().toISOString().slice(0, 7)}
+      />
     </>
   );
 };
