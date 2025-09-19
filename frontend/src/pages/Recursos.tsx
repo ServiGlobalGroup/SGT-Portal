@@ -148,6 +148,64 @@ export const Recursos: React.FC = () => {
     }
   };
 
+  // Funciones auxiliares para manejar eliminación de filtros individuales
+  const handleRemoveGasFilter = async (filterType: 'pan' | 'matricula') => {
+    const newSearch = {...gasSearch, [filterType]: ''};
+    setGasSearch(newSearch);
+    setGasSearchDraft(newSearch);
+    
+    // Si no quedan filtros, restaurar lista completa, sino hacer nueva búsqueda
+    if (!newSearch.pan.trim() && !newSearch.matricula.trim()) {
+      setGasCards(gasCardsAll);
+      setSearchingGas(false);
+    } else {
+      // Ejecutar búsqueda con los filtros restantes
+      const params: { pan?:string; matricula?:string; page:number; page_size:number } = { page:1, page_size:200 };
+      if(newSearch.pan.trim()) params.pan = newSearch.pan.trim();
+      if(newSearch.matricula.trim()) params.matricula = newSearch.matricula.trim();
+      
+      try {
+        if(isMobile) setSearchingGas(true);
+        const res = await resourcesAPI.listFuelCards(params);
+        setGasCards(res.items);
+      } catch(e:any) {
+        setErrorGas(e?.response?.data?.detail || 'Error buscando tarjetas');
+        setGasCards([]);
+      } finally {
+        setSearchingGas(false);
+      }
+    }
+  };
+
+  const handleRemoveViaTFilter = async (filterType: 'numeroTelepeaje' | 'pan' | 'matricula') => {
+    const newSearch = {...viaTSearch, [filterType]: ''};
+    setViaTSearch(newSearch);
+    setViaTSearchDraft(newSearch);
+    
+    // Si no quedan filtros, restaurar lista completa, sino hacer nueva búsqueda
+    if (!newSearch.numeroTelepeaje.trim() && !newSearch.pan.trim() && !newSearch.matricula.trim()) {
+      setViaTs(viaTsAll);
+      setSearchingViaT(false);
+    } else {
+      // Ejecutar búsqueda con los filtros restantes
+      const params: { numero_telepeaje?:string; pan?:string; matricula?:string; page:number; page_size:number } = { page:1, page_size:200 };
+      if(newSearch.numeroTelepeaje.trim()) params.numero_telepeaje = newSearch.numeroTelepeaje.trim();
+      if(newSearch.pan.trim()) params.pan = newSearch.pan.trim();
+      if(newSearch.matricula.trim()) params.matricula = newSearch.matricula.trim();
+      
+      try {
+        if(isMobile) setSearchingViaT(true);
+        const res = await resourcesAPI.listViaTDevices(params);
+        setViaTs(res.items);
+      } catch(e:any) {
+        setErrorViaT(e?.response?.data?.detail || 'Error buscando Via T');
+        setViaTs([]);
+      } finally {
+        setSearchingViaT(false);
+      }
+    }
+  };
+
   // Paginación
   const PAGE_SIZE = 25;
   const [gasPage, setGasPage] = React.useState(1);
@@ -159,13 +217,13 @@ export const Recursos: React.FC = () => {
   // PIN siempre visible (no toggle)
 
   // Formularios
-  const [gasForm, setGasForm] = React.useState({ pan:'', matricula:'', caducidad:'', pin:'', compania:'' });
-  const [viaTForm, setViaTForm] = React.useState({ numeroTelepeaje:'', panViaT:'', compania:'', matricula:'', caducidad:'' });
+  const [gasForm, setGasForm] = React.useState({ pan:'', matricula:'', caducidad:'', pin:'' });
+  const [viaTForm, setViaTForm] = React.useState({ numeroTelepeaje:'', panViaT:'', matricula:'', caducidad:'' });
   const [errors, setErrors] = React.useState<Record<string,string>>({});
 
   const resetForms = () => {
-    setGasForm({ pan:'', matricula:'', caducidad:'', pin:'', compania:'' });
-    setViaTForm({ numeroTelepeaje:'', panViaT:'', compania:'', matricula:'', caducidad:'' });
+    setGasForm({ pan:'', matricula:'', caducidad:'', pin:'' });
+    setViaTForm({ numeroTelepeaje:'', panViaT:'', matricula:'', caducidad:'' });
     setErrors({});
   //
   };
@@ -176,14 +234,12 @@ export const Recursos: React.FC = () => {
     if(!gasForm.matricula.trim()) e.matricula = 'Requerida';
     if(!gasForm.caducidad) e.caducidad = 'Requerida';
     if(!gasForm.pin.trim()) e.pin = 'Requerido';
-    if(!gasForm.compania.trim()) e.compania = 'Requerida';
     return e;
   };
   const validateViaT = () => {
     const e: Record<string,string> = {};
     if(!viaTForm.numeroTelepeaje.trim()) e.numeroTelepeaje = 'Requerido';
     if(!viaTForm.panViaT.trim()) e.panViaT = 'Requerido';
-    if(!viaTForm.compania.trim()) e.compania = 'Requerida';
     if(!viaTForm.matricula.trim()) e.matricula = 'Requerida';
     if(!viaTForm.caducidad) e.caducidad = 'Requerida';
     return e;
@@ -199,10 +255,11 @@ export const Recursos: React.FC = () => {
         pan: gasForm.pan.trim(),
         matricula: gasForm.matricula.trim(),
         caducidad: gasForm.caducidad || undefined,
-        pin: gasForm.pin,
-        compania: gasForm.compania.trim()
+        pin: gasForm.pin
       });
+      // Actualizar tanto la lista visible como la cache completa
       setGasCards(prev => [created, ...prev]);
+      setGasCardsAll(prev => [created, ...prev]);
       setSnack({open:true, msg:'Tarjeta creada', type:'success'});
       setOpenGasDialog(false);
       resetForms();
@@ -219,11 +276,12 @@ export const Recursos: React.FC = () => {
       const created = await resourcesAPI.createViaTDevice({
         numero_telepeaje: viaTForm.numeroTelepeaje.trim(),
         pan: viaTForm.panViaT.trim(),
-        compania: viaTForm.compania.trim() || undefined,
         matricula: viaTForm.matricula.trim(),
         caducidad: viaTForm.caducidad || undefined
       });
+      // Actualizar tanto la lista visible como la cache completa
       setViaTs(prev => [created, ...prev]);
+      setViaTsAll(prev => [created, ...prev]);
       setSnack({open:true, msg:'Dispositivo creado', type:'success'});
       setOpenViaTDialog(false);
       resetForms();
@@ -284,7 +342,7 @@ export const Recursos: React.FC = () => {
   }, [filteredViaTs.length, viaTPage]);
 
   // Reset página al cambiar filtros o pestaña
-  React.useEffect(()=> { setGasPage(1); }, [gasCards.length]);
+  React.useEffect(()=> { setGasPage(1); }, [gasSearch.pan, gasSearch.matricula]);
   React.useEffect(()=> { setViaTPage(1); }, [viaTSearch.numeroTelepeaje, viaTSearch.pan, viaTSearch.matricula]);
   React.useEffect(()=> { 
     /* cambio de tab */ 
@@ -563,10 +621,20 @@ export const Recursos: React.FC = () => {
                 {anyGasFilters && (
                   <Box sx={{ display:'flex', gap:1, flexWrap:'wrap', mb:2 }}>
                     {gasSearch.pan && (
-                      <Chip size="small" label={`PAN: ${gasSearch.pan}`} onDelete={()=> setGasSearch(s=>({...s, pan:''}))} sx={{ borderRadius:2 }} />
+                      <Chip 
+                        size="small" 
+                        label={`PAN: ${gasSearch.pan}`} 
+                        onDelete={() => handleRemoveGasFilter('pan')} 
+                        sx={{ borderRadius:2 }} 
+                      />
                     )}
                     {gasSearch.matricula && (
-                      <Chip size="small" label={`Matrícula: ${gasSearch.matricula}`} onDelete={()=> setGasSearch(s=>({...s, matricula:''}))} sx={{ borderRadius:2 }} />
+                      <Chip 
+                        size="small" 
+                        label={`Matrícula: ${gasSearch.matricula}`} 
+                        onDelete={() => handleRemoveGasFilter('matricula')} 
+                        sx={{ borderRadius:2 }} 
+                      />
                     )}
                   </Box>
                 )}
@@ -578,18 +646,17 @@ export const Recursos: React.FC = () => {
                           <TableRow>
                             <TableCell>P.A.N.</TableCell>
                             <TableCell>Matrícula</TableCell>
-                            <TableCell>Compañía</TableCell>
                             <TableCell>Fecha de caducidad</TableCell>
                             <TableCell>Código PIN</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
                           {loadingGas && (
-                            <TableRow><TableCell colSpan={5}><Box sx={{ display:'flex', alignItems:'center', gap:1 }}><CircularProgress size={18} /> <Typography variant="body2">Cargando...</Typography></Box></TableCell></TableRow>
+                            <TableRow><TableCell colSpan={4}><Box sx={{ display:'flex', alignItems:'center', gap:1 }}><CircularProgress size={18} /> <Typography variant="body2">Cargando...</Typography></Box></TableCell></TableRow>
                           )}
                           {!loadingGas && searchingGas && (
                             <TableRow>
-                              <TableCell colSpan={5}>
+                              <TableCell colSpan={4}>
                                 <Stack spacing={1}>
                                   <Skeleton height={28} />
                                   <Skeleton height={28} />
@@ -599,11 +666,11 @@ export const Recursos: React.FC = () => {
                             </TableRow>
                           )}
                           {!loadingGas && !searchingGas && errorGas && (
-                            <TableRow><TableCell colSpan={5}><Typography color="error" variant="body2">{errorGas}</Typography></TableCell></TableRow>
+                            <TableRow><TableCell colSpan={4}><Typography color="error" variant="body2">{errorGas}</Typography></TableCell></TableRow>
                           )}
                           {!loadingGas && !searchingGas && gasCards.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={5}>
+                              <TableCell colSpan={4}>
                                 <Typography variant="body2" sx={{ color:'text.secondary' }}>No hay tarjetas registradas todavía.</Typography>
                               </TableCell>
                             </TableRow>
@@ -619,9 +686,6 @@ export const Recursos: React.FC = () => {
                             <TableRow key={card.id} hover>
                               <TableCell>{card.pan}</TableCell>
                               <TableCell>{card.matricula}</TableCell>
-                              <TableCell>
-                                <Chip size="small" label={card.compania || ''} sx={{ fontWeight:600, bgcolor:'rgba(92,35,64,0.08)', color:'#501b36' }} />
-                              </TableCell>
                               <TableCell>{card.caducidad}</TableCell>
                               <TableCell>
                                 <Box sx={{ display:'flex', alignItems:'center', gap:1 }}>
@@ -689,7 +753,6 @@ export const Recursos: React.FC = () => {
                                 <Divider sx={{ my:1 }} />
                                 <Stack spacing={0.6}>
                                   <Typography variant="body2"><strong>PAN:</strong> {card.pan}</Typography>
-                                  <Typography variant="body2"><strong>Compañía:</strong> {card.compania || '—'}</Typography>
                                   <Typography variant="body2"><strong>PIN:</strong> <span style={{ fontFamily:'monospace', letterSpacing:1 }}>{card.pin ?? card.masked_pin}</span></Typography>
                                 </Stack>
                               </CardContent>
@@ -773,13 +836,28 @@ export const Recursos: React.FC = () => {
                 {anyViaTFilters && (
                   <Box sx={{ display:'flex', gap:1, flexWrap:'wrap', mb:2 }}>
                     {viaTSearch.numeroTelepeaje && (
-                      <Chip size="small" label={`Telepeaje: ${viaTSearch.numeroTelepeaje}`} onDelete={()=> setViaTSearch(s=>({...s, numeroTelepeaje:''}))} sx={{ borderRadius:2 }} />
+                      <Chip 
+                        size="small" 
+                        label={`Telepeaje: ${viaTSearch.numeroTelepeaje}`} 
+                        onDelete={() => handleRemoveViaTFilter('numeroTelepeaje')} 
+                        sx={{ borderRadius:2 }} 
+                      />
                     )}
                     {viaTSearch.pan && (
-                      <Chip size="small" label={`PAN: ${viaTSearch.pan}`} onDelete={()=> setViaTSearch(s=>({...s, pan:''}))} sx={{ borderRadius:2 }} />
+                      <Chip 
+                        size="small" 
+                        label={`PAN: ${viaTSearch.pan}`} 
+                        onDelete={() => handleRemoveViaTFilter('pan')} 
+                        sx={{ borderRadius:2 }} 
+                      />
                     )}
                     {viaTSearch.matricula && (
-                      <Chip size="small" label={`Matrícula: ${viaTSearch.matricula}`} onDelete={()=> setViaTSearch(s=>({...s, matricula:''}))} sx={{ borderRadius:2 }} />
+                      <Chip 
+                        size="small" 
+                        label={`Matrícula: ${viaTSearch.matricula}`} 
+                        onDelete={() => handleRemoveViaTFilter('matricula')} 
+                        sx={{ borderRadius:2 }} 
+                      />
                     )}
                   </Box>
                 )}
@@ -791,18 +869,17 @@ export const Recursos: React.FC = () => {
                           <TableRow>
                             <TableCell>Nº Telepeaje</TableCell>
                             <TableCell>P.A.N Via-T</TableCell>
-                            <TableCell>Compañía</TableCell>
                             <TableCell>Matrícula</TableCell>
                             <TableCell>Fecha de caducidad</TableCell>
                           </TableRow>
                         </TableHead>
                         <TableBody>
                           {loadingViaT && (
-                            <TableRow><TableCell colSpan={5}><Box sx={{ display:'flex', alignItems:'center', gap:1 }}><CircularProgress size={18} /> <Typography variant="body2">Cargando...</Typography></Box></TableCell></TableRow>
+                            <TableRow><TableCell colSpan={4}><Box sx={{ display:'flex', alignItems:'center', gap:1 }}><CircularProgress size={18} /> <Typography variant="body2">Cargando...</Typography></Box></TableCell></TableRow>
                           )}
                           {!loadingViaT && searchingViaT && (
                             <TableRow>
-                              <TableCell colSpan={5}>
+                              <TableCell colSpan={4}>
                                 <Stack spacing={1}>
                                   <Skeleton height={28} />
                                   <Skeleton height={28} />
@@ -812,18 +889,18 @@ export const Recursos: React.FC = () => {
                             </TableRow>
                           )}
                           {!loadingViaT && !searchingViaT && errorViaT && (
-                            <TableRow><TableCell colSpan={5}><Typography color="error" variant="body2">{errorViaT}</Typography></TableCell></TableRow>
+                            <TableRow><TableCell colSpan={4}><Typography color="error" variant="body2">{errorViaT}</Typography></TableCell></TableRow>
                           )}
                           {!loadingViaT && !searchingViaT && viaTs.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={5}>
+                              <TableCell colSpan={4}>
                                 <Typography variant="body2" sx={{ color:'text.secondary' }}>No hay dispositivos Via T registrados todavía.</Typography>
                               </TableCell>
                             </TableRow>
                           )}
                           {!loadingViaT && !searchingViaT && viaTs.length > 0 && filteredViaTs.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={5}>
+                              <TableCell colSpan={4}>
                                 <Typography variant="body2" sx={{ color:'text.secondary' }}>Sin coincidencias con los filtros aplicados.</Typography>
                               </TableCell>
                             </TableRow>
@@ -832,9 +909,6 @@ export const Recursos: React.FC = () => {
                             <TableRow key={v.id} hover>
                               <TableCell>{v.numero_telepeaje}</TableCell>
                               <TableCell>{v.pan}</TableCell>
-                              <TableCell>
-                                <Chip size="small" label={v.compania || ''} sx={{ fontWeight:600, bgcolor:'rgba(92,35,64,0.08)', color:'#501b36' }} />
-                              </TableCell>
                               <TableCell>{v.matricula}</TableCell>
                               <TableCell>{v.caducidad}</TableCell>
                             </TableRow>
@@ -903,7 +977,6 @@ export const Recursos: React.FC = () => {
                                   <Stack spacing={0.6}>
                                     <Typography variant="body2"><strong>Telepeaje:</strong> {v.numero_telepeaje}</Typography>
                                     <Typography variant="body2"><strong>PAN:</strong> {v.pan}</Typography>
-                                    <Typography variant="body2"><strong>Compañía:</strong> {v.compania}</Typography>
                                   </Stack>
                                 </CardContent>
                               </Card>
@@ -957,16 +1030,6 @@ export const Recursos: React.FC = () => {
             fullWidth
             size="small"
             inputProps={{ maxLength: 10 }}
-          />
-          <TextField
-            label="Compañía"
-            value={gasForm.compania}
-            onChange={e=> setGasForm(f=>({...f, compania:e.target.value}))}
-            error={!!errors.compania}
-            helperText={errors.compania}
-            fullWidth
-            size="small"
-            placeholder="Ej: Repsol, Galp, Shell..."
           />
           <TextField
             label="Fecha de caducidad"
@@ -1024,14 +1087,6 @@ export const Recursos: React.FC = () => {
             onChange={e=> setViaTForm(f=>({...f, panViaT:e.target.value}))}
             error={!!errors.panViaT}
             helperText={errors.panViaT}
-            fullWidth size="small"
-          />
-          <TextField
-            label="Compañía"
-            value={viaTForm.compania}
-            onChange={e=> setViaTForm(f=>({...f, compania:e.target.value}))}
-            error={!!errors.compania}
-            helperText={errors.compania}
             fullWidth size="small"
           />
           <TextField

@@ -25,7 +25,6 @@ def create_fuel_card(
         pan = payload.get('pan', '').strip()
         matricula = payload.get('matricula', '').strip()
         pin = payload.get('pin', '').strip()
-        compania = payload.get('compania', '').strip()
         caducidad = payload.get('caducidad')
         
         if not all([pan, matricula, pin]):
@@ -33,8 +32,8 @@ def create_fuel_card(
         
         # Usar SQLAlchemy text() para queries raw
         query = text("""
-            INSERT INTO fuel_cards (pan, matricula, pin, compania, caducidad, created_by)
-            VALUES (:pan, :matricula, :pin, :compania, :caducidad, :created_by)
+            INSERT INTO fuel_cards (pan, matricula, pin, caducidad, created_by)
+            VALUES (:pan, :matricula, :pin, :caducidad, :created_by)
             RETURNING id, created_at
         """)
         
@@ -42,7 +41,6 @@ def create_fuel_card(
             'pan': pan,
             'matricula': matricula, 
             'pin': pin,
-            'compania': compania or '',
             'caducidad': caducidad,
             'created_by': getattr(current_user, 'id', None)
         })
@@ -54,7 +52,6 @@ def create_fuel_card(
             "id": row[0] if row else 1,
             "pan": pan,
             "matricula": matricula,
-            "compania": compania,
             "caducidad": caducidad,
             "created_at": row[1].isoformat() if row and row[1] else datetime.utcnow().isoformat(),
             "masked_pin": "•" * len(pin),
@@ -64,17 +61,7 @@ def create_fuel_card(
     except Exception as e:
         db.rollback()
         print(f"Error creating fuel card: {e}")
-        # Fallback response
-        return {
-            "id": 1,
-            "pan": payload.get('pan', ''),
-            "matricula": payload.get('matricula', ''),
-            "compania": payload.get('compania', ''),
-            "caducidad": payload.get('caducidad'),
-            "created_at": datetime.utcnow().isoformat(),
-            "masked_pin": "••••",
-            "pin": payload.get('pin', '')
-        }
+        raise HTTPException(status_code=500, detail=f"Error creando tarjeta de combustible: {str(e)}")
 
 
 @router.get("/fuel-cards")
@@ -136,7 +123,6 @@ def create_via_t(
     try:
         numero_telepeaje = payload.get('numero_telepeaje', '').strip()
         pan = payload.get('pan', '').strip()
-        compania = payload.get('compania', '').strip()
         matricula = payload.get('matricula', '').strip()
         caducidad = payload.get('caducidad')
         
@@ -144,15 +130,14 @@ def create_via_t(
             raise HTTPException(status_code=400, detail="Faltan campos requeridos")
         
         query = text("""
-            INSERT INTO via_t_devices (numero_telepeaje, pan, compania, matricula, caducidad, created_by)
-            VALUES (:numero_telepeaje, :pan, :compania, :matricula, :caducidad, :created_by)
+            INSERT INTO via_t_devices (numero_telepeaje, pan, matricula, caducidad, created_by)
+            VALUES (:numero_telepeaje, :pan, :matricula, :caducidad, :created_by)
             RETURNING id, created_at
         """)
         
         result = db.execute(query, {
             'numero_telepeaje': numero_telepeaje,
             'pan': pan,
-            'compania': compania or '',
             'matricula': matricula,
             'caducidad': caducidad,
             'created_by': getattr(current_user, 'id', None)
@@ -165,7 +150,6 @@ def create_via_t(
             "id": row[0] if row else 1,
             "numero_telepeaje": numero_telepeaje,
             "pan": pan,
-            "compania": compania,
             "matricula": matricula,
             "caducidad": caducidad,
             "created_at": row[1].isoformat() if row and row[1] else datetime.utcnow().isoformat()
@@ -174,15 +158,7 @@ def create_via_t(
     except Exception as e:
         db.rollback()
         print(f"Error creating via-t: {e}")
-        return {
-            "id": 1,
-            "numero_telepeaje": payload.get('numero_telepeaje', ''),
-            "pan": payload.get('pan', ''),
-            "compania": payload.get('compania', ''),
-            "matricula": payload.get('matricula', ''),
-            "caducidad": payload.get('caducidad'),
-            "created_at": datetime.utcnow().isoformat()
-        }
+        raise HTTPException(status_code=500, detail=f"Error creando dispositivo Via-T: {str(e)}")
 
 
 @router.get("/via-t-devices")
