@@ -1,6 +1,6 @@
 """Add compania column back to fuel_cards and via_t_devices
 
-Revision ID: 2025_09_19_add_compania_back_to_resources
+Revision ID: add_compania_back
 Revises: add_company_column
 Create Date: 2025-09-19
 """
@@ -9,7 +9,7 @@ from alembic import op
 import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
-revision: str = '2025_09_19_add_compania_back_to_resources'
+revision: str = 'add_compania_back'
 down_revision: Union[str, None] = 'add_company_column'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
