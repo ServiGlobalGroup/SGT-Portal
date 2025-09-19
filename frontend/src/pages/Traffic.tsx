@@ -6,51 +6,46 @@ import {
   CardContent,
   Button,
   Paper,
-  TextField,
   Chip,
-  Alert,
-  CircularProgress,
   Stack,
-  Fade,
-  GlobalStyles,
   IconButton,
   Tooltip,
+  TextField,
   Snackbar,
+  Alert,
   Table,
-  TableBody,
-  TableCell,
-  TableContainer,
   TableHead,
   TableRow,
+  TableCell,
+  TableBody,
+  TableContainer,
   MenuItem,
+  GlobalStyles,
+  Fade
 } from '@mui/material';
 import { AuthContext } from '../contexts/AuthContext';
 import { alpha } from '@mui/material/styles';
 import {
   Folder,
   FolderOpen,
-  Upload,
+  Upload as UploadIcon,
   ArrowBack,
   Download,
   CreateNewFolder,
-  Description,
   Home,
   NavigateNext,
   Visibility,
   LocalShipping,
   Business,
   DirectionsCar,
-  Refresh,
   Search,
   InsertDriveFile,
   MoreVert,
-  DriveEta,
   AccountTree,
-  GridView,
-  ViewList,
   PictureAsPdf,
   Image,
   Delete,
+  FactCheck,
 } from '@mui/icons-material';
 import { trafficFilesAPI, API_BASE_URL } from '../services/api';
 import { PdfPreview } from '../components/PdfPreview';
@@ -97,17 +92,21 @@ export const Traffic: React.FC = () => {
   const [files, setFiles] = useState<TrafficFile[]>([]);
 
   // Estados de UI
-  // loading: para acciones (crear, subir, borrar, actualizar manual)
   // listLoading: para navegación entre carpetas sin "recargar" toda la página
-  const [loading, setLoading] = useState(false);
-  const [listLoading, setListLoading] = useState(false);
+  // listLoading eliminado (se quita indicador para evitar movimientos de layout)
   const [searchTerm, setSearchTerm] = useState('');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  // viewMode removido (no usado)
+  const [viewMode] = useState<'grid' | 'list'>('grid');
   
   // Estados para paginación
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [unifiedItems, setUnifiedItems] = useState<UnifiedItem[]>([]);
+
+  // Vista seleccionada (Documentos / Revisiones)
+  const [trafficView, setTrafficView] = useState<'files' | 'revisions'>('files');
+  // Última actualización silenciosa
+  const [lastSilentRefresh, setLastSilentRefresh] = useState<Date | null>(null);
 
   // Estados de modales
   const [createFolderModal, setCreateFolderModal] = useState(false);
@@ -134,11 +133,10 @@ export const Traffic: React.FC = () => {
   };
 
   // Función para cargar carpetas desde la API
-  const loadFolders = async (path?: string, opts?: { list?: boolean }) => {
+  const loadFolders = async (path?: string) => {
     try {
       console.log('🔄 Loading folders for path:', path || 'root');
-      const useListLoading = opts?.list === true;
-      useListLoading ? setListLoading(true) : setLoading(true);
+  // listLoading eliminado
       
       const foldersData = await trafficFilesAPI.getFolders(path);
       console.log('📁 Folders loaded:', foldersData);
@@ -171,8 +169,7 @@ export const Traffic: React.FC = () => {
       showSnackbar('Error al cargar las carpetas', 'error');
   setFolders([]);
     } finally {
-  const useListLoading = opts?.list === true;
-  useListLoading ? setListLoading(false) : setLoading(false);
+  // listLoading eliminado
     }
   };
 
@@ -195,9 +192,22 @@ export const Traffic: React.FC = () => {
   useEffect(() => {
     const path = currentPath === '/' ? undefined : currentPath;
     // Para navegación entre carpetas, usar loading de listado únicamente
-    loadFolders(path, { list: true });
+  loadFolders(path);
     loadFiles(path);
   }, [currentPath]);
+
+  // Refresco en segundo plano cada 60s (solo vista archivos)
+  useEffect(() => {
+    if (trafficView !== 'files') return; 
+    const interval = setInterval(() => {
+      const path = currentPath === '/' ? undefined : currentPath;
+      Promise.all([
+  loadFolders(path),
+        loadFiles(path)
+      ]).then(() => setLastSilentRefresh(new Date())).catch(()=>{});
+    }, 60000); // 60s
+    return () => clearInterval(interval);
+  }, [trafficView, currentPath]);
 
   // Crear elementos unificados para vista lista
   useEffect(() => {
@@ -310,25 +320,14 @@ export const Traffic: React.FC = () => {
     }
   };
 
-  const handleRefresh = async () => {
-    setLoading(true);
-    try {
-      await loadFolders(currentPath === '/' ? undefined : currentPath);
-      await loadFiles(currentPath === '/' ? undefined : currentPath);
-      showSnackbar('Datos actualizados correctamente', 'success');
-    } catch (error) {
-      showSnackbar('Error al actualizar los datos', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // handleRefresh eliminado (refresh automático en segundo plano)
 
   // Handler para crear carpeta
   const handleCreateFolder = async (folderName: string) => {
     if (!folderName.trim()) return;
     
     try {
-      setLoading(true);
+  // (loading removido)
       
       await trafficFilesAPI.createFolder(folderName, currentPath === '/' ? undefined : currentPath);
       
@@ -340,7 +339,7 @@ export const Traffic: React.FC = () => {
       console.error('Error creating folder:', error);
       showSnackbar('Error al crear la carpeta', 'error');
     } finally {
-      setLoading(false);
+  // (loading removido)
     }
   };
 
@@ -349,7 +348,7 @@ export const Traffic: React.FC = () => {
     if (selectedFiles.length === 0) return;
     
     try {
-      setLoading(true);
+  // (loading removido)
       console.log('🔼 Uploading files to path:', currentPath);
       console.log('📎 Files to upload:', selectedFiles.map(f => f.name));
       
@@ -366,18 +365,11 @@ export const Traffic: React.FC = () => {
       console.error('❌ Error uploading files:', error);
       showSnackbar('Error al subir los archivos', 'error');
     } finally {
-      setLoading(false);
+  // (loading removido)
     }
   };
 
-  // Estadísticas
-  const stats = {
-    totalFolders: folders.length,
-    totalFiles: files.length,
-    currentFolders: getCurrentFolders().length,
-    currentFiles: getCurrentFiles().length,
-    totalSize: files.reduce((acc, file) => acc + file.size, 0),
-  };
+  // (Bloque de estadísticas eliminado a petición)
 
   // Filtrar archivos por búsqueda
   const filteredFiles = getCurrentFiles().filter(file => 
@@ -468,7 +460,7 @@ export const Traffic: React.FC = () => {
     
     if (window.confirm(`¿Estás seguro de que quieres eliminar "${file.name}"?`)) {
       try {
-        setLoading(true);
+  // (loading removido)
         
         // Verificar si file.url existe, sino construir la ruta manualmente
         let relativePath: string;
@@ -503,7 +495,7 @@ export const Traffic: React.FC = () => {
         console.error('Error deleting file:', error);
         showSnackbar('Error al eliminar el archivo', 'error');
       } finally {
-        setLoading(false);
+  // (loading removido)
       }
     }
   };
@@ -588,44 +580,11 @@ export const Traffic: React.FC = () => {
           </Fade>
         </Box>
 
-        {/* Estadísticas Principales - Más Compactas */}
-        <Fade in timeout={1000}>
-          <Box sx={{ 
-            display: 'grid', 
-            gridTemplateColumns: { 
-              xs: 'repeat(1, 1fr)', 
-              sm: 'repeat(2, 1fr)', 
-              md: 'repeat(3, 1fr)' 
-            }, 
-            gap: 2, 
-            mb: 3 
-          }}>
-            <StatsCard
-              title="Total Carpetas"
-              value={stats.totalFolders}
-              icon={<FolderOpen />}
-              color="#2196f3"
-              loading={loading}
-            />
-            <StatsCard
-              title="Total Archivos"
-              value={stats.totalFiles}
-              icon={<Description />}
-              color="#ff9800"
-              loading={loading}
-            />
-            <StatsCard
-              title="Tamaño Total"
-              value={formatFileSize(stats.totalSize)}
-              icon={<DriveEta />}
-              color="#9c27b0"
-              loading={loading}
-              isSize
-            />
-          </Box>
-        </Fade>
+        {/* El toggle de vistas se moverá al panel de controles */}
 
-        {/* Panel de Control */}
+        {/* (Cards de estadísticas eliminadas) */}
+
+        {/* Panel de Control (siempre visible para mostrar toggle) */}
         <Fade in timeout={1200}>
           <Paper
             elevation={0}
@@ -762,109 +721,83 @@ export const Traffic: React.FC = () => {
 
             {/* Controles de acción - Más compactos */}
             <Box sx={{ 
-              display: 'flex', 
-              gap: 1.5, 
-              alignItems: 'center',
-              flexDirection: { xs: 'column', sm: 'row' },
-              justifyContent: 'space-between',
-              mb: 2
+              display:'flex',
+              flexWrap:'wrap',
+              gap:1.5,
+              alignItems:'center',
+              mb:2
             }}>
-              <TextField
-                size="small"
-                placeholder="Buscar archivos y carpetas..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                InputProps={{
-                  startAdornment: <Search sx={{ mr: 1, color: 'text.secondary', fontSize: 20 }} />
-                }}
-                sx={{ 
-                  flex: 1,
-                  maxWidth: { xs: '100%', sm: 350 },
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 2,
-                    bgcolor: '#f8fafc',
-                    '&:hover': {
-                      '& .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#501b36',
-                      },
-                    },
-                    '&.Mui-focused': {
-                      '& .MuiOutlinedInput-notchedOutline': {
-                        borderColor: '#501b36',
-                      },
-                    },
-                  },
-                }}
-              />
-              
-              <Stack direction="row" spacing={1}>
-                <Button
-                  variant="outlined"
-                  startIcon={<Refresh />}
-                  onClick={handleRefresh}
-                  disabled={loading}
+              <Box sx={{ flex:1, minWidth: 240 }}>
+                {trafficView === 'files' && (
+                  <TextField
+                    size="small"
+                    placeholder="Buscar archivos y carpetas..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    InputProps={{ startAdornment: <Search sx={{ mr:1, color:'text.secondary', fontSize:20 }} /> }}
+                    sx={{
+                      width:'100%',
+                      maxWidth:{ xs:'100%', sm:350 },
+                      '& .MuiOutlinedInput-root':{
+                        borderRadius:2,
+                        bgcolor:'#f8fafc',
+                        '&:hover .MuiOutlinedInput-notchedOutline': { borderColor:'#501b36' },
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor:'#501b36' }
+                      }
+                    }}
+                  />
+                )}
+              </Box>
+              {/* Toggle siempre alineado a la derecha */}
+              <Stack direction="row" spacing={1} alignItems="center" sx={{ justifyContent:'flex-end' }}>
+                <Box
                   sx={{
-                    borderRadius: 2,
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    borderColor: '#501b36',
-                    color: '#501b36',
-                    '&:hover': {
-                      borderColor: '#3d1429',
-                      bgcolor: alpha('#501b36', 0.04),
-                    },
+                    p:0.5,
+                    borderRadius:3,
+                    background:'linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%)',
+                    border:'2px solid #e0e0e0',
+                    boxShadow:'inset 0 1px 3px rgba(0,0,0,0.08)',
+                    display:'inline-flex'
                   }}
                 >
-                  {loading ? <CircularProgress size={16} color="inherit" /> : 'Actualizar'}
-                </Button>
-                
-                {canManageTraffic && (
-                  <>
+                  {(['files','revisions'] as const).map(val => (
                     <Button
-                      variant="outlined"
-                      startIcon={<CreateNewFolder />}
-                      onClick={() => setCreateFolderModal(true)}
+                      key={val}
+                      onClick={() => setTrafficView(val)}
+                      startIcon={val === 'files' ? <FolderOpen /> : <FactCheck />}
                       sx={{
-                        borderRadius: 2,
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        borderColor: '#501b36',
-                        color: '#501b36',
-                        '&:hover': {
-                          borderColor: '#3d1429',
-                          bgcolor: alpha('#501b36', 0.04),
-                        },
+                        borderRadius:'20px',
+                        px:2.5,
+                        py:1,
+                        textTransform:'none',
+                        fontSize:'0.8rem',
+                        fontWeight:700,
+                        minWidth:110,
+                        background: trafficView===val ? 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 70%, #501b36 100%)' : 'rgba(255,255,255,0.8)',
+                        color: trafficView===val ? 'white' : '#501b36',
+                        boxShadow: trafficView===val ? '0 4px 12px rgba(80,27,54,0.3)' : 'none',
+                        transition:'all .3s',
+                        position:'relative',
+                        '&:hover':{
+                          background: trafficView===val ? 'linear-gradient(135deg, #3d1429 0%, #5a1d3a 30%, #6b2545 70%, #3d1429 100%)' : 'rgba(255,255,255,0.95)',
+                          transform: trafficView===val ? 'translateY(-1px)' : 'translateY(-0.5px)',
+                          boxShadow: trafficView===val ? '0 6px 16px rgba(80,27,54,0.4)' : '0 2px 8px rgba(0,0,0,0.1)'
+                        }
                       }}
                     >
-                      Nueva Carpeta
+                      {val === 'files' ? 'Documentos' : 'Revisiones'}
                     </Button>
-                    <Button
-                      variant="contained"
-                      startIcon={<Upload />}
-                      onClick={() => setUploadModal(true)}
-                      sx={{
-                        borderRadius: 2,
-                        textTransform: 'none',
-                        fontWeight: 600,
-                        bgcolor: '#501b36',
-                        boxShadow: '0 4px 12px rgba(80, 27, 54, 0.3)',
-                        '&:hover': {
-                          bgcolor: '#3d1429',
-                          boxShadow: '0 6px 20px rgba(80, 27, 54, 0.4)',
-                        },
-                      }}
-                    >
-                      Subir Archivos
-                    </Button>
-                  </>
-                )}
+                  ))}
+                </Box>
+
+                {/* Botón de actualizar eliminado: refresco ahora automático */}
               </Stack>
             </Box>
           </Paper>
         </Fade>
 
         {/* Contenido Principal */}
-        <Fade in timeout={1400}>
+        {trafficView === 'files' && (<Fade in timeout={1400}>
           <Paper 
             elevation={0}
             sx={{ 
@@ -894,13 +827,49 @@ export const Traffic: React.FC = () => {
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                     {getCurrentFolders().length} carpeta{getCurrentFolders().length !== 1 ? 's' : ''} • {filteredFiles.length} archivo{filteredFiles.length !== 1 ? 's' : ''}
                   </Typography>
+                  {lastSilentRefresh && (
+                    <Typography variant="caption" sx={{ color:'text.disabled', display:'block', mt:0.5 }}>
+                      Auto-actualizado: {lastSilentRefresh.toLocaleTimeString('es-ES',{ hour:'2-digit', minute:'2-digit', second:'2-digit'})}
+                    </Typography>
+                  )}
                 </Box>
-                {listLoading && (
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <CircularProgress size={16} sx={{ color: '#501b36' }} />
-                    <Typography variant="caption" color="text.secondary">Cargando…</Typography>
-                  </Box>
-                )}
+                <Box sx={{ display:'flex', alignItems:'center', gap:1 }}>
+                  {trafficView==='files' && canManageTraffic && (
+                    <Stack direction="row" spacing={1} sx={{ mr:2 }}>
+                      <Button
+                        variant="outlined"
+                        startIcon={<CreateNewFolder />}
+                        onClick={() => setCreateFolderModal(true)}
+                        sx={{
+                          borderRadius: 2,
+                          textTransform: 'none',
+                          fontWeight: 600,
+                          borderColor: '#501b36',
+                          color: '#501b36',
+                          '&:hover': { borderColor:'#3d1429', bgcolor: alpha('#501b36',0.04) },
+                        }}
+                      >
+                        Nueva Carpeta
+                      </Button>
+                      <Button
+                        variant="contained"
+                        startIcon={<UploadIcon />}
+                        onClick={() => setUploadModal(true)}
+                        sx={{
+                          borderRadius: 2,
+                          textTransform: 'none',
+                          fontWeight: 600,
+                          bgcolor: '#501b36',
+                          boxShadow: '0 4px 12px rgba(80, 27, 54, 0.3)',
+                          '&:hover': { bgcolor:'#3d1429', boxShadow:'0 6px 20px rgba(80,27,54,0.4)' },
+                        }}
+                      >
+                        Subir Archivos
+                      </Button>
+                    </Stack>
+                  )}
+                  {/* Indicador de carga eliminado para evitar desplazamiento de botones */}
+                </Box>
                 
                 <Chip
                   label={`${getCurrentFolders().length + filteredFiles.length} elementos`}
@@ -972,7 +941,7 @@ export const Traffic: React.FC = () => {
                       </Button>
                       <Button
                         variant="contained"
-                        startIcon={<Upload />}
+                        startIcon={<UploadIcon />}
                         onClick={() => setUploadModal(true)}
                         sx={{
                           borderRadius: 2,
@@ -1525,7 +1494,7 @@ export const Traffic: React.FC = () => {
                                         '&:hover': { bgcolor: alpha('#501b36', 0.1) }
                                       }}
                                     >
-                                      <Upload fontSize="small" />
+                                      <UploadIcon fontSize="small" />
                                     </IconButton>
                                   </>
                                 )}
@@ -1784,7 +1753,47 @@ export const Traffic: React.FC = () => {
               )}
             </Box>
           </Paper>
-        </Fade>
+        </Fade>)}
+
+        {trafficView === 'revisions' && (
+          <Fade in timeout={1400}>
+            <Paper
+              elevation={0}
+              sx={{
+                borderRadius:3,
+                border:'1px solid #e2e8f0',
+                background:'#ffffff',
+                p:4,
+                minHeight:400
+              }}
+            >
+              <Box sx={{ display:'flex', alignItems:'center', gap:2, mb:3 }}>
+                <FactCheck sx={{ color:'#501b36', fontSize:32 }} />
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight:700, color:'#501b36', mb:0.5 }}>
+                    Centro de Revisiones
+                  </Typography>
+                  <Typography variant="body2" sx={{ color:'text.secondary' }}>
+                    Próximamente: control de ITV, seguros, mantenimientos y caducidades de documentación de flota.
+                  </Typography>
+                </Box>
+              </Box>
+              <Alert severity="info" sx={{ mb:3, borderRadius:2 }}>
+                Esta sección está en desarrollo. Aquí podrás registrar y hacer seguimiento de revisiones periódicas de vehículos.
+              </Alert>
+              <Stack spacing={2}>
+                <Paper variant="outlined" sx={{ p:2, borderRadius:2, bgcolor:'#f8fafc' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight:700, mb:1 }}>Ideas previstas</Typography>
+                  <ul style={{ margin:0, paddingLeft:'1.1rem' }}>
+                    <li><Typography variant="caption">Listado de próximos vencimientos (ITV, seguros, tacógrafo)</Typography></li>
+                    <li><Typography variant="caption">Historial de revisiones con documentos adjuntos</Typography></li>
+                    <li><Typography variant="caption">Estado por vehículo y alertas tempranas</Typography></li>
+                  </ul>
+                </Paper>
+              </Stack>
+            </Paper>
+          </Fade>
+        )}
 
         {/* Snackbar */}
         <Snackbar
@@ -1807,102 +1816,32 @@ export const Traffic: React.FC = () => {
         </Snackbar>
 
         {/* Modales */}
-        <CreateFolderModal
+        {trafficView === 'files' && (<CreateFolderModal
           open={createFolderModal}
           onClose={() => setCreateFolderModal(false)}
           onConfirm={handleCreateFolder}
-        />
+        />)}
         
-        <UploadModal
+        {trafficView === 'files' && (<UploadModal
           open={uploadModal}
           onClose={() => setUploadModal(false)}
           onConfirm={handleUploadFiles}
-        />
+        />)}
 
         {/* Modal de preview de archivos */}
-        <PdfPreview
+        {trafficView === 'files' && (<PdfPreview
           open={previewOpen}
           onClose={() => setPreviewOpen(false)}
           fileUrl={previewFileUrl}
           fileName={previewFileName}
           title="Vista previa - Tráfico"
-        />
+        />)}
       </Box>
     </>
   );
 };
 
-// Componente de tarjeta de estadísticas moderno
-interface StatsCardProps {
-  title: string;
-  value: number | string;
-  icon: React.ReactNode;
-  color: string;
-  loading: boolean;
-  isSize?: boolean;
-}
-
-const StatsCard: React.FC<StatsCardProps> = ({ 
-  title, 
-  value, 
-  icon, 
-  color, 
-  loading,
-  isSize = false
-}) => (
-  <Paper
-    elevation={0}
-    sx={{
-      p: 2,
-      borderRadius: 2,
-      border: '1px solid #e2e8f0',
-      background: '#ffffff',
-      height: '100%',
-      minHeight: '100px',
-      transition: 'all 0.3s ease',
-      boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-      '&:hover': {
-        boxShadow: `0 4px 12px ${alpha(color, 0.12)}`,
-        transform: 'translateY(-1px)',
-        borderColor: alpha(color, 0.3),
-      },
-    }}
-  >
-    {loading ? (
-      <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}>
-        <CircularProgress size={20} sx={{ color }} />
-      </Box>
-    ) : (
-      <Fade in timeout={600}>
-        <Box sx={{ textAlign: 'center' }}>
-          <Box
-            sx={{
-              p: 1,
-              borderRadius: 2,
-              backgroundColor: alpha(color, 0.1),
-              color: color,
-              mb: 1.5,
-              display: 'inline-flex',
-              border: `1px solid ${alpha(color, 0.2)}`,
-            }}
-          >
-            <Box sx={{ fontSize: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {icon}
-            </Box>
-          </Box>
-          
-          <Typography variant="h5" sx={{ fontWeight: 800, color: 'text.primary', mb: 0.5 }}>
-            {isSize ? value : typeof value === 'number' ? value.toLocaleString() : value}
-          </Typography>
-          
-          <Typography variant="caption" sx={{ color: 'text.secondary', fontWeight: 600, fontSize: '0.7rem' }}>
-            {title}
-          </Typography>
-        </Box>
-      </Fade>
-    )}
-  </Paper>
-);
+// (StatsCard eliminado)
 
 // Modal para crear carpeta
 const CreateFolderModal: React.FC<{
@@ -2023,7 +1962,7 @@ const UploadModal: React.FC<{
         <Button
           variant="outlined"
           component="label"
-          startIcon={<Upload />}
+          startIcon={<UploadIcon />}
           sx={{ mb: 2, width: '100%' }}
         >
           Seleccionar Archivos
