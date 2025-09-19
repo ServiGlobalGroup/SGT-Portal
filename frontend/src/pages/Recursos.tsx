@@ -9,7 +9,7 @@ import { alpha } from '@mui/material/styles';
 import { ModernModal, ModernButton } from '../components/ModernModal';
 import { useAuth } from '../hooks/useAuth';
 import { useDeviceType } from '../hooks/useDeviceType';
-import { LocalGasStation, CreditCard, Info, Add, Edit } from '@mui/icons-material';
+import { LocalGasStation, CreditCard, Info, Add, Edit, Delete } from '@mui/icons-material';
 import { resourcesAPI, FuelCardRecord, ViaTRecord } from '../services/api';
 
 // Página de Recursos: base inicial con banner y estructura de pestañas (Gasoil, Via T)
@@ -371,6 +371,52 @@ export const Recursos: React.FC = () => {
     });
     setErrors({});
     setOpenEditViaTDialog(true);
+  };
+
+  const handleDeleteGasCard = async (card: FuelCardRecord) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar la tarjeta con PAN ${card.pan} (${card.matricula})?`)) {
+      return;
+    }
+    
+    try {
+      setSavingGas(true);
+      await resourcesAPI.deleteFuelCard(card.id);
+      
+      // Actualizar estado local
+      const updatedCards = gasCards.filter(c => c.id !== card.id);
+      setGasCards(updatedCards);
+      setGasCardsAll(prev => prev.filter(c => c.id !== card.id));
+      
+      setSnack({ open: true, msg: 'Tarjeta eliminada correctamente', type: 'success' });
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail || e?.message || 'Error eliminando tarjeta';
+      setSnack({ open: true, msg, type: 'error' });
+    } finally {
+      setSavingGas(false);
+    }
+  };
+
+  const handleDeleteViaT = async (device: ViaTRecord) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar el dispositivo ${device.numero_telepeaje} (${device.matricula})?`)) {
+      return;
+    }
+    
+    try {
+      setSavingViaT(true);
+      await resourcesAPI.deleteViaTDevice(device.id);
+      
+      // Actualizar estado local
+      const updatedDevices = viaTs.filter(v => v.id !== device.id);
+      setViaTs(updatedDevices);
+      setViaTsAll(prev => prev.filter(v => v.id !== device.id));
+      
+      setSnack({ open: true, msg: 'Dispositivo Via-T eliminado correctamente', type: 'success' });
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail || e?.message || 'Error eliminando dispositivo';
+      setSnack({ open: true, msg, type: 'error' });
+    } finally {
+      setSavingViaT(false);
+    }
   };
 
   const addButtonLabel = tab === 'gasolina' ? 'Añadir Tarjeta' : 'Añadir Via T';
@@ -776,27 +822,54 @@ export const Recursos: React.FC = () => {
                               </TableCell>
                               {canAdd && (
                                 <TableCell>
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => handleEditGasCard(card)}
-                                    sx={{ 
-                                      color: '#666',
-                                      backgroundColor: 'transparent',
-                                      boxShadow: 'none',
-                                      border: 'none',
-                                      '&:hover': { 
-                                        color: '#501b36',
+                                  <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleEditGasCard(card)}
+                                      sx={{ 
+                                        color: '#666',
                                         backgroundColor: 'transparent',
-                                        boxShadow: 'none'
-                                      },
-                                      '&:focus': {
+                                        boxShadow: 'none',
+                                        border: 'none',
+                                        '&:hover': { 
+                                          color: '#501b36',
+                                          backgroundColor: 'transparent',
+                                          boxShadow: 'none'
+                                        },
+                                        '&:focus': {
+                                          backgroundColor: 'transparent',
+                                          boxShadow: 'none'
+                                        }
+                                      }}
+                                    >
+                                      <Edit fontSize="small" />
+                                    </IconButton>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleDeleteGasCard(card)}
+                                      disabled={savingGas}
+                                      sx={{ 
+                                        color: '#666',
                                         backgroundColor: 'transparent',
-                                        boxShadow: 'none'
-                                      }
-                                    }}
-                                  >
-                                    <Edit fontSize="small" />
-                                  </IconButton>
+                                        boxShadow: 'none',
+                                        border: 'none',
+                                        '&:hover': { 
+                                          color: '#d32f2f',
+                                          backgroundColor: 'transparent',
+                                          boxShadow: 'none'
+                                        },
+                                        '&:focus': {
+                                          backgroundColor: 'transparent',
+                                          boxShadow: 'none'
+                                        },
+                                        '&:disabled': {
+                                          color: '#ccc'
+                                        }
+                                      }}
+                                    >
+                                      <Delete fontSize="small" />
+                                    </IconButton>
+                                  </Box>
                                 </TableCell>
                               )}
                             </TableRow>
@@ -1044,27 +1117,54 @@ export const Recursos: React.FC = () => {
                               <TableCell>{v.caducidad}</TableCell>
                               {canAdd && (
                                 <TableCell>
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => handleEditViaT(v)}
-                                    sx={{ 
-                                      color: '#666',
-                                      backgroundColor: 'transparent',
-                                      boxShadow: 'none',
-                                      border: 'none',
-                                      '&:hover': { 
-                                        color: '#501b36',
+                                  <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleEditViaT(v)}
+                                      sx={{ 
+                                        color: '#666',
                                         backgroundColor: 'transparent',
-                                        boxShadow: 'none'
-                                      },
-                                      '&:focus': {
+                                        boxShadow: 'none',
+                                        border: 'none',
+                                        '&:hover': { 
+                                          color: '#501b36',
+                                          backgroundColor: 'transparent',
+                                          boxShadow: 'none'
+                                        },
+                                        '&:focus': {
+                                          backgroundColor: 'transparent',
+                                          boxShadow: 'none'
+                                        }
+                                      }}
+                                    >
+                                      <Edit fontSize="small" />
+                                    </IconButton>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleDeleteViaT(v)}
+                                      disabled={savingViaT}
+                                      sx={{ 
+                                        color: '#666',
                                         backgroundColor: 'transparent',
-                                        boxShadow: 'none'
-                                      }
-                                    }}
-                                  >
-                                    <Edit fontSize="small" />
-                                  </IconButton>
+                                        boxShadow: 'none',
+                                        border: 'none',
+                                        '&:hover': { 
+                                          color: '#d32f2f',
+                                          backgroundColor: 'transparent',
+                                          boxShadow: 'none'
+                                        },
+                                        '&:focus': {
+                                          backgroundColor: 'transparent',
+                                          boxShadow: 'none'
+                                        },
+                                        '&:disabled': {
+                                          color: '#ccc'
+                                        }
+                                      }}
+                                    >
+                                      <Delete fontSize="small" />
+                                    </IconButton>
+                                  </Box>
                                 </TableCell>
                               )}
                             </TableRow>

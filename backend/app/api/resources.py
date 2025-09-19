@@ -410,3 +410,79 @@ def list_via_t(
     except Exception as e:
         print(f"Error listing via-t: {e}")
         raise HTTPException(status_code=500, detail=f"Error al obtener dispositivos Via-T: {str(e)}")
+
+
+@router.delete("/fuel-cards/{card_id}")
+def delete_fuel_card(
+    card_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role not in CREATE_ROLES:
+        raise HTTPException(status_code=403, detail="Permiso denegado")
+    
+    try:
+        # Verificar que la tarjeta existe
+        check_query = text("SELECT id, pan, matricula FROM fuel_cards WHERE id = :id")
+        result = db.execute(check_query, {'id': card_id})
+        card = result.fetchone()
+        
+        if not card:
+            raise HTTPException(status_code=404, detail="Tarjeta no encontrada")
+        
+        # Eliminar la tarjeta
+        delete_query = text("DELETE FROM fuel_cards WHERE id = :id")
+        db.execute(delete_query, {'id': card_id})
+        db.commit()
+        
+        print(f"[DEBUG] Deleted fuel card: ID={card_id}, PAN={card[1]}, Matrícula={card[2]}")
+        
+        return {
+            "message": "Tarjeta de combustible eliminada correctamente",
+            "id": card_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"Error deleting fuel card: {e}")
+        raise HTTPException(status_code=500, detail=f"Error eliminando tarjeta de combustible: {str(e)}")
+
+
+@router.delete("/via-t-devices/{device_id}")
+def delete_via_t(
+    device_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role not in CREATE_ROLES:
+        raise HTTPException(status_code=403, detail="Permiso denegado")
+    
+    try:
+        # Verificar que el dispositivo existe
+        check_query = text("SELECT id, numero_telepeaje, matricula FROM via_t_devices WHERE id = :id")
+        result = db.execute(check_query, {'id': device_id})
+        device = result.fetchone()
+        
+        if not device:
+            raise HTTPException(status_code=404, detail="Dispositivo no encontrado")
+        
+        # Eliminar el dispositivo
+        delete_query = text("DELETE FROM via_t_devices WHERE id = :id")
+        db.execute(delete_query, {'id': device_id})
+        db.commit()
+        
+        print(f"[DEBUG] Deleted via-t device: ID={device_id}, Número={device[1]}, Matrícula={device[2]}")
+        
+        return {
+            "message": "Dispositivo Via-T eliminado correctamente",
+            "id": device_id
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"Error deleting via-t device: {e}")
+        raise HTTPException(status_code=500, detail=f"Error eliminando dispositivo Via-T: {str(e)}")
