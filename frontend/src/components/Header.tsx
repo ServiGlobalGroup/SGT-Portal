@@ -99,6 +99,8 @@ export const Header: React.FC<HeaderProps> = ({ isCollapsed }) => {
         return 'Tráfico';
       case 'TRABAJADOR':
         return 'Trabajador';
+      case 'P_TALLER':
+        return 'P. Taller';
       default:
         return 'Usuario';
     }

@@ -55,6 +55,7 @@ import {
   Key,
   People,
   SupervisorAccount,
+  Build,
 } from '@mui/icons-material';
 import { ModernModal } from '../components/ModernModal';
 import { ModernField, InfoCard } from '../components/ModernFormComponents';
@@ -66,7 +67,7 @@ interface User {
   last_name: string;
   email: string;
   phone?: string;
-  role: 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR';
+  role: 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR' | 'P_TALLER';
   department: string;
   position?: string;
   worker_type?: 'antiguo' | 'nuevo';
@@ -109,7 +110,7 @@ export const Users: React.FC = () => {
   // Estados para filtros
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'baja'>('all');
-  const [roleFilter, setRoleFilter] = useState<'all' | 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR'>('all');
+  const [roleFilter, setRoleFilter] = useState<'all' | 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR' | 'P_TALLER'>('all');
   
   // Estados para modal de creación de usuario
   const [openCreateModal, setOpenCreateModal] = useState(false);
@@ -119,7 +120,7 @@ export const Users: React.FC = () => {
     last_name: '',
     email: '',
     phone: '',
-  role: 'TRABAJADOR' as 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR',
+  role: 'TRABAJADOR' as 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR' | 'P_TALLER',
     department: '',
     position: '',
   worker_type: 'antiguo' as 'antiguo' | 'nuevo',
@@ -168,7 +169,7 @@ export const Users: React.FC = () => {
     last_name: '',
     email: '',
     phone: '',
-  role: 'TRABAJADOR' as 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR',
+  role: 'TRABAJADOR' as 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR' | 'P_TALLER',
     department: '',
   position: '',
   worker_type: 'antiguo' as 'antiguo' | 'nuevo'
@@ -805,6 +806,7 @@ export const Users: React.FC = () => {
   case 'ADMINISTRACION': return 'warning';
       case 'TRAFICO': return 'warning';
       case 'TRABAJADOR': return 'info';
+      case 'P_TALLER': return 'info';
       default: return 'default';
     }
   };
@@ -815,6 +817,7 @@ export const Users: React.FC = () => {
   case 'ADMINISTRACION': return 'Administración';
       case 'TRAFICO': return 'Tráfico';
       case 'TRABAJADOR': return 'Trabajador';
+      case 'P_TALLER': return 'P. Taller';
       default: return role;
     }
   };
@@ -1022,7 +1025,7 @@ export const Users: React.FC = () => {
                   <Select
                     value={roleFilter}
                     label="Rol"
-                    onChange={(e: SelectChangeEvent) => setRoleFilter(e.target.value as 'all' | 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR')}
+                    onChange={(e: SelectChangeEvent) => setRoleFilter(e.target.value as 'all' | 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR' | 'P_TALLER')}
                     sx={{
                       borderRadius: 2,
                       '&:hover': {
@@ -1042,6 +1045,7 @@ export const Users: React.FC = () => {
                     <MenuItem value="ADMINISTRACION">Administración</MenuItem>
                     <MenuItem value="TRAFICO">Tráfico</MenuItem>
                     <MenuItem value="TRABAJADOR">Trabajador</MenuItem>
+                    <MenuItem value="P_TALLER">P. Taller</MenuItem>
                   </Select>
                 </FormControl>
 
@@ -1233,7 +1237,7 @@ export const Users: React.FC = () => {
                           />
                         </TableCell>
                         <TableCell>
-                          {user.role === 'TRABAJADOR' && (
+                          {(user.role === 'TRABAJADOR' || user.role === 'P_TALLER') && (
                             <Chip
                               label={user.worker_type === 'nuevo' ? 'Nuevo' : 'Antiguo'}
                               size="small"
@@ -1983,9 +1987,15 @@ export const Users: React.FC = () => {
                         Trabajador
                       </Box>
                     </MenuItem>
+                    <MenuItem value="P_TALLER">
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Build fontSize="small" sx={{ color: '#ff9800' }} />
+                        P. Taller
+                      </Box>
+                    </MenuItem>
                   </Select>
                 </FormControl>
-                {editUserData.role === 'TRABAJADOR' && (
+                {(editUserData.role === 'TRABAJADOR' || editUserData.role === 'P_TALLER') && (
                   <FormControl fullWidth>
                     <InputLabel sx={{ fontWeight: 600, '&.Mui-focused': { color: '#501b36' } }}>
                       Tipo Trabajador
@@ -2231,10 +2241,11 @@ export const Users: React.FC = () => {
               label="Rol"
               type="select"
               value={createUserData.role}
-              onChange={(value) => setCreateUserData(prev => ({ ...prev, role: value as 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR' }))}
+              onChange={(value) => setCreateUserData(prev => ({ ...prev, role: value as 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR' | 'P_TALLER' }))}
               required
               options={[
                 { value: 'TRABAJADOR', label: 'Trabajador' },
+                { value: 'P_TALLER', label: 'P. Taller' },
                 { value: 'TRAFICO', label: 'Tráfico' },
                 { value: 'ADMINISTRACION', label: 'Administración' },
                 { value: 'ADMINISTRADOR', label: 'Administrador' },
@@ -2267,10 +2278,10 @@ export const Users: React.FC = () => {
               helperText="Se guardará siempre en MAYÚSCULAS"
             />
           </Box>
-          {createUserData.role === 'TRABAJADOR' && (
+          {(createUserData.role === 'TRABAJADOR' || createUserData.role === 'P_TALLER') && (
             <Box sx={{ mt: 1 }}>
               <ModernField
-                label="Tipo de Trabajador"
+                label="Tipo de Empleado"
                 type="select"
                 value={createUserData.worker_type}
                 onChange={(value) => setCreateUserData(prev => ({ ...prev, worker_type: value as 'antiguo' | 'nuevo' }))}
@@ -2450,10 +2461,11 @@ export const Users: React.FC = () => {
                   label: "Rol asignado",
       value: createUserData.role === 'ADMINISTRADOR' ? 'Administrador' : 
         createUserData.role === 'ADMINISTRACION' ? 'Administración' :
-        createUserData.role === 'TRAFICO' ? 'Tráfico' : 'Trabajador'
+        createUserData.role === 'TRAFICO' ? 'Tráfico' : 
+        createUserData.role === 'P_TALLER' ? 'P. Taller' : 'Trabajador'
                 }
                 ,
-                ...(createUserData.role === 'TRABAJADOR' ? [{
+                ...((createUserData.role === 'TRABAJADOR' || createUserData.role === 'P_TALLER') ? [{
                   icon: <People sx={{ fontSize: 16 }} />,
                   label: 'Tipo',
                   value: createUserData.worker_type === 'nuevo' ? 'Nuevo' : 'Antiguo'
