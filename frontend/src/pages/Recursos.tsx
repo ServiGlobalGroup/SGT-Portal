@@ -1,7 +1,7 @@
 import React from 'react';
 import { 
   Box, Paper, Typography, Fade, GlobalStyles, ToggleButtonGroup, ToggleButton, 
-  Button, TextField, Stack, 
+  Button, TextField, Stack, IconButton,
   Table, TableHead, TableRow, TableCell, TableBody, Chip,
   Pagination, Card, CardContent, Divider, CircularProgress, Snackbar, Alert, Skeleton
 } from '@mui/material';
@@ -9,7 +9,7 @@ import { alpha } from '@mui/material/styles';
 import { ModernModal, ModernButton } from '../components/ModernModal';
 import { useAuth } from '../hooks/useAuth';
 import { useDeviceType } from '../hooks/useDeviceType';
-import { LocalGasStation, CreditCard, Info, Add } from '@mui/icons-material';
+import { LocalGasStation, CreditCard, Info, Add, Edit } from '@mui/icons-material';
 import { resourcesAPI, FuelCardRecord, ViaTRecord } from '../services/api';
 
 // Página de Recursos: base inicial con banner y estructura de pestañas (Gasoil, Via T)
@@ -214,16 +214,22 @@ export const Recursos: React.FC = () => {
   // Diálogos
   const [openGasDialog, setOpenGasDialog] = React.useState(false);
   const [openViaTDialog, setOpenViaTDialog] = React.useState(false);
+  const [openEditGasDialog, setOpenEditGasDialog] = React.useState(false);
+  const [openEditViaTDialog, setOpenEditViaTDialog] = React.useState(false);
   // PIN siempre visible (no toggle)
 
   // Formularios
   const [gasForm, setGasForm] = React.useState({ pan:'', matricula:'', caducidad:'', pin:'' });
   const [viaTForm, setViaTForm] = React.useState({ numeroTelepeaje:'', panViaT:'', matricula:'', caducidad:'' });
+  const [editingGasCard, setEditingGasCard] = React.useState<FuelCardRecord | null>(null);
+  const [editingViaT, setEditingViaT] = React.useState<ViaTRecord | null>(null);
   const [errors, setErrors] = React.useState<Record<string,string>>({});
 
   const resetForms = () => {
     setGasForm({ pan:'', matricula:'', caducidad:'', pin:'' });
     setViaTForm({ numeroTelepeaje:'', panViaT:'', matricula:'', caducidad:'' });
+    setEditingGasCard(null);
+    setEditingViaT(null);
     setErrors({});
   //
   };
@@ -290,10 +296,83 @@ export const Recursos: React.FC = () => {
     } finally { setSavingViaT(false); }
   };
 
+  const handleUpdateGasCard = async () => {
+    if (!editingGasCard) return;
+    const e = validateGas();
+    setErrors(e);
+    if(Object.keys(e).length) return;
+    try {
+      setSavingGas(true);
+      const updated = await resourcesAPI.updateFuelCard(editingGasCard.id, {
+        pan: gasForm.pan.trim(),
+        matricula: gasForm.matricula.trim(),
+        caducidad: gasForm.caducidad || undefined,
+        pin: gasForm.pin
+      });
+      // Actualizar tanto la lista visible como la cache completa
+      setGasCards(prev => prev.map(card => card.id === updated.id ? updated : card));
+      setGasCardsAll(prev => prev.map(card => card.id === updated.id ? updated : card));
+      setSnack({open:true, msg:'Tarjeta actualizada', type:'success'});
+      setOpenEditGasDialog(false);
+      resetForms();
+    } catch (err:any) {
+      setSnack({open:true, msg: err?.response?.data?.detail || 'Error actualizando tarjeta', type:'error'});
+    } finally { setSavingGas(false); }
+  };
+
+  const handleUpdateViaT = async () => {
+    if (!editingViaT) return;
+    const e = validateViaT();
+    setErrors(e);
+    if(Object.keys(e).length) return;
+    try {
+      setSavingViaT(true);
+      const updated = await resourcesAPI.updateViaTDevice(editingViaT.id, {
+        numero_telepeaje: viaTForm.numeroTelepeaje.trim(),
+        pan: viaTForm.panViaT.trim(),
+        matricula: viaTForm.matricula.trim(),
+        caducidad: viaTForm.caducidad || undefined
+      });
+      // Actualizar tanto la lista visible como la cache completa
+      setViaTs(prev => prev.map(device => device.id === updated.id ? updated : device));
+      setViaTsAll(prev => prev.map(device => device.id === updated.id ? updated : device));
+      setSnack({open:true, msg:'Dispositivo actualizado', type:'success'});
+      setOpenEditViaTDialog(false);
+      resetForms();
+    } catch (err:any) {
+      setSnack({open:true, msg: err?.response?.data?.detail || 'Error actualizando dispositivo', type:'error'});
+    } finally { setSavingViaT(false); }
+  };
+
   const handleOpenAdd = () => {
     resetForms();
     if(tab === 'gasolina') setOpenGasDialog(true); else setOpenViaTDialog(true);
   };
+
+  const handleEditGasCard = (card: FuelCardRecord) => {
+    setEditingGasCard(card);
+    setGasForm({
+      pan: card.pan,
+      matricula: card.matricula,
+      caducidad: card.caducidad || '',
+      pin: card.pin || ''
+    });
+    setErrors({});
+    setOpenEditGasDialog(true);
+  };
+
+  const handleEditViaT = (device: ViaTRecord) => {
+    setEditingViaT(device);
+    setViaTForm({
+      numeroTelepeaje: device.numero_telepeaje,
+      panViaT: device.pan,
+      matricula: device.matricula,
+      caducidad: device.caducidad || ''
+    });
+    setErrors({});
+    setOpenEditViaTDialog(true);
+  };
+
   const addButtonLabel = tab === 'gasolina' ? 'Añadir Tarjeta' : 'Añadir Via T';
 
   // Filtrado (case-insensitive, trim)
@@ -641,22 +720,23 @@ export const Recursos: React.FC = () => {
                 {!isMobile && (
                   <>
                     <Box sx={{ overflowX:'auto' }}>
-                      <Table size="small" sx={{ minWidth:800, '& th':{ whiteSpace:'nowrap' } }}>
+                      <Table size="small" sx={{ minWidth:850, '& th':{ whiteSpace:'nowrap' } }}>
                         <TableHead>
                           <TableRow>
                             <TableCell>P.A.N.</TableCell>
                             <TableCell>Matrícula</TableCell>
                             <TableCell>Fecha de caducidad</TableCell>
                             <TableCell>Código PIN</TableCell>
+                            {canAdd && <TableCell>Acciones</TableCell>}
                           </TableRow>
                         </TableHead>
                         <TableBody>
                           {loadingGas && (
-                            <TableRow><TableCell colSpan={4}><Box sx={{ display:'flex', alignItems:'center', gap:1 }}><CircularProgress size={18} /> <Typography variant="body2">Cargando...</Typography></Box></TableCell></TableRow>
+                            <TableRow><TableCell colSpan={canAdd ? 5 : 4}><Box sx={{ display:'flex', alignItems:'center', gap:1 }}><CircularProgress size={18} /> <Typography variant="body2">Cargando...</Typography></Box></TableCell></TableRow>
                           )}
                           {!loadingGas && searchingGas && (
                             <TableRow>
-                              <TableCell colSpan={4}>
+                              <TableCell colSpan={canAdd ? 5 : 4}>
                                 <Stack spacing={1}>
                                   <Skeleton height={28} />
                                   <Skeleton height={28} />
@@ -666,18 +746,18 @@ export const Recursos: React.FC = () => {
                             </TableRow>
                           )}
                           {!loadingGas && !searchingGas && errorGas && (
-                            <TableRow><TableCell colSpan={4}><Typography color="error" variant="body2">{errorGas}</Typography></TableCell></TableRow>
+                            <TableRow><TableCell colSpan={canAdd ? 5 : 4}><Typography color="error" variant="body2">{errorGas}</Typography></TableCell></TableRow>
                           )}
                           {!loadingGas && !searchingGas && gasCards.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={4}>
+                              <TableCell colSpan={canAdd ? 5 : 4}>
                                 <Typography variant="body2" sx={{ color:'text.secondary' }}>No hay tarjetas registradas todavía.</Typography>
                               </TableCell>
                             </TableRow>
                           )}
                           {!loadingGas && !searchingGas && gasCards.length > 0 && filteredGasCards.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={5}>
+                              <TableCell colSpan={canAdd ? 5 : 4}>
                                 <Typography variant="body2" sx={{ color:'text.secondary' }}>Sin coincidencias con los filtros aplicados.</Typography>
                               </TableCell>
                             </TableRow>
@@ -694,6 +774,31 @@ export const Recursos: React.FC = () => {
                                   </Typography>
                                 </Box>
                               </TableCell>
+                              {canAdd && (
+                                <TableCell>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleEditGasCard(card)}
+                                    sx={{ 
+                                      color: '#666',
+                                      backgroundColor: 'transparent',
+                                      boxShadow: 'none',
+                                      border: 'none',
+                                      '&:hover': { 
+                                        color: '#501b36',
+                                        backgroundColor: 'transparent',
+                                        boxShadow: 'none'
+                                      },
+                                      '&:focus': {
+                                        backgroundColor: 'transparent',
+                                        boxShadow: 'none'
+                                      }
+                                    }}
+                                  >
+                                    <Edit fontSize="small" />
+                                  </IconButton>
+                                </TableCell>
+                              )}
                             </TableRow>
                           ))}
                         </TableBody>
@@ -748,7 +853,32 @@ export const Recursos: React.FC = () => {
                                     <Typography variant="subtitle2" sx={{ fontWeight:700, letterSpacing:.3 }}>{card.matricula}</Typography>
                                     <Typography variant="caption" sx={{ color:'text.secondary' }}>Matrícula</Typography>
                                   </Box>
-                                  <Chip size="small" label={card.caducidad || '—'} sx={{ bgcolor:'rgba(80,27,54,0.08)', color:'#501b36' }} />
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Chip size="small" label={card.caducidad || '—'} sx={{ bgcolor:'rgba(80,27,54,0.08)', color:'#501b36' }} />
+                                    {canAdd && (
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => handleEditGasCard(card)}
+                                        sx={{ 
+                                          color: '#666',
+                                          backgroundColor: 'transparent',
+                                          boxShadow: 'none',
+                                          border: 'none',
+                                          '&:hover': { 
+                                            color: '#501b36',
+                                            backgroundColor: 'transparent',
+                                            boxShadow: 'none'
+                                          },
+                                          '&:focus': {
+                                            backgroundColor: 'transparent',
+                                            boxShadow: 'none'
+                                          }
+                                        }}
+                                      >
+                                        <Edit fontSize="small" />
+                                      </IconButton>
+                                    )}
+                                  </Box>
                                 </Stack>
                                 <Divider sx={{ my:1 }} />
                                 <Stack spacing={0.6}>
@@ -864,22 +994,23 @@ export const Recursos: React.FC = () => {
                 {!isMobile && (
                   <>
                     <Box sx={{ overflowX:'auto' }}>
-                      <Table size="small" sx={{ minWidth:850, '& th':{ whiteSpace:'nowrap' } }}>
+                      <Table size="small" sx={{ minWidth:900, '& th':{ whiteSpace:'nowrap' } }}>
                         <TableHead>
                           <TableRow>
                             <TableCell>Nº Telepeaje</TableCell>
                             <TableCell>P.A.N Via-T</TableCell>
                             <TableCell>Matrícula</TableCell>
                             <TableCell>Fecha de caducidad</TableCell>
+                            {canAdd && <TableCell>Acciones</TableCell>}
                           </TableRow>
                         </TableHead>
                         <TableBody>
                           {loadingViaT && (
-                            <TableRow><TableCell colSpan={4}><Box sx={{ display:'flex', alignItems:'center', gap:1 }}><CircularProgress size={18} /> <Typography variant="body2">Cargando...</Typography></Box></TableCell></TableRow>
+                            <TableRow><TableCell colSpan={canAdd ? 5 : 4}><Box sx={{ display:'flex', alignItems:'center', gap:1 }}><CircularProgress size={18} /> <Typography variant="body2">Cargando...</Typography></Box></TableCell></TableRow>
                           )}
                           {!loadingViaT && searchingViaT && (
                             <TableRow>
-                              <TableCell colSpan={4}>
+                              <TableCell colSpan={canAdd ? 5 : 4}>
                                 <Stack spacing={1}>
                                   <Skeleton height={28} />
                                   <Skeleton height={28} />
@@ -889,18 +1020,18 @@ export const Recursos: React.FC = () => {
                             </TableRow>
                           )}
                           {!loadingViaT && !searchingViaT && errorViaT && (
-                            <TableRow><TableCell colSpan={4}><Typography color="error" variant="body2">{errorViaT}</Typography></TableCell></TableRow>
+                            <TableRow><TableCell colSpan={canAdd ? 5 : 4}><Typography color="error" variant="body2">{errorViaT}</Typography></TableCell></TableRow>
                           )}
                           {!loadingViaT && !searchingViaT && viaTs.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={4}>
+                              <TableCell colSpan={canAdd ? 5 : 4}>
                                 <Typography variant="body2" sx={{ color:'text.secondary' }}>No hay dispositivos Via T registrados todavía.</Typography>
                               </TableCell>
                             </TableRow>
                           )}
                           {!loadingViaT && !searchingViaT && viaTs.length > 0 && filteredViaTs.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={4}>
+                              <TableCell colSpan={canAdd ? 5 : 4}>
                                 <Typography variant="body2" sx={{ color:'text.secondary' }}>Sin coincidencias con los filtros aplicados.</Typography>
                               </TableCell>
                             </TableRow>
@@ -911,6 +1042,31 @@ export const Recursos: React.FC = () => {
                               <TableCell>{v.pan}</TableCell>
                               <TableCell>{v.matricula}</TableCell>
                               <TableCell>{v.caducidad}</TableCell>
+                              {canAdd && (
+                                <TableCell>
+                                  <IconButton
+                                    size="small"
+                                    onClick={() => handleEditViaT(v)}
+                                    sx={{ 
+                                      color: '#666',
+                                      backgroundColor: 'transparent',
+                                      boxShadow: 'none',
+                                      border: 'none',
+                                      '&:hover': { 
+                                        color: '#501b36',
+                                        backgroundColor: 'transparent',
+                                        boxShadow: 'none'
+                                      },
+                                      '&:focus': {
+                                        backgroundColor: 'transparent',
+                                        boxShadow: 'none'
+                                      }
+                                    }}
+                                  >
+                                    <Edit fontSize="small" />
+                                  </IconButton>
+                                </TableCell>
+                              )}
                             </TableRow>
                           ))}
                         </TableBody>
@@ -971,7 +1127,32 @@ export const Recursos: React.FC = () => {
                                       <Typography variant="subtitle2" sx={{ fontWeight:700, letterSpacing:.3 }}>{v.matricula}</Typography>
                                       <Typography variant="caption" sx={{ color:'text.secondary' }}>Matrícula</Typography>
                                     </Box>
-                                    <Chip size="small" label={v.caducidad || '—'} sx={{ bgcolor:'rgba(80,27,54,0.08)', color:'#501b36' }} />
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                      <Chip size="small" label={v.caducidad || '—'} sx={{ bgcolor:'rgba(80,27,54,0.08)', color:'#501b36' }} />
+                                      {canAdd && (
+                                        <IconButton
+                                          size="small"
+                                          onClick={() => handleEditViaT(v)}
+                                          sx={{ 
+                                            color: '#666',
+                                            backgroundColor: 'transparent',
+                                            boxShadow: 'none',
+                                            border: 'none',
+                                            '&:hover': { 
+                                              color: '#501b36',
+                                              backgroundColor: 'transparent',
+                                              boxShadow: 'none'
+                                            },
+                                            '&:focus': {
+                                              backgroundColor: 'transparent',
+                                              boxShadow: 'none'
+                                            }
+                                          }}
+                                        >
+                                          <Edit fontSize="small" />
+                                        </IconButton>
+                                      )}
+                                    </Box>
                                   </Stack>
                                   <Divider sx={{ my:1 }} />
                                   <Stack spacing={0.6}>
@@ -1069,6 +1250,124 @@ export const Recursos: React.FC = () => {
               Cancelar
             </ModernButton>
             <ModernButton onClick={handleAddViaT} disabled={savingViaT} startIcon={<Add />}>{savingViaT ? 'Guardando...' : 'Guardar'}</ModernButton>
+          </>
+        }
+      >
+        <Stack spacing={2} sx={{ mt:1 }}>
+          <TextField
+            label="Nº Telepeaje"
+            value={viaTForm.numeroTelepeaje}
+            onChange={e=> setViaTForm(f=>({...f, numeroTelepeaje:e.target.value}))}
+            error={!!errors.numeroTelepeaje}
+            helperText={errors.numeroTelepeaje}
+            fullWidth size="small"
+          />
+          <TextField
+            label="P.A.N Via-T"
+            value={viaTForm.panViaT}
+            onChange={e=> setViaTForm(f=>({...f, panViaT:e.target.value}))}
+            error={!!errors.panViaT}
+            helperText={errors.panViaT}
+            fullWidth size="small"
+          />
+          <TextField
+            label="Matrícula"
+            value={viaTForm.matricula}
+            onChange={e=> setViaTForm(f=>({...f, matricula:e.target.value.toUpperCase()}))}
+            error={!!errors.matricula}
+            helperText={errors.matricula}
+            fullWidth size="small"
+            inputProps={{ maxLength: 10 }}
+          />
+          <TextField
+            label="Fecha de caducidad"
+            type="date"
+            value={viaTForm.caducidad}
+            onChange={e=> setViaTForm(f=>({...f, caducidad:e.target.value}))}
+            error={!!errors.caducidad}
+            helperText={errors.caducidad}
+            fullWidth size="small"
+            InputLabelProps={{ shrink:true }}
+          />
+        </Stack>
+      </ModernModal>
+
+      {/* Modales de Edición */}
+      <ModernModal
+        open={openEditGasDialog}
+        onClose={()=> setOpenEditGasDialog(false)}
+        title="Editar Tarjeta de Gasoil"
+        subtitle="Modificar datos de acceso para repostajes"
+        icon={<LocalGasStation />}
+        maxWidth="sm"
+        headerColor="#501b36"
+        actions={
+          <>
+            <ModernButton variant="outlined" onClick={()=> setOpenEditGasDialog(false)}>
+              Cancelar
+            </ModernButton>
+            <ModernButton onClick={handleUpdateGasCard} disabled={savingGas} startIcon={<Edit />}>{savingGas ? 'Actualizando...' : 'Actualizar'}</ModernButton>
+          </>
+        }
+      >
+        <Stack spacing={2} sx={{ mt:1 }}>
+          <TextField
+            label="P.A.N."
+            value={gasForm.pan}
+            onChange={e=> setGasForm(f=>({...f, pan:e.target.value}))}
+            error={!!errors.pan}
+            helperText={errors.pan}
+            fullWidth
+            size="small"
+          />
+          <TextField
+            label="Matrícula"
+            value={gasForm.matricula}
+            onChange={e=> setGasForm(f=>({...f, matricula:e.target.value.toUpperCase()}))}
+            error={!!errors.matricula}
+            helperText={errors.matricula}
+            fullWidth
+            size="small"
+            inputProps={{ maxLength: 10 }}
+          />
+          <TextField
+            label="Fecha de caducidad"
+            type="date"
+            value={gasForm.caducidad}
+            onChange={e=> setGasForm(f=>({...f, caducidad:e.target.value}))}
+            error={!!errors.caducidad}
+            helperText={errors.caducidad}
+            fullWidth
+            size="small"
+            InputLabelProps={{ shrink:true }}
+          />
+          <TextField
+            label="Código PIN"
+            value={gasForm.pin}
+            onChange={e=> setGasForm(f=>({...f, pin:e.target.value}))}
+            error={!!errors.pin}
+            helperText={errors.pin || 'Se almacenará en claro (TODO: cifrado)'}
+            fullWidth
+            size="small"
+            type="text"
+          />
+        </Stack>
+      </ModernModal>
+
+      <ModernModal
+        open={openEditViaTDialog}
+        onClose={()=> setOpenEditViaTDialog(false)}
+        title="Editar Dispositivo Via T"
+        subtitle="Modificar dispositivo de telepeaje"
+        icon={<CreditCard />}
+        maxWidth="sm"
+        headerColor="#501b36"
+        actions={
+          <>
+            <ModernButton variant="outlined" onClick={()=> setOpenEditViaTDialog(false)}>
+              Cancelar
+            </ModernButton>
+            <ModernButton onClick={handleUpdateViaT} disabled={savingViaT} startIcon={<Edit />}>{savingViaT ? 'Actualizando...' : 'Actualizar'}</ModernButton>
           </>
         }
       >

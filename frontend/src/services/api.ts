@@ -732,6 +732,8 @@ export const resourcesAPI = {
   },
   createFuelCard: (data: { pan:string; matricula:string; caducidad?:string; pin:string }): Promise<FuelCardRecord> =>
     api.post('/api/resources/fuel-cards', data).then(r=>r.data as FuelCardRecord),
+  updateFuelCard: (id: number, data: { pan:string; matricula:string; caducidad?:string; pin:string }): Promise<FuelCardRecord> =>
+    api.put(`/api/resources/fuel-cards/${id}`, data).then(r=>r.data as FuelCardRecord),
   listViaTDevices: (params: { numero_telepeaje?:string; pan?:string; matricula?:string; page?:number; page_size?:number } = {}): Promise<ViaTPage> => {
     const sp = new URLSearchParams();
     if (params.numero_telepeaje) sp.append('numero_telepeaje', params.numero_telepeaje);
@@ -742,7 +744,9 @@ export const resourcesAPI = {
     return api.get(`/api/resources/via-t-devices?${sp.toString()}`).then(r=>r.data as ViaTPage);
   },
   createViaTDevice: (data: { numero_telepeaje:string; pan:string; matricula:string; caducidad?:string }): Promise<ViaTRecord> =>
-    api.post('/api/resources/via-t-devices', data).then(r=>r.data as ViaTRecord)
+    api.post('/api/resources/via-t-devices', data).then(r=>r.data as ViaTRecord),
+  updateViaTDevice: (id: number, data: { numero_telepeaje:string; pan:string; matricula:string; caducidad?:string }): Promise<ViaTRecord> =>
+    api.put(`/api/resources/via-t-devices/${id}`, data).then(r=>r.data as ViaTRecord)
 };
 
 // API de documentación
