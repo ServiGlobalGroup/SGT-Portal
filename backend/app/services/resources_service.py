@@ -8,8 +8,8 @@ from app.models.resources import FuelCard, ViaTDevice
 class ResourcesService:
     # Fuel Cards
     @staticmethod
-    def create_fuel_card(db: Session, pan: str, matricula: str, caducidad: Optional[date], pin: str, user_id: Optional[int]) -> FuelCard:
-        card = FuelCard(pan=pan, matricula=matricula, caducidad=caducidad, pin=pin, created_by=user_id)
+    def create_fuel_card(db: Session, pan: str, matricula: str, caducidad: Optional[date], pin: str, compania: str, user_id: Optional[int]) -> FuelCard:
+        card = FuelCard(pan=pan, matricula=matricula, caducidad=caducidad, pin=pin, compania=compania, created_by=user_id)
         db.add(card)
         db.commit()
         db.refresh(card)
@@ -31,8 +31,8 @@ class ResourcesService:
 
     # Via T Devices
     @staticmethod
-    def create_viat(db: Session, numero_telepeaje: str, pan: str, matricula: str, caducidad: Optional[date], user_id: Optional[int]) -> ViaTDevice:
-        device = ViaTDevice(numero_telepeaje=numero_telepeaje, pan=pan, matricula=matricula, caducidad=caducidad, created_by=user_id)
+    def create_viat(db: Session, numero_telepeaje: str, pan: str, compania: str, matricula: str, caducidad: Optional[date], user_id: Optional[int]) -> ViaTDevice:
+        device = ViaTDevice(numero_telepeaje=numero_telepeaje, pan=pan, compania=compania, matricula=matricula, caducidad=caducidad, created_by=user_id)
         db.add(device)
         db.commit()
         db.refresh(device)
