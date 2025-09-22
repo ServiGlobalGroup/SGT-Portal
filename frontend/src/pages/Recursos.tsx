@@ -219,15 +219,15 @@ export const Recursos: React.FC = () => {
   // PIN siempre visible (no toggle)
 
   // Formularios
-  const [gasForm, setGasForm] = React.useState({ pan:'', matricula:'', caducidad:'', pin:'' });
-  const [viaTForm, setViaTForm] = React.useState({ numeroTelepeaje:'', panViaT:'', matricula:'', caducidad:'' });
+  const [gasForm, setGasForm] = React.useState({ pan:'', matricula:'', caducidad:'', pin:'', compania:'' });
+  const [viaTForm, setViaTForm] = React.useState({ numeroTelepeaje:'', panViaT:'', matricula:'', caducidad:'', compania:'' });
   const [editingGasCard, setEditingGasCard] = React.useState<FuelCardRecord | null>(null);
   const [editingViaT, setEditingViaT] = React.useState<ViaTRecord | null>(null);
   const [errors, setErrors] = React.useState<Record<string,string>>({});
 
   const resetForms = () => {
-    setGasForm({ pan:'', matricula:'', caducidad:'', pin:'' });
-    setViaTForm({ numeroTelepeaje:'', panViaT:'', matricula:'', caducidad:'' });
+  setGasForm({ pan:'', matricula:'', caducidad:'', pin:'', compania:'' });
+  setViaTForm({ numeroTelepeaje:'', panViaT:'', matricula:'', caducidad:'', compania:'' });
     setEditingGasCard(null);
     setEditingViaT(null);
     setErrors({});
@@ -240,6 +240,7 @@ export const Recursos: React.FC = () => {
     if(!gasForm.matricula.trim()) e.matricula = 'Requerida';
     if(!gasForm.caducidad) e.caducidad = 'Requerida';
     if(!gasForm.pin.trim()) e.pin = 'Requerido';
+    if(!gasForm.compania.trim()) e.compania = 'Requerida';
     return e;
   };
   const validateViaT = () => {
@@ -248,6 +249,7 @@ export const Recursos: React.FC = () => {
     if(!viaTForm.panViaT.trim()) e.panViaT = 'Requerido';
     if(!viaTForm.matricula.trim()) e.matricula = 'Requerida';
     if(!viaTForm.caducidad) e.caducidad = 'Requerida';
+    if(!viaTForm.compania.trim()) e.compania = 'Requerida';
     return e;
   };
 
@@ -261,7 +263,8 @@ export const Recursos: React.FC = () => {
         pan: gasForm.pan.trim(),
         matricula: gasForm.matricula.trim(),
         caducidad: gasForm.caducidad || undefined,
-        pin: gasForm.pin
+        pin: gasForm.pin,
+        compania: gasForm.compania.trim()
       });
       // Actualizar tanto la lista visible como la cache completa
       setGasCards(prev => [created, ...prev]);
@@ -283,7 +286,8 @@ export const Recursos: React.FC = () => {
         numero_telepeaje: viaTForm.numeroTelepeaje.trim(),
         pan: viaTForm.panViaT.trim(),
         matricula: viaTForm.matricula.trim(),
-        caducidad: viaTForm.caducidad || undefined
+        caducidad: viaTForm.caducidad || undefined,
+        compania: viaTForm.compania.trim()
       });
       // Actualizar tanto la lista visible como la cache completa
       setViaTs(prev => [created, ...prev]);
@@ -307,7 +311,8 @@ export const Recursos: React.FC = () => {
         pan: gasForm.pan.trim(),
         matricula: gasForm.matricula.trim(),
         caducidad: gasForm.caducidad || undefined,
-        pin: gasForm.pin
+        pin: gasForm.pin,
+        compania: gasForm.compania.trim()
       });
       // Actualizar tanto la lista visible como la cache completa
       setGasCards(prev => prev.map(card => card.id === updated.id ? updated : card));
@@ -331,7 +336,8 @@ export const Recursos: React.FC = () => {
         numero_telepeaje: viaTForm.numeroTelepeaje.trim(),
         pan: viaTForm.panViaT.trim(),
         matricula: viaTForm.matricula.trim(),
-        caducidad: viaTForm.caducidad || undefined
+        caducidad: viaTForm.caducidad || undefined,
+        compania: viaTForm.compania.trim()
       });
       // Actualizar tanto la lista visible como la cache completa
       setViaTs(prev => prev.map(device => device.id === updated.id ? updated : device));
@@ -355,7 +361,8 @@ export const Recursos: React.FC = () => {
       pan: card.pan,
       matricula: card.matricula,
       caducidad: card.caducidad || '',
-      pin: card.pin || ''
+  pin: card.pin || '',
+  compania: card.compania || ''
     });
     setErrors({});
     setOpenEditGasDialog(true);
@@ -367,7 +374,8 @@ export const Recursos: React.FC = () => {
       numeroTelepeaje: device.numero_telepeaje,
       panViaT: device.pan,
       matricula: device.matricula,
-      caducidad: device.caducidad || ''
+  caducidad: device.caducidad || '',
+  compania: device.compania || ''
     });
     setErrors({});
     setOpenEditViaTDialog(true);
@@ -1303,6 +1311,16 @@ export const Recursos: React.FC = () => {
             size="small"
           />
           <TextField
+            label="Compañía"
+            value={gasForm.compania}
+            onChange={e=> setGasForm(f=>({...f, compania:e.target.value.toUpperCase()}))}
+            error={!!errors.compania}
+            helperText={errors.compania}
+            fullWidth
+            size="small"
+            inputProps={{ maxLength: 64 }}
+          />
+          <TextField
             label="Matrícula"
             value={gasForm.matricula}
             onChange={e=> setGasForm(f=>({...f, matricula:e.target.value.toUpperCase()}))}
@@ -1361,6 +1379,15 @@ export const Recursos: React.FC = () => {
             error={!!errors.numeroTelepeaje}
             helperText={errors.numeroTelepeaje}
             fullWidth size="small"
+          />
+          <TextField
+            label="Compañía"
+            value={viaTForm.compania}
+            onChange={e=> setViaTForm(f=>({...f, compania:e.target.value.toUpperCase()}))}
+            error={!!errors.compania}
+            helperText={errors.compania}
+            fullWidth size="small"
+            inputProps={{ maxLength: 64 }}
           />
           <TextField
             label="P.A.N Via-T"

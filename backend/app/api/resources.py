@@ -26,15 +26,17 @@ def create_fuel_card(
         matricula = payload.get('matricula', '').strip()
         pin = payload.get('pin', '').strip()
         caducidad = payload.get('caducidad')
+        # Campo nuevo / requerido a nivel DB. Si no viene desde frontend legacy, usar '' para evitar 500.
+        compania = (payload.get('compania') or '').strip()
         
         if not all([pan, matricula, pin]):
             raise HTTPException(status_code=400, detail="Faltan campos requeridos")
         
         # Usar SQLAlchemy text() para queries raw
         query = text("""
-            INSERT INTO fuel_cards (pan, matricula, pin, caducidad, created_by)
-            VALUES (:pan, :matricula, :pin, :caducidad, :created_by)
-            RETURNING id, created_at
+            INSERT INTO fuel_cards (pan, matricula, pin, caducidad, compania, created_by)
+            VALUES (:pan, :matricula, :pin, :caducidad, :compania, :created_by)
+            RETURNING id, created_at, compania
         """)
         
         result = db.execute(query, {
@@ -42,6 +44,7 @@ def create_fuel_card(
             'matricula': matricula, 
             'pin': pin,
             'caducidad': caducidad,
+            'compania': compania,
             'created_by': getattr(current_user, 'id', None)
         })
         
@@ -53,6 +56,7 @@ def create_fuel_card(
             "pan": pan,
             "matricula": matricula,
             "caducidad": caducidad,
+            "compania": row[2] if row else compania,
             "created_at": row[1].isoformat() if row and row[1] else datetime.utcnow().isoformat(),
             "masked_pin": "•" * len(pin),
             "pin": pin
@@ -85,6 +89,7 @@ def update_fuel_card(
         matricula = payload.get('matricula', '').strip()
         pin = payload.get('pin', '').strip()
         caducidad = payload.get('caducidad')
+        compania = (payload.get('compania') or '').strip()
         
         if not all([pan, matricula, pin]):
             raise HTTPException(status_code=400, detail="Faltan campos requeridos")
@@ -92,9 +97,9 @@ def update_fuel_card(
         # Actualizar la tarjeta
         update_query = text("""
             UPDATE fuel_cards 
-            SET pan = :pan, matricula = :matricula, pin = :pin, caducidad = :caducidad, updated_at = now()
+            SET pan = :pan, matricula = :matricula, pin = :pin, caducidad = :caducidad, compania = :compania, updated_at = now()
             WHERE id = :id
-            RETURNING id, pan, matricula, caducidad, pin, created_at, updated_at
+            RETURNING id, pan, matricula, compania, caducidad, pin, created_at, updated_at
         """)
         
         result = db.execute(update_query, {
@@ -102,7 +107,8 @@ def update_fuel_card(
             'pan': pan,
             'matricula': matricula,
             'pin': pin,
-            'caducidad': caducidad
+            'caducidad': caducidad,
+            'compania': compania
         })
         
         row = result.fetchone()
@@ -112,10 +118,11 @@ def update_fuel_card(
             "id": row[0],
             "pan": row[1],
             "matricula": row[2],
-            "caducidad": row[3].isoformat() if row[3] else None,
-            "created_at": row[5].isoformat() if row[5] else None,
-            "masked_pin": "•" * len(row[4]),
-            "pin": row[4]
+            "compania": row[3] or '',
+            "caducidad": row[4].isoformat() if row[4] else None,
+            "created_at": row[6].isoformat() if row[6] else None,
+            "masked_pin": "•" * len(row[5]),
+            "pin": row[5]
         }
         
     except HTTPException:
@@ -155,7 +162,7 @@ def list_fuel_cards(
             where_clause = "WHERE " + " AND ".join(where_conditions)
         
         final_query = f"""
-            SELECT id, pan, matricula, caducidad, pin, created_by, created_at 
+            SELECT id, pan, matricula, compania, caducidad, pin, created_by, created_at 
             FROM fuel_cards 
             {where_clause}
             ORDER BY id DESC 
@@ -183,14 +190,14 @@ def list_fuel_cards(
         
         items = []
         for row in rows:
-            pin_val = row[4] if len(row) > 4 and row[4] else ''
+            pin_val = row[5] if len(row) > 5 and row[5] else ''
             item = {
                 "id": row[0],
                 "pan": row[1] or '',
                 "matricula": row[2] or '', 
-                "caducidad": row[3].isoformat() if row[3] else None,
-                "compania": '',  # Campo legacy, ahora vacío
-                "created_at": row[6].isoformat() if len(row) > 6 and row[6] else None,
+                "compania": row[3] or '',
+                "caducidad": row[4].isoformat() if row[4] else None,
+                "created_at": row[7].isoformat() if len(row) > 7 and row[7] else None,
                 "masked_pin": "•" * len(pin_val),
                 "pin": pin_val
             }
@@ -226,14 +233,15 @@ def create_via_t(
         pan = payload.get('pan', '').strip()
         matricula = payload.get('matricula', '').strip()
         caducidad = payload.get('caducidad')
+        compania = (payload.get('compania') or '').strip()
         
         if not all([numero_telepeaje, pan, matricula]):
             raise HTTPException(status_code=400, detail="Faltan campos requeridos")
         
         query = text("""
-            INSERT INTO via_t_devices (numero_telepeaje, pan, matricula, caducidad, created_by)
-            VALUES (:numero_telepeaje, :pan, :matricula, :caducidad, :created_by)
-            RETURNING id, created_at
+            INSERT INTO via_t_devices (numero_telepeaje, pan, matricula, caducidad, compania, created_by)
+            VALUES (:numero_telepeaje, :pan, :matricula, :caducidad, :compania, :created_by)
+            RETURNING id, created_at, compania
         """)
         
         result = db.execute(query, {
@@ -241,6 +249,7 @@ def create_via_t(
             'pan': pan,
             'matricula': matricula,
             'caducidad': caducidad,
+            'compania': compania,
             'created_by': getattr(current_user, 'id', None)
         })
         
@@ -253,6 +262,7 @@ def create_via_t(
             "pan": pan,
             "matricula": matricula,
             "caducidad": caducidad,
+            "compania": row[2] if row else compania,
             "created_at": row[1].isoformat() if row and row[1] else datetime.utcnow().isoformat()
         }
         
@@ -283,6 +293,7 @@ def update_via_t(
         pan = payload.get('pan', '').strip()
         matricula = payload.get('matricula', '').strip()
         caducidad = payload.get('caducidad')
+        compania = (payload.get('compania') or '').strip()
         
         if not all([numero_telepeaje, pan, matricula]):
             raise HTTPException(status_code=400, detail="Faltan campos requeridos")
@@ -290,9 +301,9 @@ def update_via_t(
         # Actualizar el dispositivo
         update_query = text("""
             UPDATE via_t_devices 
-            SET numero_telepeaje = :numero_telepeaje, pan = :pan, matricula = :matricula, caducidad = :caducidad, updated_at = now()
+            SET numero_telepeaje = :numero_telepeaje, pan = :pan, matricula = :matricula, caducidad = :caducidad, compania = :compania, updated_at = now()
             WHERE id = :id
-            RETURNING id, numero_telepeaje, pan, matricula, caducidad, created_at, updated_at
+            RETURNING id, numero_telepeaje, pan, compania, matricula, caducidad, created_at, updated_at
         """)
         
         result = db.execute(update_query, {
@@ -300,7 +311,8 @@ def update_via_t(
             'numero_telepeaje': numero_telepeaje,
             'pan': pan,
             'matricula': matricula,
-            'caducidad': caducidad
+            'caducidad': caducidad,
+            'compania': compania
         })
         
         row = result.fetchone()
@@ -310,9 +322,10 @@ def update_via_t(
             "id": row[0],
             "numero_telepeaje": row[1],
             "pan": row[2],
-            "matricula": row[3],
-            "caducidad": row[4].isoformat() if row[4] else None,
-            "created_at": row[5].isoformat() if row[5] else None
+            "compania": row[3] or '',
+            "matricula": row[4],
+            "caducidad": row[5].isoformat() if row[5] else None,
+            "created_at": row[6].isoformat() if row[6] else None
         }
         
     except HTTPException:
@@ -357,7 +370,7 @@ def list_via_t(
             where_clause = "WHERE " + " AND ".join(where_conditions)
         
         final_query = f"""
-            SELECT id, numero_telepeaje, pan, matricula, caducidad, created_by, created_at 
+            SELECT id, numero_telepeaje, pan, compania, matricula, caducidad, created_by, created_at 
             FROM via_t_devices 
             {where_clause}
             ORDER BY id DESC 
@@ -389,10 +402,10 @@ def list_via_t(
                 "id": row[0],
                 "numero_telepeaje": row[1] or '',
                 "pan": row[2] or '',
-                "compania": '',  # Campo legacy, ahora vacío
-                "matricula": row[3] or '',
-                "caducidad": row[4].isoformat() if row[4] else None,
-                "created_at": row[6].isoformat() if len(row) > 6 and row[6] else None
+                "compania": row[3] or '',
+                "matricula": row[4] or '',
+                "caducidad": row[5].isoformat() if row[5] else None,
+                "created_at": row[7].isoformat() if len(row) > 7 and row[7] else None
             }
             items.append(item)
             print(f"[DEBUG] Added item: {item}")
