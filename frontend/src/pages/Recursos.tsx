@@ -1,16 +1,15 @@
 import React from 'react';
 import { 
   Box, Paper, Typography, Fade, GlobalStyles, ToggleButtonGroup, ToggleButton, 
-  Button, TextField, Stack, 
+  Button, TextField, Stack, IconButton,
   Table, TableHead, TableRow, TableCell, TableBody, Chip,
-  Pagination, Card, CardContent, Divider, CircularProgress, Snackbar, Alert, Skeleton,
-  Dialog, DialogTitle, DialogContent, DialogActions
+  Pagination, Card, CardContent, Divider, CircularProgress, Snackbar, Alert, Skeleton
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import { ModernModal, ModernButton } from '../components/ModernModal';
 import { useAuth } from '../hooks/useAuth';
 import { useDeviceType } from '../hooks/useDeviceType';
-import { LocalGasStation, CreditCard, Info, Add, Construction } from '@mui/icons-material';
+import { LocalGasStation, CreditCard, Info, Add, Edit, Delete } from '@mui/icons-material';
 import { resourcesAPI, FuelCardRecord, ViaTRecord } from '../services/api';
 
 // Página de Recursos: base inicial con banner y estructura de pestañas (Gasoil, Via T)
@@ -40,8 +39,7 @@ export const Recursos: React.FC = () => {
   const [savingViaT, setSavingViaT] = React.useState(false);
   const [snack, setSnack] = React.useState<{open:boolean; msg:string; type:'success'|'error'}>({open:false,msg:'',type:'success'});
 
-  // Modal de mantenimiento
-  const [maintenanceModalOpen, setMaintenanceModalOpen] = React.useState(false);
+  // (Modal de mantenimiento eliminado)
 
   // Búsquedas (draft vs applied)
   const [gasSearchDraft, setGasSearchDraft] = React.useState({ pan:'', matricula:'' });
@@ -150,6 +148,64 @@ export const Recursos: React.FC = () => {
     }
   };
 
+  // Funciones auxiliares para manejar eliminación de filtros individuales
+  const handleRemoveGasFilter = async (filterType: 'pan' | 'matricula') => {
+    const newSearch = {...gasSearch, [filterType]: ''};
+    setGasSearch(newSearch);
+    setGasSearchDraft(newSearch);
+    
+    // Si no quedan filtros, restaurar lista completa, sino hacer nueva búsqueda
+    if (!newSearch.pan.trim() && !newSearch.matricula.trim()) {
+      setGasCards(gasCardsAll);
+      setSearchingGas(false);
+    } else {
+      // Ejecutar búsqueda con los filtros restantes
+      const params: { pan?:string; matricula?:string; page:number; page_size:number } = { page:1, page_size:200 };
+      if(newSearch.pan.trim()) params.pan = newSearch.pan.trim();
+      if(newSearch.matricula.trim()) params.matricula = newSearch.matricula.trim();
+      
+      try {
+        if(isMobile) setSearchingGas(true);
+        const res = await resourcesAPI.listFuelCards(params);
+        setGasCards(res.items);
+      } catch(e:any) {
+        setErrorGas(e?.response?.data?.detail || 'Error buscando tarjetas');
+        setGasCards([]);
+      } finally {
+        setSearchingGas(false);
+      }
+    }
+  };
+
+  const handleRemoveViaTFilter = async (filterType: 'numeroTelepeaje' | 'pan' | 'matricula') => {
+    const newSearch = {...viaTSearch, [filterType]: ''};
+    setViaTSearch(newSearch);
+    setViaTSearchDraft(newSearch);
+    
+    // Si no quedan filtros, restaurar lista completa, sino hacer nueva búsqueda
+    if (!newSearch.numeroTelepeaje.trim() && !newSearch.pan.trim() && !newSearch.matricula.trim()) {
+      setViaTs(viaTsAll);
+      setSearchingViaT(false);
+    } else {
+      // Ejecutar búsqueda con los filtros restantes
+      const params: { numero_telepeaje?:string; pan?:string; matricula?:string; page:number; page_size:number } = { page:1, page_size:200 };
+      if(newSearch.numeroTelepeaje.trim()) params.numero_telepeaje = newSearch.numeroTelepeaje.trim();
+      if(newSearch.pan.trim()) params.pan = newSearch.pan.trim();
+      if(newSearch.matricula.trim()) params.matricula = newSearch.matricula.trim();
+      
+      try {
+        if(isMobile) setSearchingViaT(true);
+        const res = await resourcesAPI.listViaTDevices(params);
+        setViaTs(res.items);
+      } catch(e:any) {
+        setErrorViaT(e?.response?.data?.detail || 'Error buscando Via T');
+        setViaTs([]);
+      } finally {
+        setSearchingViaT(false);
+      }
+    }
+  };
+
   // Paginación
   const PAGE_SIZE = 25;
   const [gasPage, setGasPage] = React.useState(1);
@@ -158,16 +214,22 @@ export const Recursos: React.FC = () => {
   // Diálogos
   const [openGasDialog, setOpenGasDialog] = React.useState(false);
   const [openViaTDialog, setOpenViaTDialog] = React.useState(false);
+  const [openEditGasDialog, setOpenEditGasDialog] = React.useState(false);
+  const [openEditViaTDialog, setOpenEditViaTDialog] = React.useState(false);
   // PIN siempre visible (no toggle)
 
   // Formularios
-  const [gasForm, setGasForm] = React.useState({ pan:'', matricula:'', caducidad:'', pin:'', compania:'' });
-  const [viaTForm, setViaTForm] = React.useState({ numeroTelepeaje:'', panViaT:'', compania:'', matricula:'', caducidad:'' });
+  const [gasForm, setGasForm] = React.useState({ pan:'', matricula:'', caducidad:'', pin:'' });
+  const [viaTForm, setViaTForm] = React.useState({ numeroTelepeaje:'', panViaT:'', matricula:'', caducidad:'' });
+  const [editingGasCard, setEditingGasCard] = React.useState<FuelCardRecord | null>(null);
+  const [editingViaT, setEditingViaT] = React.useState<ViaTRecord | null>(null);
   const [errors, setErrors] = React.useState<Record<string,string>>({});
 
   const resetForms = () => {
-    setGasForm({ pan:'', matricula:'', caducidad:'', pin:'', compania:'' });
-    setViaTForm({ numeroTelepeaje:'', panViaT:'', compania:'', matricula:'', caducidad:'' });
+    setGasForm({ pan:'', matricula:'', caducidad:'', pin:'' });
+    setViaTForm({ numeroTelepeaje:'', panViaT:'', matricula:'', caducidad:'' });
+    setEditingGasCard(null);
+    setEditingViaT(null);
     setErrors({});
   //
   };
@@ -184,7 +246,6 @@ export const Recursos: React.FC = () => {
     const e: Record<string,string> = {};
     if(!viaTForm.numeroTelepeaje.trim()) e.numeroTelepeaje = 'Requerido';
     if(!viaTForm.panViaT.trim()) e.panViaT = 'Requerido';
-    if(!viaTForm.compania.trim()) e.compania = 'Requerida';
     if(!viaTForm.matricula.trim()) e.matricula = 'Requerida';
     if(!viaTForm.caducidad) e.caducidad = 'Requerida';
     return e;
@@ -200,10 +261,11 @@ export const Recursos: React.FC = () => {
         pan: gasForm.pan.trim(),
         matricula: gasForm.matricula.trim(),
         caducidad: gasForm.caducidad || undefined,
-        pin: gasForm.pin,
-        compania: gasForm.compania.trim() || undefined
+        pin: gasForm.pin
       });
+      // Actualizar tanto la lista visible como la cache completa
       setGasCards(prev => [created, ...prev]);
+      setGasCardsAll(prev => [created, ...prev]);
       setSnack({open:true, msg:'Tarjeta creada', type:'success'});
       setOpenGasDialog(false);
       resetForms();
@@ -220,11 +282,12 @@ export const Recursos: React.FC = () => {
       const created = await resourcesAPI.createViaTDevice({
         numero_telepeaje: viaTForm.numeroTelepeaje.trim(),
         pan: viaTForm.panViaT.trim(),
-        compania: viaTForm.compania.trim() || undefined,
         matricula: viaTForm.matricula.trim(),
         caducidad: viaTForm.caducidad || undefined
       });
+      // Actualizar tanto la lista visible como la cache completa
       setViaTs(prev => [created, ...prev]);
+      setViaTsAll(prev => [created, ...prev]);
       setSnack({open:true, msg:'Dispositivo creado', type:'success'});
       setOpenViaTDialog(false);
       resetForms();
@@ -233,10 +296,129 @@ export const Recursos: React.FC = () => {
     } finally { setSavingViaT(false); }
   };
 
+  const handleUpdateGasCard = async () => {
+    if (!editingGasCard) return;
+    const e = validateGas();
+    setErrors(e);
+    if(Object.keys(e).length) return;
+    try {
+      setSavingGas(true);
+      const updated = await resourcesAPI.updateFuelCard(editingGasCard.id, {
+        pan: gasForm.pan.trim(),
+        matricula: gasForm.matricula.trim(),
+        caducidad: gasForm.caducidad || undefined,
+        pin: gasForm.pin
+      });
+      // Actualizar tanto la lista visible como la cache completa
+      setGasCards(prev => prev.map(card => card.id === updated.id ? updated : card));
+      setGasCardsAll(prev => prev.map(card => card.id === updated.id ? updated : card));
+      setSnack({open:true, msg:'Tarjeta actualizada', type:'success'});
+      setOpenEditGasDialog(false);
+      resetForms();
+    } catch (err:any) {
+      setSnack({open:true, msg: err?.response?.data?.detail || 'Error actualizando tarjeta', type:'error'});
+    } finally { setSavingGas(false); }
+  };
+
+  const handleUpdateViaT = async () => {
+    if (!editingViaT) return;
+    const e = validateViaT();
+    setErrors(e);
+    if(Object.keys(e).length) return;
+    try {
+      setSavingViaT(true);
+      const updated = await resourcesAPI.updateViaTDevice(editingViaT.id, {
+        numero_telepeaje: viaTForm.numeroTelepeaje.trim(),
+        pan: viaTForm.panViaT.trim(),
+        matricula: viaTForm.matricula.trim(),
+        caducidad: viaTForm.caducidad || undefined
+      });
+      // Actualizar tanto la lista visible como la cache completa
+      setViaTs(prev => prev.map(device => device.id === updated.id ? updated : device));
+      setViaTsAll(prev => prev.map(device => device.id === updated.id ? updated : device));
+      setSnack({open:true, msg:'Dispositivo actualizado', type:'success'});
+      setOpenEditViaTDialog(false);
+      resetForms();
+    } catch (err:any) {
+      setSnack({open:true, msg: err?.response?.data?.detail || 'Error actualizando dispositivo', type:'error'});
+    } finally { setSavingViaT(false); }
+  };
+
   const handleOpenAdd = () => {
     resetForms();
     if(tab === 'gasolina') setOpenGasDialog(true); else setOpenViaTDialog(true);
   };
+
+  const handleEditGasCard = (card: FuelCardRecord) => {
+    setEditingGasCard(card);
+    setGasForm({
+      pan: card.pan,
+      matricula: card.matricula,
+      caducidad: card.caducidad || '',
+      pin: card.pin || ''
+    });
+    setErrors({});
+    setOpenEditGasDialog(true);
+  };
+
+  const handleEditViaT = (device: ViaTRecord) => {
+    setEditingViaT(device);
+    setViaTForm({
+      numeroTelepeaje: device.numero_telepeaje,
+      panViaT: device.pan,
+      matricula: device.matricula,
+      caducidad: device.caducidad || ''
+    });
+    setErrors({});
+    setOpenEditViaTDialog(true);
+  };
+
+  const handleDeleteGasCard = async (card: FuelCardRecord) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar la tarjeta con PAN ${card.pan} (${card.matricula})?`)) {
+      return;
+    }
+    
+    try {
+      setSavingGas(true);
+      await resourcesAPI.deleteFuelCard(card.id);
+      
+      // Actualizar estado local
+      const updatedCards = gasCards.filter(c => c.id !== card.id);
+      setGasCards(updatedCards);
+      setGasCardsAll(prev => prev.filter(c => c.id !== card.id));
+      
+      setSnack({ open: true, msg: 'Tarjeta eliminada correctamente', type: 'success' });
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail || e?.message || 'Error eliminando tarjeta';
+      setSnack({ open: true, msg, type: 'error' });
+    } finally {
+      setSavingGas(false);
+    }
+  };
+
+  const handleDeleteViaT = async (device: ViaTRecord) => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar el dispositivo ${device.numero_telepeaje} (${device.matricula})?`)) {
+      return;
+    }
+    
+    try {
+      setSavingViaT(true);
+      await resourcesAPI.deleteViaTDevice(device.id);
+      
+      // Actualizar estado local
+      const updatedDevices = viaTs.filter(v => v.id !== device.id);
+      setViaTs(updatedDevices);
+      setViaTsAll(prev => prev.filter(v => v.id !== device.id));
+      
+      setSnack({ open: true, msg: 'Dispositivo Via-T eliminado correctamente', type: 'success' });
+    } catch (e: any) {
+      const msg = e?.response?.data?.detail || e?.message || 'Error eliminando dispositivo';
+      setSnack({ open: true, msg, type: 'error' });
+    } finally {
+      setSavingViaT(false);
+    }
+  };
+
   const addButtonLabel = tab === 'gasolina' ? 'Añadir Tarjeta' : 'Añadir Via T';
 
   // Filtrado (case-insensitive, trim)
@@ -269,14 +451,7 @@ export const Recursos: React.FC = () => {
     load();
   }, [user]);
 
-  // Mostrar modal de mantenimiento al cargar la página
-  React.useEffect(() => {
-    const timer = setTimeout(() => {
-      setMaintenanceModalOpen(true);
-    }, 1000); // Mostrar después de 1 segundo para permitir que se cargue la página
-    
-    return () => clearTimeout(timer);
-  }, []);
+  // (Efecto del modal de mantenimiento eliminado)
 
   const anyGasFilters = !!(gasSearch.pan || gasSearch.matricula);
   const anyViaTFilters = viaTSearch.numeroTelepeaje || viaTSearch.pan || viaTSearch.matricula;
@@ -292,7 +467,7 @@ export const Recursos: React.FC = () => {
   }, [filteredViaTs.length, viaTPage]);
 
   // Reset página al cambiar filtros o pestaña
-  React.useEffect(()=> { setGasPage(1); }, [gasCards.length]);
+  React.useEffect(()=> { setGasPage(1); }, [gasSearch.pan, gasSearch.matricula]);
   React.useEffect(()=> { setViaTPage(1); }, [viaTSearch.numeroTelepeaje, viaTSearch.pan, viaTSearch.matricula]);
   React.useEffect(()=> { 
     /* cambio de tab */ 
@@ -571,33 +746,43 @@ export const Recursos: React.FC = () => {
                 {anyGasFilters && (
                   <Box sx={{ display:'flex', gap:1, flexWrap:'wrap', mb:2 }}>
                     {gasSearch.pan && (
-                      <Chip size="small" label={`PAN: ${gasSearch.pan}`} onDelete={()=> setGasSearch(s=>({...s, pan:''}))} sx={{ borderRadius:2 }} />
+                      <Chip 
+                        size="small" 
+                        label={`PAN: ${gasSearch.pan}`} 
+                        onDelete={() => handleRemoveGasFilter('pan')} 
+                        sx={{ borderRadius:2 }} 
+                      />
                     )}
                     {gasSearch.matricula && (
-                      <Chip size="small" label={`Matrícula: ${gasSearch.matricula}`} onDelete={()=> setGasSearch(s=>({...s, matricula:''}))} sx={{ borderRadius:2 }} />
+                      <Chip 
+                        size="small" 
+                        label={`Matrícula: ${gasSearch.matricula}`} 
+                        onDelete={() => handleRemoveGasFilter('matricula')} 
+                        sx={{ borderRadius:2 }} 
+                      />
                     )}
                   </Box>
                 )}
                 {!isMobile && (
                   <>
                     <Box sx={{ overflowX:'auto' }}>
-                      <Table size="small" sx={{ minWidth:800, '& th':{ whiteSpace:'nowrap' } }}>
+                      <Table size="small" sx={{ minWidth:850, '& th':{ whiteSpace:'nowrap' } }}>
                         <TableHead>
                           <TableRow>
                             <TableCell>P.A.N.</TableCell>
                             <TableCell>Matrícula</TableCell>
-                            <TableCell>Compañía</TableCell>
                             <TableCell>Fecha de caducidad</TableCell>
                             <TableCell>Código PIN</TableCell>
+                            {canAdd && <TableCell>Acciones</TableCell>}
                           </TableRow>
                         </TableHead>
                         <TableBody>
                           {loadingGas && (
-                            <TableRow><TableCell colSpan={5}><Box sx={{ display:'flex', alignItems:'center', gap:1 }}><CircularProgress size={18} /> <Typography variant="body2">Cargando...</Typography></Box></TableCell></TableRow>
+                            <TableRow><TableCell colSpan={canAdd ? 5 : 4}><Box sx={{ display:'flex', alignItems:'center', gap:1 }}><CircularProgress size={18} /> <Typography variant="body2">Cargando...</Typography></Box></TableCell></TableRow>
                           )}
                           {!loadingGas && searchingGas && (
                             <TableRow>
-                              <TableCell colSpan={5}>
+                              <TableCell colSpan={canAdd ? 5 : 4}>
                                 <Stack spacing={1}>
                                   <Skeleton height={28} />
                                   <Skeleton height={28} />
@@ -607,18 +792,18 @@ export const Recursos: React.FC = () => {
                             </TableRow>
                           )}
                           {!loadingGas && !searchingGas && errorGas && (
-                            <TableRow><TableCell colSpan={5}><Typography color="error" variant="body2">{errorGas}</Typography></TableCell></TableRow>
+                            <TableRow><TableCell colSpan={canAdd ? 5 : 4}><Typography color="error" variant="body2">{errorGas}</Typography></TableCell></TableRow>
                           )}
                           {!loadingGas && !searchingGas && gasCards.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={5}>
+                              <TableCell colSpan={canAdd ? 5 : 4}>
                                 <Typography variant="body2" sx={{ color:'text.secondary' }}>No hay tarjetas registradas todavía.</Typography>
                               </TableCell>
                             </TableRow>
                           )}
                           {!loadingGas && !searchingGas && gasCards.length > 0 && filteredGasCards.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={5}>
+                              <TableCell colSpan={canAdd ? 5 : 4}>
                                 <Typography variant="body2" sx={{ color:'text.secondary' }}>Sin coincidencias con los filtros aplicados.</Typography>
                               </TableCell>
                             </TableRow>
@@ -627,9 +812,6 @@ export const Recursos: React.FC = () => {
                             <TableRow key={card.id} hover>
                               <TableCell>{card.pan}</TableCell>
                               <TableCell>{card.matricula}</TableCell>
-                              <TableCell>
-                                <Chip size="small" label={card.compania || ''} sx={{ fontWeight:600, bgcolor:'rgba(92,35,64,0.08)', color:'#501b36' }} />
-                              </TableCell>
                               <TableCell>{card.caducidad}</TableCell>
                               <TableCell>
                                 <Box sx={{ display:'flex', alignItems:'center', gap:1 }}>
@@ -638,6 +820,58 @@ export const Recursos: React.FC = () => {
                                   </Typography>
                                 </Box>
                               </TableCell>
+                              {canAdd && (
+                                <TableCell>
+                                  <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleEditGasCard(card)}
+                                      sx={{ 
+                                        color: '#666',
+                                        backgroundColor: 'transparent',
+                                        boxShadow: 'none',
+                                        border: 'none',
+                                        '&:hover': { 
+                                          color: '#501b36',
+                                          backgroundColor: 'transparent',
+                                          boxShadow: 'none'
+                                        },
+                                        '&:focus': {
+                                          backgroundColor: 'transparent',
+                                          boxShadow: 'none'
+                                        }
+                                      }}
+                                    >
+                                      <Edit fontSize="small" />
+                                    </IconButton>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleDeleteGasCard(card)}
+                                      disabled={savingGas}
+                                      sx={{ 
+                                        color: '#666',
+                                        backgroundColor: 'transparent',
+                                        boxShadow: 'none',
+                                        border: 'none',
+                                        '&:hover': { 
+                                          color: '#d32f2f',
+                                          backgroundColor: 'transparent',
+                                          boxShadow: 'none'
+                                        },
+                                        '&:focus': {
+                                          backgroundColor: 'transparent',
+                                          boxShadow: 'none'
+                                        },
+                                        '&:disabled': {
+                                          color: '#ccc'
+                                        }
+                                      }}
+                                    >
+                                      <Delete fontSize="small" />
+                                    </IconButton>
+                                  </Box>
+                                </TableCell>
+                              )}
                             </TableRow>
                           ))}
                         </TableBody>
@@ -692,12 +926,36 @@ export const Recursos: React.FC = () => {
                                     <Typography variant="subtitle2" sx={{ fontWeight:700, letterSpacing:.3 }}>{card.matricula}</Typography>
                                     <Typography variant="caption" sx={{ color:'text.secondary' }}>Matrícula</Typography>
                                   </Box>
-                                  <Chip size="small" label={card.caducidad || '—'} sx={{ bgcolor:'rgba(80,27,54,0.08)', color:'#501b36' }} />
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Chip size="small" label={card.caducidad || '—'} sx={{ bgcolor:'rgba(80,27,54,0.08)', color:'#501b36' }} />
+                                    {canAdd && (
+                                      <IconButton
+                                        size="small"
+                                        onClick={() => handleEditGasCard(card)}
+                                        sx={{ 
+                                          color: '#666',
+                                          backgroundColor: 'transparent',
+                                          boxShadow: 'none',
+                                          border: 'none',
+                                          '&:hover': { 
+                                            color: '#501b36',
+                                            backgroundColor: 'transparent',
+                                            boxShadow: 'none'
+                                          },
+                                          '&:focus': {
+                                            backgroundColor: 'transparent',
+                                            boxShadow: 'none'
+                                          }
+                                        }}
+                                      >
+                                        <Edit fontSize="small" />
+                                      </IconButton>
+                                    )}
+                                  </Box>
                                 </Stack>
                                 <Divider sx={{ my:1 }} />
                                 <Stack spacing={0.6}>
                                   <Typography variant="body2"><strong>PAN:</strong> {card.pan}</Typography>
-                                  <Typography variant="body2"><strong>Compañía:</strong> {card.compania || '—'}</Typography>
                                   <Typography variant="body2"><strong>PIN:</strong> <span style={{ fontFamily:'monospace', letterSpacing:1 }}>{card.pin ?? card.masked_pin}</span></Typography>
                                 </Stack>
                               </CardContent>
@@ -781,36 +1039,51 @@ export const Recursos: React.FC = () => {
                 {anyViaTFilters && (
                   <Box sx={{ display:'flex', gap:1, flexWrap:'wrap', mb:2 }}>
                     {viaTSearch.numeroTelepeaje && (
-                      <Chip size="small" label={`Telepeaje: ${viaTSearch.numeroTelepeaje}`} onDelete={()=> setViaTSearch(s=>({...s, numeroTelepeaje:''}))} sx={{ borderRadius:2 }} />
+                      <Chip 
+                        size="small" 
+                        label={`Telepeaje: ${viaTSearch.numeroTelepeaje}`} 
+                        onDelete={() => handleRemoveViaTFilter('numeroTelepeaje')} 
+                        sx={{ borderRadius:2 }} 
+                      />
                     )}
                     {viaTSearch.pan && (
-                      <Chip size="small" label={`PAN: ${viaTSearch.pan}`} onDelete={()=> setViaTSearch(s=>({...s, pan:''}))} sx={{ borderRadius:2 }} />
+                      <Chip 
+                        size="small" 
+                        label={`PAN: ${viaTSearch.pan}`} 
+                        onDelete={() => handleRemoveViaTFilter('pan')} 
+                        sx={{ borderRadius:2 }} 
+                      />
                     )}
                     {viaTSearch.matricula && (
-                      <Chip size="small" label={`Matrícula: ${viaTSearch.matricula}`} onDelete={()=> setViaTSearch(s=>({...s, matricula:''}))} sx={{ borderRadius:2 }} />
+                      <Chip 
+                        size="small" 
+                        label={`Matrícula: ${viaTSearch.matricula}`} 
+                        onDelete={() => handleRemoveViaTFilter('matricula')} 
+                        sx={{ borderRadius:2 }} 
+                      />
                     )}
                   </Box>
                 )}
                 {!isMobile && (
                   <>
                     <Box sx={{ overflowX:'auto' }}>
-                      <Table size="small" sx={{ minWidth:850, '& th':{ whiteSpace:'nowrap' } }}>
+                      <Table size="small" sx={{ minWidth:900, '& th':{ whiteSpace:'nowrap' } }}>
                         <TableHead>
                           <TableRow>
                             <TableCell>Nº Telepeaje</TableCell>
                             <TableCell>P.A.N Via-T</TableCell>
-                            <TableCell>Compañía</TableCell>
                             <TableCell>Matrícula</TableCell>
                             <TableCell>Fecha de caducidad</TableCell>
+                            {canAdd && <TableCell>Acciones</TableCell>}
                           </TableRow>
                         </TableHead>
                         <TableBody>
                           {loadingViaT && (
-                            <TableRow><TableCell colSpan={5}><Box sx={{ display:'flex', alignItems:'center', gap:1 }}><CircularProgress size={18} /> <Typography variant="body2">Cargando...</Typography></Box></TableCell></TableRow>
+                            <TableRow><TableCell colSpan={canAdd ? 5 : 4}><Box sx={{ display:'flex', alignItems:'center', gap:1 }}><CircularProgress size={18} /> <Typography variant="body2">Cargando...</Typography></Box></TableCell></TableRow>
                           )}
                           {!loadingViaT && searchingViaT && (
                             <TableRow>
-                              <TableCell colSpan={5}>
+                              <TableCell colSpan={canAdd ? 5 : 4}>
                                 <Stack spacing={1}>
                                   <Skeleton height={28} />
                                   <Skeleton height={28} />
@@ -820,18 +1093,18 @@ export const Recursos: React.FC = () => {
                             </TableRow>
                           )}
                           {!loadingViaT && !searchingViaT && errorViaT && (
-                            <TableRow><TableCell colSpan={5}><Typography color="error" variant="body2">{errorViaT}</Typography></TableCell></TableRow>
+                            <TableRow><TableCell colSpan={canAdd ? 5 : 4}><Typography color="error" variant="body2">{errorViaT}</Typography></TableCell></TableRow>
                           )}
                           {!loadingViaT && !searchingViaT && viaTs.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={5}>
+                              <TableCell colSpan={canAdd ? 5 : 4}>
                                 <Typography variant="body2" sx={{ color:'text.secondary' }}>No hay dispositivos Via T registrados todavía.</Typography>
                               </TableCell>
                             </TableRow>
                           )}
                           {!loadingViaT && !searchingViaT && viaTs.length > 0 && filteredViaTs.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={5}>
+                              <TableCell colSpan={canAdd ? 5 : 4}>
                                 <Typography variant="body2" sx={{ color:'text.secondary' }}>Sin coincidencias con los filtros aplicados.</Typography>
                               </TableCell>
                             </TableRow>
@@ -840,11 +1113,60 @@ export const Recursos: React.FC = () => {
                             <TableRow key={v.id} hover>
                               <TableCell>{v.numero_telepeaje}</TableCell>
                               <TableCell>{v.pan}</TableCell>
-                              <TableCell>
-                                <Chip size="small" label={v.compania || ''} sx={{ fontWeight:600, bgcolor:'rgba(92,35,64,0.08)', color:'#501b36' }} />
-                              </TableCell>
                               <TableCell>{v.matricula}</TableCell>
                               <TableCell>{v.caducidad}</TableCell>
+                              {canAdd && (
+                                <TableCell>
+                                  <Box sx={{ display: 'flex', gap: 0.5 }}>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleEditViaT(v)}
+                                      sx={{ 
+                                        color: '#666',
+                                        backgroundColor: 'transparent',
+                                        boxShadow: 'none',
+                                        border: 'none',
+                                        '&:hover': { 
+                                          color: '#501b36',
+                                          backgroundColor: 'transparent',
+                                          boxShadow: 'none'
+                                        },
+                                        '&:focus': {
+                                          backgroundColor: 'transparent',
+                                          boxShadow: 'none'
+                                        }
+                                      }}
+                                    >
+                                      <Edit fontSize="small" />
+                                    </IconButton>
+                                    <IconButton
+                                      size="small"
+                                      onClick={() => handleDeleteViaT(v)}
+                                      disabled={savingViaT}
+                                      sx={{ 
+                                        color: '#666',
+                                        backgroundColor: 'transparent',
+                                        boxShadow: 'none',
+                                        border: 'none',
+                                        '&:hover': { 
+                                          color: '#d32f2f',
+                                          backgroundColor: 'transparent',
+                                          boxShadow: 'none'
+                                        },
+                                        '&:focus': {
+                                          backgroundColor: 'transparent',
+                                          boxShadow: 'none'
+                                        },
+                                        '&:disabled': {
+                                          color: '#ccc'
+                                        }
+                                      }}
+                                    >
+                                      <Delete fontSize="small" />
+                                    </IconButton>
+                                  </Box>
+                                </TableCell>
+                              )}
                             </TableRow>
                           ))}
                         </TableBody>
@@ -905,13 +1227,37 @@ export const Recursos: React.FC = () => {
                                       <Typography variant="subtitle2" sx={{ fontWeight:700, letterSpacing:.3 }}>{v.matricula}</Typography>
                                       <Typography variant="caption" sx={{ color:'text.secondary' }}>Matrícula</Typography>
                                     </Box>
-                                    <Chip size="small" label={v.caducidad || '—'} sx={{ bgcolor:'rgba(80,27,54,0.08)', color:'#501b36' }} />
+                                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                      <Chip size="small" label={v.caducidad || '—'} sx={{ bgcolor:'rgba(80,27,54,0.08)', color:'#501b36' }} />
+                                      {canAdd && (
+                                        <IconButton
+                                          size="small"
+                                          onClick={() => handleEditViaT(v)}
+                                          sx={{ 
+                                            color: '#666',
+                                            backgroundColor: 'transparent',
+                                            boxShadow: 'none',
+                                            border: 'none',
+                                            '&:hover': { 
+                                              color: '#501b36',
+                                              backgroundColor: 'transparent',
+                                              boxShadow: 'none'
+                                            },
+                                            '&:focus': {
+                                              backgroundColor: 'transparent',
+                                              boxShadow: 'none'
+                                            }
+                                          }}
+                                        >
+                                          <Edit fontSize="small" />
+                                        </IconButton>
+                                      )}
+                                    </Box>
                                   </Stack>
                                   <Divider sx={{ my:1 }} />
                                   <Stack spacing={0.6}>
                                     <Typography variant="body2"><strong>Telepeaje:</strong> {v.numero_telepeaje}</Typography>
                                     <Typography variant="body2"><strong>PAN:</strong> {v.pan}</Typography>
-                                    <Typography variant="body2"><strong>Compañía:</strong> {v.compania}</Typography>
                                   </Stack>
                                 </CardContent>
                               </Card>
@@ -965,16 +1311,6 @@ export const Recursos: React.FC = () => {
             fullWidth
             size="small"
             inputProps={{ maxLength: 10 }}
-          />
-          <TextField
-            label="Compañía"
-            value={gasForm.compania}
-            onChange={e=> setGasForm(f=>({...f, compania:e.target.value}))}
-            error={!!errors.compania}
-            helperText={errors.compania}
-            fullWidth
-            size="small"
-            placeholder="Ej: Repsol, Galp, Shell..."
           />
           <TextField
             label="Fecha de caducidad"
@@ -1035,11 +1371,121 @@ export const Recursos: React.FC = () => {
             fullWidth size="small"
           />
           <TextField
-            label="Compañía"
-            value={viaTForm.compania}
-            onChange={e=> setViaTForm(f=>({...f, compania:e.target.value}))}
-            error={!!errors.compania}
-            helperText={errors.compania}
+            label="Matrícula"
+            value={viaTForm.matricula}
+            onChange={e=> setViaTForm(f=>({...f, matricula:e.target.value.toUpperCase()}))}
+            error={!!errors.matricula}
+            helperText={errors.matricula}
+            fullWidth size="small"
+            inputProps={{ maxLength: 10 }}
+          />
+          <TextField
+            label="Fecha de caducidad"
+            type="date"
+            value={viaTForm.caducidad}
+            onChange={e=> setViaTForm(f=>({...f, caducidad:e.target.value}))}
+            error={!!errors.caducidad}
+            helperText={errors.caducidad}
+            fullWidth size="small"
+            InputLabelProps={{ shrink:true }}
+          />
+        </Stack>
+      </ModernModal>
+
+      {/* Modales de Edición */}
+      <ModernModal
+        open={openEditGasDialog}
+        onClose={()=> setOpenEditGasDialog(false)}
+        title="Editar Tarjeta de Gasoil"
+        subtitle="Modificar datos de acceso para repostajes"
+        icon={<LocalGasStation />}
+        maxWidth="sm"
+        headerColor="#501b36"
+        actions={
+          <>
+            <ModernButton variant="outlined" onClick={()=> setOpenEditGasDialog(false)}>
+              Cancelar
+            </ModernButton>
+            <ModernButton onClick={handleUpdateGasCard} disabled={savingGas} startIcon={<Edit />}>{savingGas ? 'Actualizando...' : 'Actualizar'}</ModernButton>
+          </>
+        }
+      >
+        <Stack spacing={2} sx={{ mt:1 }}>
+          <TextField
+            label="P.A.N."
+            value={gasForm.pan}
+            onChange={e=> setGasForm(f=>({...f, pan:e.target.value}))}
+            error={!!errors.pan}
+            helperText={errors.pan}
+            fullWidth
+            size="small"
+          />
+          <TextField
+            label="Matrícula"
+            value={gasForm.matricula}
+            onChange={e=> setGasForm(f=>({...f, matricula:e.target.value.toUpperCase()}))}
+            error={!!errors.matricula}
+            helperText={errors.matricula}
+            fullWidth
+            size="small"
+            inputProps={{ maxLength: 10 }}
+          />
+          <TextField
+            label="Fecha de caducidad"
+            type="date"
+            value={gasForm.caducidad}
+            onChange={e=> setGasForm(f=>({...f, caducidad:e.target.value}))}
+            error={!!errors.caducidad}
+            helperText={errors.caducidad}
+            fullWidth
+            size="small"
+            InputLabelProps={{ shrink:true }}
+          />
+          <TextField
+            label="Código PIN"
+            value={gasForm.pin}
+            onChange={e=> setGasForm(f=>({...f, pin:e.target.value}))}
+            error={!!errors.pin}
+            helperText={errors.pin || 'Se almacenará en claro (TODO: cifrado)'}
+            fullWidth
+            size="small"
+            type="text"
+          />
+        </Stack>
+      </ModernModal>
+
+      <ModernModal
+        open={openEditViaTDialog}
+        onClose={()=> setOpenEditViaTDialog(false)}
+        title="Editar Dispositivo Via T"
+        subtitle="Modificar dispositivo de telepeaje"
+        icon={<CreditCard />}
+        maxWidth="sm"
+        headerColor="#501b36"
+        actions={
+          <>
+            <ModernButton variant="outlined" onClick={()=> setOpenEditViaTDialog(false)}>
+              Cancelar
+            </ModernButton>
+            <ModernButton onClick={handleUpdateViaT} disabled={savingViaT} startIcon={<Edit />}>{savingViaT ? 'Actualizando...' : 'Actualizar'}</ModernButton>
+          </>
+        }
+      >
+        <Stack spacing={2} sx={{ mt:1 }}>
+          <TextField
+            label="Nº Telepeaje"
+            value={viaTForm.numeroTelepeaje}
+            onChange={e=> setViaTForm(f=>({...f, numeroTelepeaje:e.target.value}))}
+            error={!!errors.numeroTelepeaje}
+            helperText={errors.numeroTelepeaje}
+            fullWidth size="small"
+          />
+          <TextField
+            label="P.A.N Via-T"
+            value={viaTForm.panViaT}
+            onChange={e=> setViaTForm(f=>({...f, panViaT:e.target.value}))}
+            error={!!errors.panViaT}
+            helperText={errors.panViaT}
             fullWidth size="small"
           />
           <TextField
@@ -1064,91 +1510,7 @@ export const Recursos: React.FC = () => {
         </Stack>
       </ModernModal>
 
-      {/* Modal de Mantenimiento */}
-      <Dialog
-        open={maintenanceModalOpen}
-        onClose={() => setMaintenanceModalOpen(false)}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{
-          sx: {
-            borderRadius: 3,
-            background: 'linear-gradient(135deg, #fff 0%, #f8f9fa 100%)',
-            border: '1px solid #e0e0e0',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.15)'
-          }
-        }}
-      >
-        <DialogTitle sx={{ 
-          textAlign: 'center', 
-          pb: 2,
-          borderBottom: '1px solid #e0e0e0',
-          background: 'linear-gradient(135deg, #501b36 0%, #6d2548 100%)',
-          color: 'white',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          gap: 2
-        }}>
-          <Box
-            sx={{
-              p: 2,
-              bgcolor: 'rgba(255,255,255,0.15)',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
-            <Construction sx={{ fontSize: 32 }} />
-          </Box>
-          <Typography variant="h5" sx={{ fontWeight: 700 }}>
-            Página en Mantenimiento
-          </Typography>
-        </DialogTitle>
-        
-        <DialogContent sx={{ p: 4, textAlign: 'center' }}>
-          <Typography variant="body1" sx={{ mb: 2, fontSize: '1.1rem', lineHeight: 1.6 }}>
-            Esta sección está temporalmente en mantenimiento para mejorar la experiencia del usuario.
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Estamos trabajando en nuevas funcionalidades y mejoras. Por favor, inténtalo más tarde.
-          </Typography>
-          <Box sx={{ 
-            p: 2, 
-            bgcolor: 'rgba(80,27,54,0.05)', 
-            borderRadius: 2, 
-            border: '1px solid rgba(80,27,54,0.1)' 
-          }}>
-            <Typography variant="caption" color="text.secondary">
-              Si necesitas acceso urgente a esta funcionalidad, contacta con el administrador del sistema.
-            </Typography>
-          </Box>
-        </DialogContent>
-        
-        <DialogActions sx={{ p: 3, justifyContent: 'center', borderTop: '1px solid #e0e0e0' }}>
-          <Button
-            onClick={() => setMaintenanceModalOpen(false)}
-            variant="contained"
-            sx={{
-              px: 4,
-              py: 1.5,
-              borderRadius: 3,
-              background: 'linear-gradient(135deg, #501b36 0%, #6d2548 100%)',
-              textTransform: 'none',
-              fontWeight: 600,
-              fontSize: '1rem',
-              '&:hover': {
-                background: 'linear-gradient(135deg, #3d1429 0%, #5a1d3a 100%)',
-                transform: 'translateY(-1px)',
-                boxShadow: '0 4px 12px rgba(80,27,54,0.3)'
-              }
-            }}
-          >
-            Entendido
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {/* (Modal de mantenimiento eliminado) */}
 
       <Snackbar open={snack.open} autoHideDuration={4000} onClose={()=> setSnack(s=>({...s, open:false}))} anchorOrigin={{ vertical:'bottom', horizontal:'center' }}>
         <Alert severity={snack.type} variant="filled" onClose={()=> setSnack(s=>({...s, open:false}))}>{snack.msg}</Alert>

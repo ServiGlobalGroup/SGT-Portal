@@ -465,7 +465,7 @@ export const usersAPI = {
     last_name: string;
     email: string;
     phone?: string;
-  role: 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR';
+  role: 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR' | 'P_TALLER';
     department: string;
     position?: string;
   worker_type?: 'antiguo' | 'nuevo';
@@ -716,9 +716,9 @@ export const tripsAPI = {
 };
 
 // Recursos (Fuel Cards y Via T)
-export interface FuelCardRecord { id:number; pan:string; matricula:string; caducidad:string|null; compania?:string|null; created_at:string; masked_pin:string; pin:string }
+export interface FuelCardRecord { id:number; pan:string; matricula:string; caducidad:string|null; created_at:string; masked_pin:string; pin:string }
 export interface FuelCardPage { total:number; page:number; page_size:number; items:FuelCardRecord[] }
-export interface ViaTRecord { id:number; numero_telepeaje:string; pan:string; compania?:string|null; matricula:string; caducidad:string|null; created_at:string }
+export interface ViaTRecord { id:number; numero_telepeaje:string; pan:string; matricula:string; caducidad:string|null; created_at:string }
 export interface ViaTPage { total:number; page:number; page_size:number; items:ViaTRecord[] }
 
 export const resourcesAPI = {
@@ -730,8 +730,12 @@ export const resourcesAPI = {
     if (params.page_size) sp.append('page_size', String(params.page_size));
     return api.get(`/api/resources/fuel-cards?${sp.toString()}`).then(r=>r.data as FuelCardPage);
   },
-  createFuelCard: (data: { pan:string; matricula:string; caducidad?:string; pin:string; compania?:string }): Promise<FuelCardRecord> =>
+  createFuelCard: (data: { pan:string; matricula:string; caducidad?:string; pin:string }): Promise<FuelCardRecord> =>
     api.post('/api/resources/fuel-cards', data).then(r=>r.data as FuelCardRecord),
+  updateFuelCard: (id: number, data: { pan:string; matricula:string; caducidad?:string; pin:string }): Promise<FuelCardRecord> =>
+    api.put(`/api/resources/fuel-cards/${id}`, data).then(r=>r.data as FuelCardRecord),
+  deleteFuelCard: (id: number): Promise<{message: string; id: number}> =>
+    api.delete(`/api/resources/fuel-cards/${id}`).then(r=>r.data),
   listViaTDevices: (params: { numero_telepeaje?:string; pan?:string; matricula?:string; page?:number; page_size?:number } = {}): Promise<ViaTPage> => {
     const sp = new URLSearchParams();
     if (params.numero_telepeaje) sp.append('numero_telepeaje', params.numero_telepeaje);
@@ -741,8 +745,12 @@ export const resourcesAPI = {
     if (params.page_size) sp.append('page_size', String(params.page_size));
     return api.get(`/api/resources/via-t-devices?${sp.toString()}`).then(r=>r.data as ViaTPage);
   },
-  createViaTDevice: (data: { numero_telepeaje:string; pan:string; compania?:string; matricula:string; caducidad?:string }): Promise<ViaTRecord> =>
-    api.post('/api/resources/via-t-devices', data).then(r=>r.data as ViaTRecord)
+  createViaTDevice: (data: { numero_telepeaje:string; pan:string; matricula:string; caducidad?:string }): Promise<ViaTRecord> =>
+    api.post('/api/resources/via-t-devices', data).then(r=>r.data as ViaTRecord),
+  updateViaTDevice: (id: number, data: { numero_telepeaje:string; pan:string; matricula:string; caducidad?:string }): Promise<ViaTRecord> =>
+    api.put(`/api/resources/via-t-devices/${id}`, data).then(r=>r.data as ViaTRecord),
+  deleteViaTDevice: (id: number): Promise<{message: string; id: number}> =>
+    api.delete(`/api/resources/via-t-devices/${id}`).then(r=>r.data)
 };
 
 // API de documentación

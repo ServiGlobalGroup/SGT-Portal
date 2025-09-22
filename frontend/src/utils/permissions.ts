@@ -68,6 +68,13 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
   Permission.VIEW_TRIPS, // Conductores ven viajes
     Permission.VIEW_VACATIONS,
   ],
+  P_TALLER: [
+    // Personal de Taller - acceso a documentos, vacaciones y tráfico (NO viajes)
+    Permission.VIEW_DOCUMENTS,
+    Permission.UPLOAD_DOCUMENTS,
+    Permission.VIEW_VACATIONS,
+    Permission.VIEW_TRAFFIC,  // Acceso a carpeta de tráfico
+  ],
   TRAFICO: [
     Permission.VIEW_DOCUMENTS,
     Permission.UPLOAD_DOCUMENTS,
@@ -180,6 +187,8 @@ export const getRoleText = (role: string): string => {
       return 'Tráfico';
     case 'TRABAJADOR':
       return 'Trabajador';
+    case 'P_TALLER':
+      return 'P. Taller';
     default:
       return 'Usuario';
   }
@@ -214,6 +223,8 @@ export const getRoleColor = (role: string): string => {
       return '#1976d2'; // Azul
     case 'TRABAJADOR':
       return '#388e3c'; // Verde
+    case 'P_TALLER':
+      return '#ff9800'; // Naranja para personal de taller
     default:
       return '#666666'; // Gris
   }

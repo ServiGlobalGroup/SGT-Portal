@@ -11,7 +11,9 @@ from app.services.dieta_service import DietaService
 from decimal import Decimal
 
 # Reglas backend para evitar manipulación desde clientes externos
-ALLOWED_CONCEPTS_NUEVO = { 'pernocta', 'festivos' }
+# Ampliado temporalmente para permitir grabar dietas de conductores nuevos con "canon_tti".
+# TODO: Revisar política definitiva y, si procede, volver a restringir o filtrar desde frontend.
+ALLOWED_CONCEPTS_NUEVO = { 'pernocta', 'festivos', 'canon_tti' }
 PERCENT_CONCEPT_PREFIXES = ('extraPct:',)
 EXTRA_FIXED_PREFIX = 'extra:'
 
@@ -24,9 +26,11 @@ async def create_dieta_record(
     current_user: User = Depends(get_current_user),
     x_company: str | None = Header(default=None, alias="X-Company"),
 ):
-    # Solo admins pueden crear registros de dietas (ajustar si se desea otro permiso)
+    # Roles permitidos para crear registros de dietas:
+    #  - ADMINISTRADOR y MASTER_ADMIN (pleno acceso)
+    #  - ADMINISTRACION (se habilita para carga operativa de dietas)
     role_value = getattr(current_user.role, 'value', current_user.role)
-    if role_value not in ['ADMINISTRADOR', 'MASTER_ADMIN']:
+    if role_value not in ['ADMINISTRADOR', 'MASTER_ADMIN', 'ADMINISTRACION']:
         raise HTTPException(status_code=403, detail='No autorizado')
     if not payload.order_number or not payload.order_number.strip():
         raise HTTPException(status_code=422, detail='order_number es obligatorio')
@@ -88,9 +92,13 @@ async def list_dietas(
     current_user: User = Depends(get_current_user),
     x_company: str | None = Header(default=None, alias="X-Company"),
 ):
-    # Trabajadores y rol ADMINISTRACION solo ven sus registros
+    # Visibilidad según rol:
+    #  - TRABAJADOR: siempre solo sus propios registros
+    #  - ADMINISTRACION: ahora puede ver todos SI especifica filtros (o ninguno) -> no forzamos user_id
+    #    (si se quisiera limitar a sí mismo bastaría con volver a forzar user_id aquí)
+    #  - ADMINISTRADOR / MASTER_ADMIN: todos
     role_value = str(getattr(current_user.role, 'value', current_user.role))
-    if role_value in ('TRABAJADOR', 'ADMINISTRACION'):
+    if role_value == 'TRABAJADOR':
         user_id = getattr(current_user, 'id')
     # Filtrar por compañía efectiva (permite override vía X-Company para admins)
     comp_obj = effective_company_for_request(current_user, x_company)

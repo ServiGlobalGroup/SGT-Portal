@@ -63,6 +63,17 @@ ROLE_PERMISSIONS: Dict[UserRole, Set[Permission]] = {
         Permission.DELETE_DOCUMENTS,  # Solo sus propios documentos
     },
     
+    UserRole.P_TALLER: {
+        # Personal de Taller - acceso a documentos, vacaciones y carpeta de tráfico (NO viajes)
+        Permission.VIEW_DOCUMENTS,
+        Permission.VIEW_VACATIONS,
+        Permission.VIEW_PROFILE,
+        Permission.EDIT_PROFILE,
+        Permission.UPLOAD_DOCUMENTS,
+        Permission.DELETE_DOCUMENTS,  # Solo sus propios documentos
+        Permission.VIEW_TRAFFIC,  # Acceso a carpeta de tráfico (solo lectura)
+    },
+    
     UserRole.TRAFICO: {
         # Todo lo de TRABAJADOR + gestión completa de tráfico
         Permission.VIEW_DOCUMENTS,

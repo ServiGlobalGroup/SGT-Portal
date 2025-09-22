@@ -14,6 +14,7 @@ class UserRole(enum.Enum):
     ADMINISTRACION = "ADMINISTRACION"
     TRAFICO = "TRAFICO"
     TRABAJADOR = "TRABAJADOR"
+    P_TALLER = "P_TALLER"  # Personal de Taller con permisos similares a Trabajador
 
 class UserStatus(enum.Enum):
     ACTIVO = "ACTIVO"        # Usuario activo normal
@@ -192,6 +193,20 @@ class User(Base):
             ]
             base_folders.extend(conductor_folders)
         
+        # Carpetas específicas para personal de taller (similares a conductores)
+        elif self.role.name == 'P_TALLER':
+            taller_folders = [
+                os.path.join(user_folder, "licencias_conducir"),    # Carnet de conducir
+                os.path.join(user_folder, "formacion_conductor"),   # CAP, ADR, etc.
+                os.path.join(user_folder, "certificados_medicos"), # Reconocimientos médicos
+                os.path.join(user_folder, "multas_infracciones"),  # Multas e infracciones
+                os.path.join(user_folder, "vehiculos_asignados"),  # Documentación vehículos
+                os.path.join(user_folder, "herramientas_taller"),  # Inventario herramientas
+                os.path.join(user_folder, "reparaciones"),         # Historial reparaciones
+                os.path.join(user_folder, "manuales_tecnicos"),    # Manuales y documentación técnica
+            ]
+            base_folders.extend(taller_folders)
+        
         # Carpetas específicas para personal de tráfico
         elif self.role.name == 'TRAFICO':
             trafico_folders = [
@@ -246,6 +261,9 @@ class User(Base):
                             "multas_infracciones": "  → Multas de tráfico e infracciones",
                             "tacografo": "  → Registros y descargas del tacógrafo",
                             "vehiculos_asignados": "  → ITV, seguros, fichas técnicas",
+                            "herramientas_taller": "  → Inventario y control de herramientas",
+                            "reparaciones": "  → Historial de reparaciones y mantenimiento",
+                            "manuales_tecnicos": "  → Documentación técnica y manuales",
                             "planificacion": "  → Rutas, horarios, planificación",
                             "documentos_carga": "  → CMR, albaranes, documentos de carga",
                             "clientes": "  → Contactos y documentos de clientes",

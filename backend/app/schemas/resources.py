@@ -7,6 +7,8 @@ class FuelCardBase(BaseModel):
     pan: str = Field(..., max_length=64)
     matricula: str = Field(..., max_length=16)
     caducidad: Optional[date] = None
+    # Aunque a nivel de modelo SQLAlchemy es NOT NULL, toleramos nulos legacy convirtiéndolos a '' al serializar
+    compania: str = Field(..., max_length=64, description="Compañía emisora de la tarjeta")
 
 class FuelCardCreate(FuelCardBase):
     pin: str = Field(..., min_length=1, max_length=32)
@@ -20,11 +22,14 @@ class FuelCardOut(FuelCardBase):
     @classmethod
     def from_orm_with_mask(cls, obj):
         pin_val = getattr(obj, 'pin', '') or ''
+        compania_val = getattr(obj, 'compania', '') or ''
+        # Forzar string (evitar None que provocaría 500 si la migración aun no pobló datos)
         return cls(
             id=obj.id,
             pan=obj.pan,
             matricula=obj.matricula,
             caducidad=obj.caducidad,
+            compania=compania_val,
             created_at=obj.created_at,
             masked_pin='•' * len(pin_val),
             pin=pin_val
@@ -39,6 +44,7 @@ class ViaTDeviceBase(BaseModel):
     pan: str = Field(..., max_length=64)
     matricula: str = Field(..., max_length=16)
     caducidad: Optional[date] = None
+    compania: str = Field(..., max_length=64, description="Compañía emisora del dispositivo")
 
 class ViaTDeviceCreate(ViaTDeviceBase):
     pass
