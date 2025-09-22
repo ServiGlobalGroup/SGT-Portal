@@ -1448,6 +1448,16 @@ export const Recursos: React.FC = () => {
             size="small"
           />
           <TextField
+            label="Compañía"
+            value={gasForm.compania}
+            onChange={e=> setGasForm(f=>({...f, compania:e.target.value.toUpperCase()}))}
+            error={!!errors.compania}
+            helperText={errors.compania}
+            fullWidth
+            size="small"
+            inputProps={{ maxLength: 64 }}
+          />
+          <TextField
             label="Matrícula"
             value={gasForm.matricula}
             onChange={e=> setGasForm(f=>({...f, matricula:e.target.value.toUpperCase()}))}
@@ -1506,6 +1516,15 @@ export const Recursos: React.FC = () => {
             error={!!errors.numeroTelepeaje}
             helperText={errors.numeroTelepeaje}
             fullWidth size="small"
+          />
+          <TextField
+            label="Compañía"
+            value={viaTForm.compania}
+            onChange={e=> setViaTForm(f=>({...f, compania:e.target.value.toUpperCase()}))}
+            error={!!errors.compania}
+            helperText={errors.compania}
+            fullWidth size="small"
+            inputProps={{ maxLength: 64 }}
           />
           <TextField
             label="P.A.N Via-T"
