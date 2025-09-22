@@ -166,13 +166,42 @@ async def update_user(
     """
     Actualizar un usuario existente.
     """
-    user = UserService.update_user(db, user_id, user_data)
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Usuario no encontrado"
-        )
-    return user
+    from sqlalchemy.exc import IntegrityError, DataError
+    try:
+        user = UserService.update_user(db, user_id, user_data)
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Usuario no encontrado"
+            )
+        return user
+    except IntegrityError as e:
+        # Capturar posibles errores de constraint o enum no existente
+        db.rollback()
+        msg = str(e.orig).lower() if hasattr(e, 'orig') else str(e).lower()
+        print(f"DEBUG IntegrityError: {e}")
+        print(f"DEBUG msg: {msg}")
+        if 'userrole' in msg and 'invalid input value' in msg:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Rol inválido: asegúrate de que el enum en BD incluye P_TALLER (ejecuta script add_p_taller_role.py)"
+            )
+        if 'duplicate key value' in msg and 'users_email_key' in msg:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email ya existe")
+        if 'duplicate key value' in msg and 'users_dni_nie_key' in msg:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="DNI/NIE ya existe")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Error de integridad: {msg}")
+    except DataError as e:
+        db.rollback()
+        print(f"DEBUG DataError: {e}")
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Datos inválidos: {str(e)}")
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        print(f"DEBUG Exception general: {e}")
+        print(f"DEBUG Exception type: {type(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error actualizando usuario: {str(e)}")
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def deactivate_user(
