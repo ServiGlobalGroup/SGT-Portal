@@ -6,7 +6,8 @@ import { usersAPI } from '../services/api';
 import type { User } from '../types';
 import { calculateDietas, DIETA_RATES, DietaConceptInput, DietaCalculationResult, findKilometerRangeAntiguo } from '../config/dietas';
 import { dietasAPI, distancierosAPI } from '../services/api';
-import { Add, Delete, Calculate, RestaurantMenu, History, FiberNew, Close, ArrowUpward, ArrowDownward, ArrowDropDown, Map, ArrowRightAlt, Flag, TripOrigin, Close as CloseIcon, Undo, Toll, RemoveCircleOutline, CheckCircle, Storage, Cloud, Save, SwapVert, FileDownload } from '@mui/icons-material';
+import { Add, Delete, Edit, Calculate, RestaurantMenu, History, FiberNew, Close, ArrowUpward, ArrowDownward, ArrowDropDown, Map, ArrowRightAlt, Flag, TripOrigin, Close as CloseIcon, Undo, Toll, RemoveCircleOutline, CheckCircle, Storage, Cloud, Save, SwapVert, FileDownload } from '@mui/icons-material';
+import * as XLSX from 'xlsx';
 
 import { DietasExportDialog } from '../components/DietasExportDialog';
 
@@ -31,6 +32,7 @@ interface DietaRecordRow {
   created_at: string;
   concepts: { code:string; label:string; quantity:number; rate:number; subtotal:number; }[];
   user_name?: string;
+  notes?: string;
 }
 
 // Icono Excel inline para evitar imports adicionales pesados
@@ -164,6 +166,7 @@ export const Dietas: React.FC = () => {
   // Cálculo
   const [rows, setRows] = useState<ConceptRow[]>([]);
   const [orderNumber, setOrderNumber] = useState('');
+  const [observations, setObservations] = useState('');
   const [month, setMonth] = useState<string>(new Date().toISOString().slice(0,10));
   const [kmsAntiguo, setKmsAntiguo] = useState('');
   const [result, setResult] = useState<DietaCalculationResult | null>(null);
@@ -190,6 +193,30 @@ export const Dietas: React.FC = () => {
   const [recordDetail, setRecordDetail] = useState<DietaRecordRow | null>(null);
   const [selectedRecordId, setSelectedRecordId] = useState<number | null>(null);
 
+  // Estados para edición y eliminación
+  const [editingRecord, setEditingRecord] = useState<DietaRecordRow | null>(null);
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [recordToDelete, setRecordToDelete] = useState<DietaRecordRow | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  
+  // Estados para el formulario de edición
+  const [editFormData, setEditFormData] = useState({
+    user_id: 0,
+    worker_type: '',
+    order_number: '',
+    month: '',
+    total_amount: 0,
+    concepts: [] as any[],
+    notes: ''
+  });
+  const [isUpdating, setIsUpdating] = useState(false);
+  
+  // Estados para añadir conceptos en edición
+  const [newConceptCode, setNewConceptCode] = useState('');
+  const [newConceptLabel, setNewConceptLabel] = useState('');
+  const [newConceptQuantity, setNewConceptQuantity] = useState('');
+  const [newConceptRate, setNewConceptRate] = useState('');
+
   // Export
   const exportingRef = useRef(false);
   const [showSuccess, setShowSuccess] = useState(false);
@@ -205,7 +232,9 @@ export const Dietas: React.FC = () => {
     { key:'order_number', label:'OC / Albarán', width:140 },
     { key:'total_amount', label:'Total (€)', width:110, align:'right' },
     { key:'concepts', label:'Conceptos' },
-    { key:'created_at', label:'Creado', width:170 }
+    { key:'observations', label:'Observaciones', width:200 },
+    { key:'created_at', label:'Creado', width:170 },
+    { key:'actions', label:'Acciones', width:120, align:'center' }
   ]);
   const [sortKey, setSortKey] = useState<string>('');
   const [sortDir, setSortDir] = useState<'asc'|'desc'|''>('');
@@ -408,17 +437,60 @@ export const Dietas: React.FC = () => {
         'OC / Albarán': r.order_number || '',
         Creado: formatDateTime(r.created_at),
         'Total (€)': r.total_amount.toFixed(2),
-        Conceptos: resumenConceptos
+        Conceptos: resumenConceptos,
+        Observaciones: r.notes || ''
       };
     });
   };
 
-  const exportExcel = () => {
-    // Generar CSV seguro (UTF-8 con BOM) para abrir en Excel
-    if(exportingRef.current) return; exportingRef.current = true;
+  // Función para detectar si es perfil de EMATRA (misma lógica que PDF)
+  const detectEmatraProfile = (): boolean => {
+    try {
+      // Método 1: Verificar selected_company en localStorage
+      const selectedCompany = localStorage.getItem('selected_company');
+      if (selectedCompany === 'EMATRA') {
+        return true;
+      }
+      
+      // Método 2: Verificar datos del usuario
+      const userDataRaw = localStorage.getItem('user_data');
+      if (userDataRaw) {
+        const userData = JSON.parse(userDataRaw);
+        if (userData.company === 'EMATRA' || 
+            userData.empresa === 'EMATRA' || 
+            userData.companyName?.toUpperCase().includes('EMATRA')) {
+          return true;
+        }
+        
+        if (userData.company && typeof userData.company === 'object') {
+          const companyValue = userData.company.value || userData.company.name || '';
+          if (String(companyValue).toUpperCase() === 'EMATRA') {
+            return true;
+          }
+        }
+      }
+      
+      // Método 3: Verificar contexto de sesión
+      const sessionOverride = sessionStorage.getItem('session_company_override');
+      if (sessionOverride === 'EMATRA') {
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.warn('Error detectando perfil EMATRA:', error);
+      return false;
+    }
+  };
+
+  const exportCSV = () => {
+    // Función original de CSV para compatibilidad
+    if(exportingRef.current) return; 
+    exportingRef.current = true;
+    
     try {
       const rows = buildExportRows();
-      const headers = ['#','Fecha','Conductor','Tipo','OC / Albarán','Creado','Total (€)','Conceptos'];
+      const headers = ['#','Fecha','Conductor','Tipo','OC / Albarán','Creado','Total (€)','Conceptos','Observaciones'];
       const escape = (val: any) => {
         const s = String(val ?? '');
         if(/[";,\n]/.test(s)) return '"' + s.replace(/"/g,'""') + '"';
@@ -430,9 +502,295 @@ export const Dietas: React.FC = () => {
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
       link.download = `dietas_${fecha}.csv`;
-      document.body.appendChild(link); link.click(); document.body.removeChild(link);
+      document.body.appendChild(link); 
+      link.click(); 
+      document.body.removeChild(link);
       setTimeout(()=> URL.revokeObjectURL(link.href), 2000);
-    } finally { exportingRef.current = false; }
+    } finally { 
+      exportingRef.current = false; 
+    }
+  };
+
+  // Función auxiliar para convertir imagen a base64
+  const loadImageAsBase64 = (imagePath: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('No se pudo obtener el contexto del canvas'));
+          return;
+        }
+        
+        canvas.width = img.width;
+        canvas.height = img.height;
+        ctx.drawImage(img, 0, 0);
+        
+        try {
+          const base64 = canvas.toDataURL('image/png').split(',')[1];
+          resolve(base64);
+        } catch (error) {
+          reject(error);
+        }
+      };
+      img.onerror = () => reject(new Error('Error al cargar la imagen'));
+      img.src = imagePath;
+    });
+  };
+
+  const exportExcel = async () => {
+    if(exportingRef.current) return; 
+    exportingRef.current = true;
+    
+    try {
+      const rows = buildExportRows();
+      const fecha = new Date().toLocaleDateString('es-ES');
+      const fechaArchivo = new Date().toISOString().slice(0,10);
+      
+      // Detectar empresa para branding
+      const isEmatra = detectEmatraProfile();
+      const empresaNombre = isEmatra ? 'EMATRA SL' : 'SERVI GLOBAL TRANS SL';
+      const colorEmpresa = isEmatra ? 'B71C1C' : '1f4e79'; // Rojo burdeos para Ematra, azul para SGT
+      
+      // Calcular total general
+      const totalGeneral = rows.reduce((sum, row) => {
+        const total = parseFloat(row['Total (€)'].toString().replace('€', '').replace(',', '.')) || 0;
+        return sum + total;
+      }, 0);
+      
+      // Crear un nuevo workbook
+      const wb = XLSX.utils.book_new();
+      
+      // Configurar metadatos del archivo
+      wb.Props = {
+        Title: "Informe de Dietas - SGT Portal",
+        Subject: "Registro de dietas y gastos de transporte",
+        Author: "Servi Global Trans SL",
+        CreatedDate: new Date()
+      };
+      
+      // Preparar datos para Excel con branding dinámico
+      const excelData = [
+        // Fila 1: Información corporativa
+        [empresaNombre, '', '', '', '', '', '', '', ''],
+        // Fila 2: Espaciado
+        ['', '', '', '', '', '', '', '', ''],
+        // Fila 3: Título principal
+        ['', '', 'INFORME DE DIETAS Y GASTOS DE TRANSPORTE', '', '', '', '', '', ''],
+        // Fila 4: Subtítulo con fecha
+        ['', '', `Fecha de generación: ${fecha}`, '', '', '', '', '', ''],
+        // Fila 5: Información adicional
+        ['', '', `Total de registros: ${rows.length}`, '', '', '', '', '', ''],
+        // Fila 6: Espaciado
+        ['', '', '', '', '', '', '', '', ''],
+        // Fila 7: Encabezados
+        ['#', 'Fecha', 'Conductor', 'Tipo', 'OC / Albarán', 'Creado', 'Total (€)', 'Conceptos', 'Observaciones'],
+        // Filas de datos
+        ...rows.map((row, index) => [
+          index + 1,
+          row.Fecha,
+          row.Conductor,
+          row.Tipo,
+          row['OC / Albarán'],
+          row.Creado,
+          row['Total (€)'],
+          row.Conceptos,
+          row.Observaciones
+        ]),
+        // Fila de espaciado
+        ['', '', '', '', '', '', '', '', ''],
+        // Fila de total
+        ['', '', '', '', '', 'TOTAL GENERAL:', `${totalGeneral.toFixed(2)}€`, '', '']
+      ];
+      
+      // Crear la hoja de trabajo
+      const ws = XLSX.utils.aoa_to_sheet(excelData);
+      
+      // Configurar anchos de columna
+      ws['!cols'] = [
+        { wch: 5 },   // #
+        { wch: 12 },  // Fecha
+        { wch: 25 },  // Conductor
+        { wch: 12 },  // Tipo
+        { wch: 15 },  // OC / Albarán
+        { wch: 12 },  // Creado
+        { wch: 12 },  // Total (€)
+        { wch: 40 },  // Conceptos
+        { wch: 30 }   // Observaciones
+      ];
+      
+      // Configurar alturas de filas
+      ws['!rows'] = [
+        { hpx: 30 },  // Fila 1 (empresa)
+        { hpx: 10 },  // Fila 2 (espaciado)
+        { hpx: 25 },  // Fila 3 (título)
+        { hpx: 18 },  // Fila 4 (fecha)
+        { hpx: 18 },  // Fila 5 (total registros)
+        { hpx: 15 },  // Fila 6 (espaciado)
+        { hpx: 25 },  // Fila 7 (encabezados)
+        ...rows.map(() => ({ hpx: 22 })), // Filas de datos
+        { hpx: 15 },  // Fila espaciado antes del total
+        { hpx: 25 }   // Fila total general
+      ];
+      
+      // Aplicar estilos
+      const headerRow = 7;
+      const dataStartRow = 8;
+      const totalRow = dataStartRow + rows.length + 1;
+      
+      // Estilo para el nombre de la empresa
+      if (ws['A1']) {
+        ws['A1'].s = {
+          font: { bold: true, sz: 14, color: { rgb: colorEmpresa } },
+          alignment: { horizontal: "left", vertical: "center" }
+        };
+      }
+      
+      // Estilo para el título principal
+      if (ws['C3']) {
+        ws['C3'].s = {
+          font: { bold: true, sz: 16, color: { rgb: colorEmpresa } },
+          alignment: { horizontal: "left", vertical: "center" }
+        };
+      }
+      
+      // Estilo para la fecha
+      if (ws['C4']) {
+        ws['C4'].s = {
+          font: { italic: true, sz: 11, color: { rgb: "666666" } },
+          alignment: { horizontal: "left", vertical: "center" }
+        };
+      }
+      
+      // Estilo para total de registros
+      if (ws['C5']) {
+        ws['C5'].s = {
+          font: { sz: 10, color: { rgb: "666666" } },
+          alignment: { horizontal: "left", vertical: "center" }
+        };
+      }
+      
+      // Estilos para encabezados
+      for (let col = 0; col < 9; col++) {
+        const cellRef = XLSX.utils.encode_cell({ r: headerRow - 1, c: col });
+        if (ws[cellRef]) {
+          ws[cellRef].s = {
+            font: { bold: true, color: { rgb: "ffffff" } },
+            fill: { fgColor: { rgb: colorEmpresa } },
+            alignment: { horizontal: "center", vertical: "center" },
+            border: {
+              top: { style: "thin", color: { rgb: "000000" } },
+              bottom: { style: "thin", color: { rgb: "000000" } },
+              left: { style: "thin", color: { rgb: "000000" } },
+              right: { style: "thin", color: { rgb: "000000" } }
+            }
+          };
+        }
+      }
+      
+      // Estilos para filas de datos (alternando colores)
+      for (let row = 0; row < rows.length; row++) {
+        const isEvenRow = row % 2 === 0;
+        const backgroundColor = isEvenRow ? "f8f9fa" : "ffffff";
+        
+        for (let col = 0; col < 9; col++) {
+          const cellRef = XLSX.utils.encode_cell({ r: dataStartRow - 1 + row, c: col });
+          if (ws[cellRef]) {
+            ws[cellRef].s = {
+              fill: { fgColor: { rgb: backgroundColor } },
+              alignment: { vertical: "center", wrapText: col >= 7 }, // Wrap text para conceptos y observaciones
+              border: {
+                top: { style: "thin", color: { rgb: "e0e0e0" } },
+                bottom: { style: "thin", color: { rgb: "e0e0e0" } },
+                left: { style: "thin", color: { rgb: "e0e0e0" } },
+                right: { style: "thin", color: { rgb: "e0e0e0" } }
+              }
+            };
+            
+            // Alineación especial para números y fechas
+            if (col === 0 || col === 6) { // # y Total
+              ws[cellRef].s.alignment.horizontal = "center";
+            } else if (col === 1 || col === 5) { // Fechas
+              ws[cellRef].s.alignment.horizontal = "center";
+            }
+            
+            // Formato de moneda para la columna Total
+            if (col === 6) {
+              ws[cellRef].z = '#,##0.00€';
+            }
+          }
+        }
+      }
+      
+      // Estilos para la fila de total
+      const totalCellF = XLSX.utils.encode_cell({ r: totalRow - 1, c: 5 }); // "TOTAL GENERAL:"
+      const totalCellG = XLSX.utils.encode_cell({ r: totalRow - 1, c: 6 }); // Valor total
+      
+      if (ws[totalCellF]) {
+        ws[totalCellF].s = {
+          font: { bold: true, sz: 12, color: { rgb: colorEmpresa } },
+          alignment: { horizontal: "right", vertical: "center" },
+          fill: { fgColor: { rgb: isEmatra ? "fce4ec" : "e8f4fd" } },
+          border: {
+            top: { style: "medium", color: { rgb: colorEmpresa } },
+            bottom: { style: "medium", color: { rgb: colorEmpresa } },
+            left: { style: "medium", color: { rgb: colorEmpresa } },
+            right: { style: "medium", color: { rgb: colorEmpresa } }
+          }
+        };
+      }
+      
+      if (ws[totalCellG]) {
+        ws[totalCellG].s = {
+          font: { bold: true, sz: 12, color: { rgb: colorEmpresa } },
+          alignment: { horizontal: "center", vertical: "center" },
+          fill: { fgColor: { rgb: isEmatra ? "fce4ec" : "e8f4fd" } },
+          border: {
+            top: { style: "medium", color: { rgb: colorEmpresa } },
+            bottom: { style: "medium", color: { rgb: colorEmpresa } },
+            left: { style: "medium", color: { rgb: colorEmpresa } },
+            right: { style: "medium", color: { rgb: colorEmpresa } }
+          }
+        };
+        ws[totalCellG].z = '#,##0.00€';
+      }
+      
+      // Configurar área de impresión
+      ws['!printHeader'] = [6]; // Repetir encabezados en cada página
+      ws['!margins'] = { left: 0.7, right: 0.7, top: 0.75, bottom: 0.75, header: 0.3, footer: 0.3 };
+      
+      // Mergear celdas para mejor presentación
+      ws['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } }, // Nombre empresa
+        { s: { r: 2, c: 2 }, e: { r: 2, c: 6 } }, // Título principal
+        { s: { r: 3, c: 2 }, e: { r: 3, c: 5 } }, // Fecha
+        { s: { r: 4, c: 2 }, e: { r: 4, c: 5 } }  // Total registros
+      ];
+      
+      // Agregar la hoja al workbook
+      XLSX.utils.book_append_sheet(wb, ws, "Dietas");
+      
+      // Generar y descargar el archivo
+      const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `dietas_${isEmatra ? 'ematra' : 'sgt'}_${fechaArchivo}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      setTimeout(() => URL.revokeObjectURL(link.href), 2000);
+      
+    } catch (error) {
+      console.error('Error al generar Excel:', error);
+      alert('Error al generar el archivo Excel');
+    } finally { 
+      exportingRef.current = false; 
+    }
   };
 
   // Estilo reutilizable para inputs tipo "pill" en filtros de registros
@@ -498,6 +856,142 @@ export const Dietas: React.FC = () => {
   }, [tab, filterUser, filterWorkerType, filterOrder, filterStart, filterEnd]);
 
   useEffect(() => { if (tab === 1) loadRecords(); /* cargar al entrar */ }, [tab]);
+
+  // Funciones para editar y eliminar registros
+  const handleEditRecord = (record: DietaRecordRow) => {
+    setEditFormData({
+      user_id: record.user_id,
+      worker_type: record.worker_type,
+      order_number: record.order_number || '',
+      month: record.month,
+      total_amount: Number(record.total_amount),
+      concepts: record.concepts,
+      notes: record.notes || ''
+    });
+    setEditingRecord(record);
+  };
+
+  const handleDeleteRecord = (record: DietaRecordRow) => {
+    setRecordToDelete(record);
+    setDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!recordToDelete) return;
+    
+    setIsDeleting(true);
+    try {
+      await dietasAPI.delete(recordToDelete.id);
+      setSnackbar({ open: true, message: 'Registro eliminado correctamente', severity: 'success' });
+      loadRecords(); // Recargar la lista
+      setDeleteConfirmOpen(false);
+      setRecordToDelete(null);
+    } catch (error) {
+      console.error('Error al eliminar registro:', error);
+      setSnackbar({ open: true, message: 'Error al eliminar el registro', severity: 'error' });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const saveEditedRecord = async () => {
+    if (!editingRecord) return;
+    
+    setIsUpdating(true);
+    try {
+      await dietasAPI.update(editingRecord.id, editFormData);
+      setSnackbar({ open: true, message: 'Registro actualizado correctamente', severity: 'success' });
+      loadRecords(); // Recargar la lista
+      setEditingRecord(null);
+    } catch (error) {
+      console.error('Error al actualizar registro:', error);
+      setSnackbar({ open: true, message: 'Error al actualizar el registro', severity: 'error' });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  // Funciones para manejar conceptos editables
+  const updateConcept = (idx: number, field: 'quantity' | 'rate' | 'label', value: string | number) => {
+    setEditFormData(prev => {
+      const newConcepts = [...prev.concepts];
+      const concept = { ...newConcepts[idx] };
+      
+      if (field === 'quantity') {
+        concept.quantity = typeof value === 'string' ? parseFloat(value) || 0 : value;
+      } else if (field === 'rate') {
+        concept.rate = typeof value === 'string' ? parseFloat(value) || 0 : value;
+      } else if (field === 'label') {
+        concept.label = String(value);
+      }
+      
+      // Recalcular subtotal
+      concept.subtotal = concept.quantity * concept.rate;
+      
+      newConcepts[idx] = concept;
+      
+      // Recalcular total
+      const newTotal = newConcepts.reduce((sum, c) => sum + (c.subtotal || 0), 0);
+      
+      return {
+        ...prev,
+        concepts: newConcepts,
+        total_amount: newTotal
+      };
+    });
+  };
+
+  const removeConcept = (idx: number) => {
+    setEditFormData(prev => {
+      const newConcepts = prev.concepts.filter((_, i) => i !== idx);
+      const newTotal = newConcepts.reduce((sum, c) => sum + (c.subtotal || 0), 0);
+      
+      return {
+        ...prev,
+        concepts: newConcepts,
+        total_amount: newTotal
+      };
+    });
+  };
+
+  // Función para añadir un nuevo concepto en edición
+  const addNewConceptToEdit = () => {
+    const code = newConceptCode.trim();
+    const label = newConceptLabel.trim();
+    const quantity = parseFloat(newConceptQuantity) || 0;
+    const rate = parseFloat(newConceptRate) || 0;
+    
+    if (!code || !label || quantity <= 0 || rate <= 0) {
+      setSnackbar({ open: true, message: 'Todos los campos del concepto son obligatorios', severity: 'error' });
+      return;
+    }
+    
+    const subtotal = quantity * rate;
+    const newConcept = {
+      code,
+      label,
+      quantity,
+      rate,
+      subtotal
+    };
+    
+    setEditFormData(prev => {
+      const newConcepts = [...prev.concepts, newConcept];
+      const newTotal = newConcepts.reduce((sum, c) => sum + (c.subtotal || 0), 0);
+      
+      return {
+        ...prev,
+        concepts: newConcepts,
+        total_amount: newTotal
+      };
+    });
+    
+    // Limpiar campos
+    setNewConceptCode('');
+    setNewConceptLabel('');
+    setNewConceptQuantity('');
+    setNewConceptRate('');
+  };
 
   const addExtraConcept = () => {
     const name = extraName.trim();
@@ -649,6 +1143,7 @@ export const Dietas: React.FC = () => {
     setRows([]);
     setResult(null);
     setOrderNumber('');
+    setObservations('');
     setKmsAntiguo('');
     setCalcClient('');
     setCalcRoutes([]);
@@ -1353,6 +1848,7 @@ export const Dietas: React.FC = () => {
         month,
         total_amount: result.total,
         concepts: result.concepts.map(c => ({ code: c.code, label: c.label, quantity: c.quantity, rate: c.rate, subtotal: c.subtotal })),
+        notes: observations.trim() || undefined,
       });
       setSaveMessage('Guardado correctamente');
       setShowSuccess(true);
@@ -1364,6 +1860,7 @@ export const Dietas: React.FC = () => {
         setRows([]);
         setResult(null);
         setOrderNumber('');
+        setObservations('');
         setKmsAntiguo('');
         setMonth(new Date().toISOString().slice(0,10));
         setOpenExtraDialog(false);
@@ -1630,6 +2127,7 @@ export const Dietas: React.FC = () => {
             </Box>
           )}
         </Box>
+        
         {/* Bloque Cliente/Ruta distanciero debajo */}
         {selectedDriver && driverType==='antiguo' && (
           <Box mt={2} display="flex" flexWrap="wrap" gap={2}>
@@ -1739,6 +2237,27 @@ export const Dietas: React.FC = () => {
             </Box>
           </Box>
         )}
+
+        {/* Observaciones debajo de Cliente/Ruta: input simple una línea */}
+        <Box sx={{ mt: 2 }}>
+          <TextField
+            label="Observaciones"
+            value={observations}
+            onChange={e=>setObservations(e.target.value)}
+            fullWidth
+            size="small"
+            placeholder="Notas internas (opcional)"
+            inputProps={{ maxLength: 180 }}
+            sx={{
+              ...pillFieldSx,
+              '& .MuiInputBase-root': {
+                ...pillFieldSx['& .MuiInputBase-root'],
+                textAlign: 'center'
+              },
+              '& input': { textAlign:'center' }
+            }}
+          />
+        </Box>
             <Divider sx={{ my: 3 }} />
             <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>Conceptos</Typography>
             <Stack direction="row" justifyContent="space-between" alignItems="center" mb={1}>
@@ -1822,7 +2341,26 @@ export const Dietas: React.FC = () => {
                       <TableCell align="right">{subtotal.toFixed(2)}€</TableCell>
                       <TableCell align="right">
                         <Tooltip title="Eliminar">
-                          <IconButton size="small" onClick={()=>handleRemoveRow(r.tempId)}><Delete fontSize="small" /></IconButton>
+                          <IconButton 
+                            size="small" 
+                            onClick={()=>handleRemoveRow(r.tempId)}
+                            sx={{ 
+                              color: '#d32f2f',
+                              backgroundColor: 'transparent',
+                              boxShadow: 'none',
+                              '&:hover': {
+                                backgroundColor: 'transparent',
+                                boxShadow: 'none',
+                                color: '#b71c1c'
+                              },
+                              '&:active': {
+                                backgroundColor: 'transparent',
+                                boxShadow: 'none'
+                              }
+                            }}
+                          >
+                            <Delete fontSize="small" />
+                          </IconButton>
                         </Tooltip>
                       </TableCell>
                     </TableRow>
@@ -1832,7 +2370,17 @@ export const Dietas: React.FC = () => {
             </Table>
           )}
             <Box mt={3} textAlign="right">
-              <Button variant="contained" startIcon={<Calculate />} disabled={!selectedDriver || rows.length===0 || !orderNumber.trim()} onClick={handleCalculate}>Calcular</Button>
+              <Button variant="contained" startIcon={<Calculate />} 
+                disabled={
+                  !selectedDriver || 
+                  !orderNumber.trim() || 
+                  (driverType === 'nuevo' && rows.length === 0) ||
+                  (driverType === 'antiguo' && rows.length === 0 && !kmsAntiguo)
+                } 
+                onClick={handleCalculate}
+              >
+                Calcular
+              </Button>
             </Box>
           </Paper>
         </Fade>
@@ -2756,7 +3304,72 @@ export const Dietas: React.FC = () => {
                                   {r.concepts.length>5 && <Chip size="small" label={`+${r.concepts.length-5}`}/>}
                                 </Stack>
                               ); break;
+                              case 'observations': content = (
+                                <Typography 
+                                  variant="body2" 
+                                  sx={{ 
+                                    fontSize: '0.8rem',
+                                    color: r.notes ? 'text.primary' : 'text.secondary',
+                                    fontStyle: r.notes ? 'normal' : 'italic',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                    maxWidth: '180px'
+                                  }}
+                                  title={r.notes || ''}
+                                >
+                                  {r.notes || 'Sin observaciones'}
+                                </Typography>
+                              ); break;
                               case 'created_at': content = formatDateTime(r.created_at); break;
+                              case 'actions': content = (
+                                <Stack direction="row" spacing={0.5}>
+                                  <Tooltip title="Editar registro">
+                                    <IconButton 
+                                      size="small" 
+                                      onClick={(e) => { e.stopPropagation(); handleEditRecord(r); }}
+                                      sx={{ 
+                                        color: '#1976d2',
+                                        backgroundColor: 'transparent',
+                                        boxShadow: 'none',
+                                        '&:hover': {
+                                          backgroundColor: 'transparent',
+                                          boxShadow: 'none',
+                                          color: '#0d47a1'
+                                        },
+                                        '&:active': {
+                                          backgroundColor: 'transparent',
+                                          boxShadow: 'none'
+                                        }
+                                      }}
+                                    >
+                                      <Edit fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                  <Tooltip title="Eliminar registro">
+                                    <IconButton 
+                                      size="small" 
+                                      onClick={(e) => { e.stopPropagation(); handleDeleteRecord(r); }}
+                                      sx={{ 
+                                        color: '#d32f2f',
+                                        backgroundColor: 'transparent',
+                                        boxShadow: 'none',
+                                        '&:hover': {
+                                          backgroundColor: 'transparent',
+                                          boxShadow: 'none',
+                                          color: '#b71c1c'
+                                        },
+                                        '&:active': {
+                                          backgroundColor: 'transparent',
+                                          boxShadow: 'none'
+                                        }
+                                      }}
+                                    >
+                                      <Delete fontSize="small" />
+                                    </IconButton>
+                                  </Tooltip>
+                                </Stack>
+                              ); break;
                               default: content = (r as any)[col.key];
                             }
                             return (
@@ -2797,67 +3410,48 @@ export const Dietas: React.FC = () => {
                       <Typography variant="caption">Antiguo: <strong>{totalAntiguo.toFixed(2)}€</strong></Typography>
                       <Typography variant="caption">Nuevo: <strong>{totalNuevo.toFixed(2)}€</strong></Typography>
                       <Typography variant="caption" sx={{ ml:'auto' }}>Actualizado {new Date().toLocaleTimeString()}</Typography>
-                      <Divider flexItem orientation="vertical" sx={{ mx:1 }} />
+                      
+                      {/* Botones de exportación */}
                       <Tooltip title="Exportar Excel">
                         <span>
                           <IconButton
-                            size="medium"
+                            size="small"
                             onClick={exportExcel}
                             disabled={records.length===0}
-                            disableRipple
-                            disableFocusRipple
                             sx={{
                               color:'#1D6F42',
                               background:'rgba(29,111,66,0.08)',
-                              boxShadow:'0 0 0 1px #cfd3d7',
-                              border:'none',
-                              width:46,
-                              height:42,
-                              borderRadius:12,
-                              display:'flex',
-                              alignItems:'center',
-                              justifyContent:'center',
-                              '& svg':{ width:24, height:24 },
+                              border:'1px solid rgba(29,111,66,0.2)',
+                              width:36,
+                              height:36,
+                              borderRadius:2,
                               '&:hover':{ background:'rgba(29,111,66,0.12)', color:'#17894e' },
-                              '&:active':{ background:'rgba(29,111,66,0.18)', transform:'scale(0.94)' },
-                              '&:focus,&:focus-visible':{ outline:'none', background:'rgba(29,111,66,0.15)' },
-                              '& .MuiTouchRipple-root':{ display:'none' },
-                              '&.Mui-disabled':{ color:'#1D6F4255', background:'rgba(29,111,66,0.05)' }
+                              '&:disabled':{ color:'#1D6F4255', background:'rgba(29,111,66,0.05)' }
                             }}
                           >
-                            <ExcelIcon size={22} />
+                            <ExcelIcon size={18} />
                           </IconButton>
                         </span>
                       </Tooltip>
 
-                      <Tooltip title="Exportar PDF Profesional (Compatible con Subida Masiva)">
+                      <Tooltip title="Exportar PDF Profesional">
                         <span>
                           <IconButton
-                            size="medium"
+                            size="small"
                             onClick={() => setExportDialogOpen(true)}
                             disabled={records.length===0}
-                            disableRipple
-                            disableFocusRipple
                             sx={{
                               color:'#501b36',
                               background:'rgba(80,27,54,0.08)',
-                              boxShadow:'0 0 0 1px #cfd3d7',
-                              border:'none',
-                              width:46,
-                              height:42,
-                              borderRadius:12,
-                              display:'flex',
-                              alignItems:'center',
-                              justifyContent:'center',
-                              '& svg':{ fontSize:24 },
+                              border:'1px solid rgba(80,27,54,0.2)',
+                              width:36,
+                              height:36,
+                              borderRadius:2,
                               '&:hover':{ background:'rgba(80,27,54,0.12)', color:'#3c1329' },
-                              '&:active':{ background:'rgba(80,27,54,0.18)', transform:'scale(0.94)' },
-                              '&:focus,&:focus-visible':{ outline:'none', background:'rgba(80,27,54,0.15)' },
-                              '& .MuiTouchRipple-root':{ display:'none' },
-                              '&.Mui-disabled':{ color:'#501b3655', background:'rgba(80,27,54,0.05)' }
+                              '&:disabled':{ color:'#501b3655', background:'rgba(80,27,54,0.05)' }
                             }}
                           >
-                            <FileDownload fontSize="inherit" />
+                            <FileDownload fontSize="small" />
                           </IconButton>
                         </span>
                       </Tooltip>
@@ -2955,6 +3549,16 @@ export const Dietas: React.FC = () => {
               <Typography variant="body2"><strong>OC / Albarán:</strong> {recordDetail.order_number || '-'}</Typography>
               <Typography variant="body2"><strong>Tipo:</strong> {recordDetail.worker_type}</Typography>
               <Typography variant="body2"><strong>Total:</strong> {Number(recordDetail.total_amount).toFixed(2)}€</Typography>
+              {recordDetail.notes && (
+                <Box sx={{ mt: 1, p: 1.5, bgcolor: 'grey.50', borderRadius: 1, borderLeft: '4px solid #2196f3' }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5, color: 'primary.main' }}>
+                    Observaciones:
+                  </Typography>
+                  <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
+                    {recordDetail.notes}
+                  </Typography>
+                </Box>
+              )}
               <Typography variant="body2"><strong>Creado:</strong> {formatDateTime(recordDetail.created_at)}</Typography>
             </Stack>
           )}
@@ -3013,6 +3617,279 @@ export const Dietas: React.FC = () => {
           Registro guardado correctamente
         </MuiAlert>
       </Snackbar>
+
+      {/* Diálogo de confirmación de eliminación */}
+      <Dialog
+        open={deleteConfirmOpen}
+        onClose={() => !isDeleting && setDeleteConfirmOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>
+          <Typography variant="h6" fontWeight={600}>
+            Confirmar eliminación
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            ¿Estás seguro de que deseas eliminar este registro de dieta?
+          </Typography>
+          {recordToDelete && (
+            <Box sx={{ p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+              <Typography variant="body2">
+                <strong>Conductor:</strong> {recordToDelete.user_name || recordToDelete.user_id}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Fecha:</strong> {formatDate(recordToDelete.month)}
+              </Typography>
+              <Typography variant="body2">
+                <strong>Total:</strong> {Number(recordToDelete.total_amount).toFixed(2)}€
+              </Typography>
+            </Box>
+          )}
+          <Typography variant="body2" color="error" sx={{ mt: 2 }}>
+            Esta acción no se puede deshacer.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setDeleteConfirmOpen(false)}
+            disabled={isDeleting}
+          >
+            Cancelar
+          </Button>
+          <Button 
+            onClick={confirmDelete}
+            color="error" 
+            variant="contained"
+            disabled={isDeleting}
+          >
+            {isDeleting ? 'Eliminando...' : 'Eliminar'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Diálogo de edición */}
+      <Dialog
+        open={Boolean(editingRecord)}
+        onClose={() => !isUpdating && setEditingRecord(null)}
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle>
+          <Typography variant="h6" fontWeight={600}>
+            Editar registro de dieta
+          </Typography>
+        </DialogTitle>
+        <DialogContent dividers>
+          {editingRecord && (
+            <Stack spacing={3}>
+              <Box>
+                <Typography variant="subtitle1" fontWeight={600} mb={1}>
+                  Información del registro
+                </Typography>
+                <Stack spacing={2}>
+                  <TextField
+                    label="Número de orden/albarán"
+                    value={editFormData.order_number}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, order_number: e.target.value }))}
+                    fullWidth
+                    size="small"
+                  />
+                  <TextField
+                    label="Fecha"
+                    type="date"
+                    value={editFormData.month}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, month: e.target.value }))}
+                    fullWidth
+                    size="small"
+                    InputLabelProps={{ shrink: true }}
+                  />
+                  <Box sx={{ p: 2, bgcolor: 'info.light', borderRadius: 1, color: 'info.contrastText' }}>
+                    <Typography variant="body2">
+                      <strong>Tipo de trabajador:</strong> {editFormData.worker_type === 'nuevo' ? 'NUEVO' : 'ANTIGUO'} (no editable)
+                    </Typography>
+                  </Box>
+                  <TextField
+                    label="Notas"
+                    value={editFormData.notes}
+                    onChange={(e) => setEditFormData(prev => ({ ...prev, notes: e.target.value }))}
+                    fullWidth
+                    size="small"
+                    multiline
+                    rows={2}
+                  />
+                </Stack>
+              </Box>
+
+              <Box>
+                <Typography variant="subtitle1" fontWeight={600} mb={1}>
+                  Conceptos ({editFormData.concepts.length})
+                </Typography>
+                <Box sx={{ border: '1px solid #e0e0e0', borderRadius: 1, overflow: 'hidden' }}>
+                  <Table size="small">
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Concepto</TableCell>
+                        <TableCell align="right">Cantidad</TableCell>
+                        <TableCell align="right">Importe</TableCell>
+                        <TableCell align="right">Subtotal</TableCell>
+                        <TableCell align="center" width={60}>Acciones</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {editFormData.concepts.map((concept, idx) => (
+                        <TableRow key={idx}>
+                          <TableCell>
+                            <TextField
+                              size="small"
+                              variant="outlined"
+                              value={concept.label || concept.code}
+                              onChange={(e) => updateConcept(idx, 'label', e.target.value)}
+                              sx={{ minWidth: 120 }}
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            <TextField
+                              size="small"
+                              variant="outlined"
+                              type="number"
+                              value={concept.quantity}
+                              onChange={(e) => updateConcept(idx, 'quantity', e.target.value)}
+                              inputProps={{ min: 0, step: 0.1 }}
+                              sx={{ width: 80 }}
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            <TextField
+                              size="small"
+                              variant="outlined"
+                              type="number"
+                              value={concept.rate}
+                              onChange={(e) => updateConcept(idx, 'rate', e.target.value)}
+                              inputProps={{ min: 0, step: 0.01 }}
+                              sx={{ width: 80 }}
+                            />
+                          </TableCell>
+                          <TableCell align="right">
+                            <Typography variant="body2" fontWeight={600}>
+                              {concept.subtotal?.toFixed(2)}€
+                            </Typography>
+                          </TableCell>
+                          <TableCell align="center">
+                            <Tooltip title="Eliminar concepto">
+                              <IconButton
+                                size="small"
+                                onClick={() => removeConcept(idx)}
+                                disabled={isUpdating}
+                                sx={{ 
+                                  color: '#d32f2f',
+                                  backgroundColor: 'transparent',
+                                  boxShadow: 'none',
+                                  '&:hover': {
+                                    backgroundColor: 'transparent',
+                                    boxShadow: 'none',
+                                    color: '#b71c1c'
+                                  },
+                                  '&:active': {
+                                    backgroundColor: 'transparent',
+                                    boxShadow: 'none'
+                                  },
+                                  '&:disabled': {
+                                    color: '#ccc',
+                                    backgroundColor: 'transparent'
+                                  }
+                                }}
+                              >
+                                <Delete fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </Box>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                  <strong>Total:</strong> {editFormData.total_amount.toFixed(2)}€
+                </Typography>
+                <Typography variant="body2" color="info.main" sx={{ mt: 1 }}>
+                  Puedes editar los conceptos directamente. Los cambios en cantidad e importe recalcularán automáticamente el total.
+                </Typography>
+
+                {/* Sección para añadir nuevos conceptos */}
+                <Box sx={{ mt: 2, p: 2, border: '1px solid #e0e0e0', borderRadius: 1, bgcolor: 'grey.50' }}>
+                  <Typography variant="subtitle2" fontWeight={600} mb={2}>
+                    Añadir nuevo concepto
+                  </Typography>
+                  <Stack spacing={2}>
+                    <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+                      <TextField
+                        label="Código"
+                        value={newConceptCode}
+                        onChange={(e) => setNewConceptCode(e.target.value)}
+                        size="small"
+                        sx={{ minWidth: 120 }}
+                        placeholder="ej: pernocta"
+                      />
+                      <TextField
+                        label="Etiqueta"
+                        value={newConceptLabel}
+                        onChange={(e) => setNewConceptLabel(e.target.value)}
+                        size="small"
+                        sx={{ minWidth: 150 }}
+                        placeholder="ej: Pernoctación"
+                      />
+                      <TextField
+                        label="Cantidad"
+                        type="number"
+                        value={newConceptQuantity}
+                        onChange={(e) => setNewConceptQuantity(e.target.value)}
+                        size="small"
+                        sx={{ width: 100 }}
+                        inputProps={{ min: 0, step: 0.1 }}
+                      />
+                      <TextField
+                        label="Importe"
+                        type="number"
+                        value={newConceptRate}
+                        onChange={(e) => setNewConceptRate(e.target.value)}
+                        size="small"
+                        sx={{ width: 100 }}
+                        inputProps={{ min: 0, step: 0.01 }}
+                      />
+                      <Button
+                        variant="contained"
+                        onClick={addNewConceptToEdit}
+                        disabled={isUpdating}
+                        startIcon={<Add />}
+                        sx={{ height: 'fit-content' }}
+                      >
+                        Añadir
+                      </Button>
+                    </Box>
+                  </Stack>
+                </Box>
+              </Box>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setEditingRecord(null)}
+            disabled={isUpdating}
+          >
+            Cancelar
+          </Button>
+          <Button 
+            onClick={saveEditedRecord}
+            variant="contained"
+            disabled={isUpdating}
+          >
+            {isUpdating ? 'Guardando...' : 'Guardar cambios'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Diálogo de exportación de PDFs profesional */}
       <DietasExportDialog

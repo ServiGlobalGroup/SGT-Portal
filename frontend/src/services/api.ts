@@ -558,7 +558,17 @@ export const dietasAPI = {
     if (params?.order_number) sp.append('order_number', params.order_number);
     return api.get(`/api/dietas/?${sp.toString()}`).then(r=>r.data as DietaRecord[]);
   },
-  get: (id: number): Promise<DietaRecord> => api.get(`/api/dietas/${id}`).then(r=>r.data)
+  get: (id: number): Promise<DietaRecord> => api.get(`/api/dietas/${id}`).then(r=>r.data),
+  update: (id: number, data: {
+    user_id: number;
+    worker_type: string;
+    order_number?: string;
+    month: string;
+    total_amount: number;
+    concepts: { code: string; label: string; quantity: number; rate: number; subtotal: number; }[];
+    notes?: string;
+  }): Promise<DietaRecord> => api.put(`/api/dietas/${id}`, data).then(r=>r.data),
+  delete: (id: number): Promise<void> => api.delete(`/api/dietas/${id}`).then(r=>r.data)
 };
 
 // API Distancieros

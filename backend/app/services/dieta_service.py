@@ -51,3 +51,34 @@ class DietaService:
         if end_date:
             q = q.filter(DietaRecord.month <= end_date)
         return q.order_by(DietaRecord.created_at.desc()).all()
+
+    @staticmethod
+    def update(db: Session, record_id: int, data: DietaRecordCreate) -> Optional[DietaRecord]:
+        """Actualiza un registro de dieta existente"""
+        record = db.query(DietaRecord).filter(DietaRecord.id == record_id).first()
+        if not record:
+            return None
+        
+        # Actualizar campos
+        record.user_id = data.user_id
+        record.worker_type = data.worker_type
+        record.order_number = data.order_number
+        record.month = data.month
+        record.total_amount = data.total_amount
+        record.concepts = [c.dict() for c in data.concepts]
+        record.notes = data.notes
+        
+        db.commit()
+        db.refresh(record)
+        return record
+
+    @staticmethod
+    def delete(db: Session, record_id: int) -> bool:
+        """Elimina un registro de dieta"""
+        record = db.query(DietaRecord).filter(DietaRecord.id == record_id).first()
+        if not record:
+            return False
+        
+        db.delete(record)
+        db.commit()
+        return True

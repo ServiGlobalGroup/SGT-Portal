@@ -31,6 +31,7 @@ export const DIETA_RATES: DietaRate[] = [
   { code: 'canon_tti', label: 'Canon TTI', unit: 'ud', amount: 20 }, // Disponible para antiguo y nuevo
   { code: 'adr', label: 'ADR (+5% tramo kms)', unit: 'ud', percentKmTramo: 0.05, onlyFor: 'antiguo' },
   { code: 'reefer', label: 'Reefer (+10% tramo kms)', unit: 'ud', percentKmTramo: 0.10, onlyFor: 'antiguo' },
+  { code: 'pernocta_antiguo', label: 'Pernocta', unit: 'dia', amount: 40, onlyFor: 'antiguo' },
   // Nuevos: solo pernocta y festivos, ambos 50€
   { code: 'pernocta', label: 'Pernocta', unit: 'dia', amount: 50, onlyFor: 'nuevo' },
   { code: 'festivos', label: 'Festivos', unit: 'ud', amount: 50, onlyFor: 'nuevo' },

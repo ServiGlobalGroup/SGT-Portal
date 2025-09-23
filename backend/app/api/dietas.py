@@ -140,3 +140,68 @@ async def get_dieta_record(
             f"{getattr(user,'first_name','').strip()} {getattr(user,'last_name','').strip()}".strip() or None
         )
     return resp
+
+@router.put('/{record_id}', response_model=DietaRecordResponse)
+async def update_dieta_record(
+    record_id: int,
+    payload: DietaRecordCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    x_company: str | None = Header(default=None, alias="X-Company"),
+):
+    # Verificar que el registro existe y el usuario tiene permisos
+    existing_record = DietaService.get(db, record_id)
+    if not existing_record:
+        raise HTTPException(status_code=404, detail='Registro no encontrado')
+    
+    # Restringir por compañía
+    comp_obj = effective_company_for_request(current_user, x_company)
+    if comp_obj is not None and getattr(existing_record, 'company', None) not in (None, comp_obj):
+        raise HTTPException(status_code=404, detail='Registro no encontrado')
+    
+    # Verificar permisos: Solo administradores o el propietario del registro
+    role_value = str(getattr(current_user.role, 'value', current_user.role))
+    if role_value == 'TRABAJADOR' and existing_record.user_id != getattr(current_user, 'id'):
+        raise HTTPException(status_code=403, detail='No autorizado para editar este registro')
+    
+    # Actualizar el registro
+    updated_record = DietaService.update(db, record_id, payload)
+    if not updated_record:
+        raise HTTPException(status_code=500, detail='Error al actualizar el registro')
+    
+    resp = DietaRecordResponse.model_validate(updated_record, from_attributes=True)
+    user = getattr(updated_record, 'user', None)
+    if user:
+        resp.user_name = getattr(user, 'full_name', None) or (
+            f"{getattr(user,'first_name','').strip()} {getattr(user,'last_name','').strip()}".strip() or None
+        )
+    return resp
+
+@router.delete('/{record_id}')
+async def delete_dieta_record(
+    record_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    x_company: str | None = Header(default=None, alias="X-Company"),
+):
+    # Verificar que el registro existe y el usuario tiene permisos
+    existing_record = DietaService.get(db, record_id)
+    if not existing_record:
+        raise HTTPException(status_code=404, detail='Registro no encontrado')
+    
+    # Restringir por compañía
+    comp_obj = effective_company_for_request(current_user, x_company)
+    if comp_obj is not None and getattr(existing_record, 'company', None) not in (None, comp_obj):
+        raise HTTPException(status_code=404, detail='Registro no encontrado')
+    
+    # Verificar permisos: Solo administradores o el propietario del registro
+    role_value = str(getattr(current_user.role, 'value', current_user.role))
+    if role_value == 'TRABAJADOR' and existing_record.user_id != getattr(current_user, 'id'):
+        raise HTTPException(status_code=403, detail='No autorizado para eliminar este registro')
+    
+    # Eliminar el registro
+    success = DietaService.delete(db, record_id)
+    if not success:
+        raise HTTPException(status_code=500, detail='Error al eliminar el registro')
+    
+    return {"message": "Registro eliminado correctamente"}

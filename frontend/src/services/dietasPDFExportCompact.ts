@@ -57,7 +57,7 @@ export class DietasPDFExporter {
 
     try {
       // Cargar logo de EMATRA
-      this.logoEmatraBase64 = await this.imageToBase64('/images/Ematra.webp');
+      this.logoEmatraBase64 = await this.imageToBase64('/images/Ematra burdeos y amarillo.webp');
       console.log('✅ Logo EMATRA cargado:', this.logoEmatraBase64 ? 'Sí' : 'No');
     } catch (error) {
       console.warn('❌ No se pudo cargar el logo de EMATRA:', error);
