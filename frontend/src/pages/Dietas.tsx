@@ -20,7 +20,7 @@ declare global {
   var google: any; // simplificado
 }
 
-interface ConceptRow extends DietaConceptInput { tempId: string; }
+interface ConceptRow extends DietaConceptInput { tempId: string; customRate?: number; }
 
 interface DietaRecordRow {
   id: number;
@@ -1807,11 +1807,26 @@ export const Dietas: React.FC = () => {
   }, [routeStats, disabledLegs]);
 
   const handleAddRow = () => {
-  setRows(prev => [...prev, { tempId: safeRandomId(), code: availableRates[0]?.code || '', quantity: 1 }]);
+    const firstCode = availableRates[0]?.code || '';
+    const rateDef = availableRates.find(r => r.code === firstCode);
+    setRows(prev => [...prev, { tempId: safeRandomId(), code: firstCode, quantity: 1, customRate: rateDef?.variable ? (rateDef.amount ?? 0) : undefined }]);
   };
 
   const handleChangeRow = (tempId: string, patch: Partial<ConceptRow>) => {
-    setRows(prev => prev.map(r => r.tempId === tempId ? { ...r, ...patch } : r));
+    setRows(prev => prev.map(r => {
+      if (r.tempId !== tempId) return r;
+      const next = { ...r, ...patch } as ConceptRow;
+      // Si cambia el código, ajustar customRate según si es variable
+      if (patch.code) {
+        const def = availableRates.find(ar => ar.code === patch.code);
+        if (def?.variable) {
+          next.customRate = typeof next.customRate === 'number' ? next.customRate : (def.amount ?? 0);
+        } else {
+          delete next.customRate;
+        }
+      }
+      return next;
+    }));
   };
 
   const handleRemoveRow = (tempId: string) => {
@@ -1827,7 +1842,7 @@ export const Dietas: React.FC = () => {
         driverType,
         orderNumber,
         month,
-        concepts: rows.map(r => ({ code: r.code, quantity: r.quantity })),
+        concepts: rows.map(r => ({ code: r.code, quantity: r.quantity, customRate: r.customRate })),
         kmsAntiguo: driverType === 'antiguo' && kmsAntiguo ? Number(kmsAntiguo) : undefined,
       };
       const calc = calculateDietas(input);
@@ -1847,7 +1862,7 @@ export const Dietas: React.FC = () => {
         order_number: orderNumber || undefined,
         month,
         total_amount: result.total,
-        concepts: result.concepts.map(c => ({ code: c.code, label: c.label, quantity: c.quantity, rate: c.rate, subtotal: c.subtotal })),
+  concepts: result.concepts.map(c => ({ code: c.code, label: c.label, quantity: c.quantity, rate: c.rate, subtotal: c.subtotal })),
         notes: observations.trim() || undefined,
       });
       setSaveMessage('Guardado correctamente');
@@ -2347,7 +2362,21 @@ export const Dietas: React.FC = () => {
                         <TextField type="number" size="small" value={r.quantity} inputProps={{min:0, step:0.5}} onChange={e=>handleChangeRow(r.tempId,{quantity:Number(e.target.value)})} />
                       </TableCell>
                       <TableCell align="right">
-                        {displayRate.toFixed(2)}€
+                        {rate?.variable ? (
+                          <TextField
+                            type="number"
+                            size="small"
+                            value={r.customRate ?? rate.amount ?? 0}
+                            inputProps={{ min:0, step:0.01 }}
+                            onChange={e=>{
+                              const val = Number(e.target.value);
+                              handleChangeRow(r.tempId,{ customRate: isNaN(val)? 0 : val });
+                            }}
+                            sx={{ width:90 }}
+                          />
+                        ) : (
+                          `${displayRate.toFixed(2)}€`
+                        )}
                       </TableCell>
                       <TableCell align="right">{subtotal.toFixed(2)}€</TableCell>
                       <TableCell align="right">

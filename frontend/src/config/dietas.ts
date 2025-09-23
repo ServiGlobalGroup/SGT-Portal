@@ -13,6 +13,7 @@ export interface DietaRate {
   category?: 'nacional' | 'internacional';
   onlyFor?: 'nuevo' | 'antiguo'; // Restringir a tipo de conductor si aplica
   percentKmTramo?: number;   // Si es un recargo porcentual sobre el importe del tramo kms (ej: ADR 0.05, Reefer 0.10)
+  variable?: boolean;        // Si true, el importe es editable por el usuario (se ignora amount fijo y se usa customRate)
 }
 
 export const DIETA_RATES: DietaRate[] = [
@@ -31,9 +32,9 @@ export const DIETA_RATES: DietaRate[] = [
   { code: 'canon_tti', label: 'Canon TTI', unit: 'ud', amount: 20 }, // Disponible para antiguo y nuevo
   { code: 'adr', label: 'ADR (+5% tramo kms)', unit: 'ud', percentKmTramo: 0.05, onlyFor: 'antiguo' },
   { code: 'reefer', label: 'Reefer (+10% tramo kms)', unit: 'ud', percentKmTramo: 0.10, onlyFor: 'antiguo' },
-  { code: 'pernocta_antiguo', label: 'Pernocta', unit: 'dia', amount: 40, onlyFor: 'antiguo' },
+  { code: 'pernocta_antiguo', label: 'Pernocta', unit: 'dia', amount: 40, onlyFor: 'antiguo', variable: true },
   // Nuevos: solo pernocta y festivos, ambos 50€
-  { code: 'pernocta', label: 'Pernocta', unit: 'dia', amount: 50, onlyFor: 'nuevo' },
+  { code: 'pernocta', label: 'Pernocta', unit: 'dia', amount: 50, onlyFor: 'nuevo', variable: true },
   { code: 'festivos', label: 'Festivos', unit: 'ud', amount: 50, onlyFor: 'nuevo' },
 ];
 
@@ -50,6 +51,7 @@ export const classifyDriverByHireDate = (hireDate?: string): 'nuevo' | 'antiguo'
 export interface DietaConceptInput {
   code: string;
   quantity: number; // puede ser decimal (ej: 0.5)
+  customRate?: number; // Importe manual cuando el concepto es variable (p.ej. pernocta)
 }
 
 export interface DietaCalculationInput {
@@ -147,6 +149,10 @@ export const calculateDietas = (input: DietaCalculationInput): DietaCalculationR
     const rate = DIETA_RATES.find(r => r.code === c.code);
     if (!rate) throw new Error(`Tarifa no encontrada para concepto ${c.code}`);
     let unitAmount = rate.amount ?? 0;
+    // Sustituir por customRate si la tarifa es variable y se ha proporcionado
+    if (rate.variable && typeof c.customRate === 'number' && !isNaN(c.customRate)) {
+      unitAmount = c.customRate;
+    }
     // percentKmTramo se aplica después de conocer tramo, lo dejamos temporal con placeholder y recalculamos más abajo
     if (!rate.percentKmTramo) {
       concepts.push({
