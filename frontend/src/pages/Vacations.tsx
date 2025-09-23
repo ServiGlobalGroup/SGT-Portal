@@ -769,12 +769,15 @@ export const Vacations: React.FC = () => {
     return diffDays + 1; // +1 para incluir el día de inicio
   };
 
+  // Formatea un string YYYY-MM-DD (o ISO) sin provocar desfase por huso horario.
+  // Evita usar `new Date(dateString)` porque si llega sin hora lo interpreta como UTC y puede restar un día en local.
   const formatDate = (dateString: string): string => {
-    return new Date(dateString).toLocaleDateString('es-ES', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric'
-    });
+    if (!dateString) return '';
+    // Si viene en ISO completo, extraer la parte de fecha
+    const ymd = dateString.length > 10 ? dateString.slice(0,10) : dateString;
+    const [y,m,d] = ymd.split('-').map(v=>parseInt(v,10));
+    if(!y||!m||!d) return dateString;
+    return `${String(d).padStart(2,'0')}/${String(m).padStart(2,'0')}/${y}`;
   };
 
   const getStatusIcon = (status: string) => {
