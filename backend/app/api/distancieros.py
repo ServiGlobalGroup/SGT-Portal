@@ -18,6 +18,7 @@ class GoogleRouteCreate(BaseModel):
     polyline: str | None = None
     variant: str = 'NOTOLLS'  # NOTOLLS | TOLLS
     uses_tolls: bool | None = None
+    waypoints: list[str] | None = None  # Multi-tramo (ordenados). En enfoque rápido se codifican en destination.
 
 class GoogleRouteResponse(BaseModel):
     origin: str
@@ -139,13 +140,18 @@ async def get_google_cached_route(
     destination: str,
     mode: str = 'DRIVING',
     variant: str = 'NOTOLLS',
+    waypoints: Optional[str] = Query(None, description="Waypoints separados por || en orden"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     role_value = getattr(current_user.role, 'value', current_user.role)
     if role_value not in ['ADMINISTRADOR', 'MASTER_ADMIN', 'TRAFICO', 'TRABAJADOR', 'ADMINISTRACION']:
         raise HTTPException(status_code=403, detail='No autorizado')
-    entity = DistancieroService.get_cached_route(db, origin, destination, mode, variant=variant)
+    wp_list = []
+    if waypoints:
+        # Split seguro, ignorando vacíos
+        wp_list = [w.strip() for w in waypoints.split('||') if w.strip()]
+    entity = DistancieroService.get_cached_route(db, origin, destination, mode, variant=variant, waypoints=wp_list)
     if not entity:
         raise HTTPException(status_code=404, detail='No caché')
     return GoogleRouteResponse(  # type: ignore[arg-type]
@@ -178,8 +184,9 @@ async def save_google_route(
         km=payload.km,
         duration_sec=payload.duration_sec,
         polyline=payload.polyline,
-    variant=payload.variant,
-    uses_tolls=payload.uses_tolls
+        variant=payload.variant,
+        uses_tolls=payload.uses_tolls,
+        waypoints=payload.waypoints or []
     )
     return GoogleRouteResponse(  # type: ignore[arg-type]
         origin=getattr(entity, 'origin', None) or payload.origin,

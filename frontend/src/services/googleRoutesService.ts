@@ -33,8 +33,11 @@ api.interceptors.response.use(
 );
 
 export const googleRoutesService = {
-  async getCached(origin: string, destination: string, mode: string = 'DRIVING', variant: 'NOTOLLS' | 'TOLLS' = 'NOTOLLS'): Promise<GoogleRouteCache | null> {
+  async getCached(origin: string, destination: string, mode: string = 'DRIVING', variant: 'NOTOLLS' | 'TOLLS' = 'NOTOLLS', waypoints?: string[]): Promise<GoogleRouteCache | null> {
     const params = new URLSearchParams({ origin, destination, mode, variant });
+    if(waypoints && waypoints.length){
+      params.set('waypoints', waypoints.join('||'));
+    }
     try {
       const r = await api.get(`/api/distancieros/google/route?${params.toString()}`);
       return r.data as GoogleRouteCache;
@@ -43,7 +46,7 @@ export const googleRoutesService = {
       throw e;
     }
   },
-  async save(route: { origin: string; destination: string; mode?: string; km: number; duration_sec?: number; polyline?: string; variant?: 'NOTOLLS' | 'TOLLS'; uses_tolls?: boolean; }): Promise<GoogleRouteCache> {
+  async save(route: { origin: string; destination: string; mode?: string; km: number; duration_sec?: number; polyline?: string; variant?: 'NOTOLLS' | 'TOLLS'; uses_tolls?: boolean; waypoints?: string[]; }): Promise<GoogleRouteCache> {
     const r = await api.post('/api/distancieros/google/route', route);
     return r.data as GoogleRouteCache;
   }

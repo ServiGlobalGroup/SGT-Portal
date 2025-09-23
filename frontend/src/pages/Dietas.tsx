@@ -1530,14 +1530,17 @@ export const Dietas: React.FC = () => {
       placeMarkers(candidates[selected]);
     };
 
-    // Intentar caché sólo cuando no hay waypoints Y usuario permite caché
-  if(cleanWaypoints.length === 0 && useRouteCache){
+    // Intentar caché:
+    //  - Rutas simples: sólo si el usuario habilita caché (useRouteCache)
+    //  - Rutas multi-tramo: siempre (para no gastar tokens de nuevo)
+  if((cleanWaypoints.length === 0 && useRouteCache) || (cleanWaypoints.length>0)){
       try {
         const { googleRoutesService } = await import('../services/googleRoutesService');
-    // Intentar primero ruta sin peaje
-    console.log('🔍 Buscando rutas en caché:', routeOrigin, 'a', routeDestination);
-    const cachedNo = await googleRoutesService.getCached(routeOrigin, routeDestination, 'DRIVING','NOTOLLS');
-    const cachedToll = await googleRoutesService.getCached(routeOrigin, routeDestination, 'DRIVING','TOLLS');
+    // Intentar primero ruta sin peaje (pasando waypoints si los hay)
+    console.log('🔍 Buscando rutas en caché:', routeOrigin, 'a', routeDestination, cleanWaypoints.length? `(multitramos=${cleanWaypoints.length})` : '');
+    const wpArg = cleanWaypoints.length? cleanWaypoints : undefined;
+    const cachedNo = await googleRoutesService.getCached(routeOrigin, routeDestination, 'DRIVING','NOTOLLS', wpArg);
+    const cachedToll = await googleRoutesService.getCached(routeOrigin, routeDestination, 'DRIVING','TOLLS', wpArg);
     console.log('📋 Resultado caché - SinPeaje:', cachedNo ? `✅ ${cachedNo.km}km` : '❌', 'ConPeaje:', cachedToll ? `✅ ${cachedToll.km}km` : '❌');
     
     // Prioridad: si tenemos al menos la sin peaje la usamos; luego añadimos (on-demand) la de peaje tras dibujar
@@ -1716,21 +1719,23 @@ export const Dietas: React.FC = () => {
       drawAllPolylines(unique,0);
       setRouteStats(base);
       console.log('🚗 Rutas seleccionadas', unique.map((c:any,i:number)=>({i, summary:c.route?.summary, seconds:c.seconds, meters:c.meters, usesTolls:c.usesTolls, tollReason:c.tollReason||null })));
-      // Guardar en caché si no hay waypoints Y usuario opta por caché
-      if(cleanWaypoints.length===0 && useRouteCache){
+      // Guardar en caché rutas:
+      //  - Si NO hay waypoints y usuario permite caché (comportamiento previo)
+      //  - Si HAY waypoints: guardar SIEMPRE (auto-guardado multi-tramo rápido)
+      if((cleanWaypoints.length===0 && useRouteCache) || (cleanWaypoints.length>0)){
         try {
           const { googleRoutesService } = await import('../services/googleRoutesService');
           // Guardar ambas variantes si existen
           const polylineBase = base?.route?.overview_polyline?.encodedPath || base?.route?.overview_polyline?.points || base?.route?.overview_polyline || null;
           if(polylineBase){
-            console.log('💾 Guardando ruta SIN peaje en caché:', base.totalKmNumber + 'km');
-            googleRoutesService.save({ origin: routeOrigin, destination: routeDestination, mode: 'DRIVING', km: base.totalKmNumber, duration_sec: base?.seconds || undefined, polyline: polylineBase, variant: 'NOTOLLS', uses_tolls:false });
+            console.log(cleanWaypoints.length>0 ? '💾 Guardando ruta multi-tramo' : '💾 Guardando ruta SIN peaje en caché:', base.totalKmNumber + 'km');
+            googleRoutesService.save({ origin: routeOrigin, destination: routeDestination, mode: 'DRIVING', km: base.totalKmNumber, duration_sec: base?.seconds || undefined, polyline: polylineBase, variant: 'NOTOLLS', uses_tolls:false, waypoints: cleanWaypoints.length>0 ? cleanWaypoints : undefined });
           }
           if(tollCandidate){
             const polylineToll = tollCandidate?.route?.overview_polyline?.encodedPath || tollCandidate?.route?.overview_polyline?.points || tollCandidate?.route?.overview_polyline || null;
             if(polylineToll){
-              console.log('💾 Guardando ruta CON peaje en caché:', tollCandidate.totalKmNumber + 'km');
-              googleRoutesService.save({ origin: routeOrigin, destination: routeDestination, mode: 'DRIVING', km: tollCandidate.totalKmNumber, duration_sec: tollCandidate?.seconds || undefined, polyline: polylineToll, variant: 'TOLLS', uses_tolls:true });
+              console.log(cleanWaypoints.length>0 ? '💾 Guardando ruta multi-tramo (peaje)' : '💾 Guardando ruta CON peaje en caché:', tollCandidate.totalKmNumber + 'km');
+              googleRoutesService.save({ origin: routeOrigin, destination: routeDestination, mode: 'DRIVING', km: tollCandidate.totalKmNumber, duration_sec: tollCandidate?.seconds || undefined, polyline: polylineToll, variant: 'TOLLS', uses_tolls:true, waypoints: cleanWaypoints.length>0 ? cleanWaypoints : undefined });
             }
           }
         } catch {}
@@ -3053,9 +3058,17 @@ export const Dietas: React.FC = () => {
                               let content: React.ReactNode;
                               switch(col.key){
                                 case 'destination': 
+                                  const isMulti = typeof r.destination === 'string' && r.destination.includes(' > ');
+                                  let legsCount = 0;
+                                  if(isMulti){
+                                    legsCount = r.destination.split(' > ').length - 1; // n tramos = puntos -1
+                                  }
                                   content = (
                                     <Box sx={{ display:'flex', alignItems:'center', gap:1, minWidth:0 }}>
-                                      <span style={{ flex:'1 1 auto', minWidth:0, overflow:'hidden', textOverflow:'ellipsis' }}>{r.destination}</span>
+                                      <span style={{ flex:'1 1 auto', minWidth:0, overflow:'hidden', textOverflow:'ellipsis' }} title={r.destination}>{r.destination}</span>
+                                      {isMulti && (
+                                        <Chip size="small" label={`Multi ${legsCount}`} sx={{ fontSize:10, height:20, bgcolor:'rgba(33,150,243,0.15)', color:'#0d47a1', border:'1px solid rgba(33,150,243,0.4)', fontWeight:600 }} />
+                                      )}
                                       {selectedClient === 'GOOGLE MAPS' && (r as any).uses_tolls === true && (
                                         <Chip size="small" label="Peaje" sx={{ fontSize:10, height:20, bgcolor:'rgba(255,152,0,0.15)', color:'#8a5200', border:'1px solid rgba(255,152,0,0.4)', fontWeight:600 }} />
                                       )}
