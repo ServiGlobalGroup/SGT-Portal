@@ -1855,10 +1855,10 @@ export const Dietas: React.FC = () => {
       setFlashSaved(true);
       // Tras breve pausa permitir feedback visual y luego resetear para nuevo registro
       setTimeout(() => {
-        // Limpiar también el conductor (pedido del usuario)
-        setSelectedDriver(undefined);
-        setRows([]);
-        setResult(null);
+        // Mantener el conductor seleccionado (requerimiento) y limpiar el resto
+        // No se reinicia selectedDriver para permitir seguir cargando conceptos inmediatamente
+        setRows([]);              // limpiar conceptos
+        setResult(null);          // limpiar resultado previo
         setOrderNumber('');
         setObservations('');
         setKmsAntiguo('');
@@ -1870,6 +1870,17 @@ export const Dietas: React.FC = () => {
         setExtraPercentBase('kmTramo');
         setSaveMessage(null);
         setFlashSaved(false);
+        // Si estamos en la pestaña de registros (o si el usuario cambia después) la lista se recargará automáticamente.
+        // Forzar recarga si actualmente tab == 1 para que aparezca el nuevo registro inmediatamente.
+        try {
+          if (tab === 1) {
+            // reutilizamos loadRecords si está en scope; si no, disparar un cambio mínimo para que effect lo recargue
+            // loadRecords está definido más arriba; para evitar dependencia circular, usamos un evento personalizado simple
+            // pero aquí podemos llamar directamente si existe en closure.
+            // @ts-ignore - loadRecords existe en el closure superior
+            if (typeof loadRecords === 'function') loadRecords();
+          }
+        } catch { /* noop */ }
       }, 1200);
     } catch (e:any) {
       setSaveMessage('Error al guardar');
