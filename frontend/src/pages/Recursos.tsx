@@ -9,16 +9,16 @@ import { alpha } from '@mui/material/styles';
 import { ModernModal, ModernButton } from '../components/ModernModal';
 import { useAuth } from '../hooks/useAuth';
 import { useDeviceType } from '../hooks/useDeviceType';
-import { LocalGasStation, CreditCard, Info, Add, Edit, Delete } from '@mui/icons-material';
+import { LocalGasStation, CreditCard, Info, Add, Edit, Delete, PhoneIphone } from '@mui/icons-material';
 import { resourcesAPI, FuelCardRecord, ViaTRecord } from '../services/api';
 
 // Página de Recursos: base inicial con banner y estructura de pestañas (Gasoil, Via T)
 // Se ampliará posteriormente con lógica de carga desde backend/APIs
 export const Recursos: React.FC = () => {
-  const [tab, setTab] = React.useState<'gasolina' | 'viat'>(() => {
+  const [tab, setTab] = React.useState<'gasolina' | 'viat' | 'telefonos'>(() => {
     // Recuperar la pestaña activa desde localStorage o usar 'gasolina' por defecto
     const savedTab = localStorage.getItem('recursos-active-tab');
-    return (savedTab === 'gasolina' || savedTab === 'viat') ? savedTab : 'gasolina';
+    return (savedTab === 'gasolina' || savedTab === 'viat' || savedTab === 'telefonos') ? (savedTab as any) : 'gasolina';
   });
   const { user } = useAuth();
   const { isMobile } = useDeviceType();
@@ -427,7 +427,11 @@ export const Recursos: React.FC = () => {
     }
   };
 
-  const addButtonLabel = tab === 'gasolina' ? 'Añadir Tarjeta' : 'Añadir Via T';
+  const addButtonLabel = (
+    tab === 'gasolina' ? 'Añadir Tarjeta' :
+    tab === 'viat' ? 'Añadir Via T' :
+    'Añadir Teléfono'
+  );
 
   // Filtrado (case-insensitive, trim)
   const filteredGasCards = gasCards; // backend aplica filtros ahora
@@ -663,6 +667,9 @@ export const Recursos: React.FC = () => {
               </ToggleButton>
               <ToggleButton value="viat">
                 <CreditCard /> Via T
+              </ToggleButton>
+              <ToggleButton value="telefonos">
+                <PhoneIphone /> Teléfonos
               </ToggleButton>
             </ToggleButtonGroup>
           </Box>
@@ -1276,6 +1283,20 @@ export const Recursos: React.FC = () => {
                     )}
                   </Box>
                 )}
+              </Paper>
+            )}
+            {tab === 'telefonos' && (
+              <Paper elevation={0} sx={{ p:{ xs:4, sm:6 }, borderRadius:3, border:'2px dashed #d7d7d7', background:'#ffffff', textAlign:'center' }}>
+                <Box sx={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
+                  <Box sx={{ p:3, borderRadius:'50%', background:'linear-gradient(135deg,#f5f5f5 0%,#ededed 100%)', border:'1px solid #e0e0e0' }}>
+                    <PhoneIphone sx={{ fontSize:56, color:'#7d2d52' }} />
+                  </Box>
+                  <Typography variant="h5" sx={{ fontWeight:700, color:'#501b36' }}>Teléfonos (Recursos)</Typography>
+                  <Typography variant="body1" sx={{ maxWidth:560, color:'text.secondary' }}>
+                    Esta nueva sección está en desarrollo. Aquí podrás gestionar teléfonos corporativos, asignaciones y estado de cada dispositivo.
+                  </Typography>
+                  <Chip label="En desarrollo" color="warning" variant="outlined" sx={{ fontWeight:600 }} />
+                </Box>
               </Paper>
             )}
           </Box>
