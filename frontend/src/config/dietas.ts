@@ -33,9 +33,10 @@ export const DIETA_RATES: DietaRate[] = [
   { code: 'adr', label: 'ADR (+5% tramo kms)', unit: 'ud', percentKmTramo: 0.05, onlyFor: 'antiguo' },
   { code: 'reefer', label: 'Reefer (+10% tramo kms)', unit: 'ud', percentKmTramo: 0.10, onlyFor: 'antiguo' },
   { code: 'pernocta_antiguo', label: 'Pernocta', unit: 'dia', amount: 40, onlyFor: 'antiguo', variable: true },
+  { code: 'festivo_antiguo', label: 'Festivo', unit: 'ud', amount: 45, onlyFor: 'antiguo' }, // Nuevo concepto solicitado
   // Nuevos: solo pernocta y festivos, ambos 50€
   { code: 'pernocta', label: 'Pernocta', unit: 'dia', amount: 50, onlyFor: 'nuevo', variable: true },
-  { code: 'festivos', label: 'Festivos', unit: 'ud', amount: 50, onlyFor: 'nuevo' },
+  { code: 'festivos', label: 'Festivos', unit: 'ud', amount: 50, onlyFor: 'nuevo', variable: true },
 ];
 
 // Número de días desde el alta para considerar "nuevo" (asumido)

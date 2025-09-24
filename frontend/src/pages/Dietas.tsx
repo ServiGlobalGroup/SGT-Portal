@@ -84,6 +84,8 @@ export const Dietas: React.FC = () => {
   const [loadingCalcRoutes, setLoadingCalcRoutes] = useState(false);
   const [calcRouteFilter, setCalcRouteFilter] = useState('');
   const [selectedCalcRoute, setSelectedCalcRoute] = useState<{ id:number; destination:string; km:number; uses_tolls?:boolean; verified_at?:string; created_at?:string;} | undefined>(undefined);
+  // Versión para forzar recarga de rutas de cálculo al crear/guardar nuevas rutas (fix: nueva ruta Google Maps no aparecía hasta F5)
+  const [calcRoutesVersion, setCalcRoutesVersion] = useState(0);
   const [clientRoutes, setClientRoutes] = useState<{ id:number; client_name:string; destination:string; destination_normalized:string; km:number; active:boolean; notes?:string; created_at:string; updated_at:string; }[]>([]);
   const [loadingRoutes, setLoadingRoutes] = useState(false);
   const [showOnlyActiveRoutes, setShowOnlyActiveRoutes] = useState(true);
@@ -154,7 +156,7 @@ export const Dietas: React.FC = () => {
     };
     fetchAll();
     return ()=> { cancelled = true; };
-  },[calcClient]);
+  },[calcClient, calcRoutesVersion]);
 
   // Eliminado scroll infinito (carga completa arriba)
 
@@ -2340,8 +2342,13 @@ export const Dietas: React.FC = () => {
                     const baseVal = baseKey === 'totalBase' ? baseTotal : kmTramoAmount;
                     displayRate = +(baseVal * pct).toFixed(2);
                   } else if (rate) {
-                    displayRate = rate.amount || 0;
-                    if (rate.percentKmTramo) displayRate = kmTramoAmount * (rate.percentKmTramo||0);
+                    if (rate.variable) {
+                      // Si es variable usar el customRate de la fila (fallback al amount base)
+                      displayRate = typeof r.customRate === 'number' && !isNaN(r.customRate) ? r.customRate : (rate.amount || 0);
+                    } else {
+                      displayRate = rate.amount || 0;
+                      if (rate.percentKmTramo) displayRate = kmTramoAmount * (rate.percentKmTramo||0);
+                    }
                   }
                   const subtotal = (r.quantity || 0) * displayRate;
                   return (
@@ -2761,6 +2768,13 @@ export const Dietas: React.FC = () => {
                                   
                                   // Marcar como guardado desde caché para deshabilitar el botón
                                   setRouteStats((prev: any) => prev ? { ...prev, fromCache: true } : null);
+                                  // Si el usuario luego pasa a la pestaña de Cálculos, necesitamos que la nueva ruta aparezca sin F5.
+                                  // Forzamos recarga incrementando versión y, si procede, seleccionamos cliente GOOGLE MAPS automáticamente.
+                                  setCalcRoutesVersion(v => v + 1);
+                                  // Si aún no se ha seleccionado el cliente GOOGLE MAPS para cálculo y la intención es usar estas rutas, podemos sugerirlo.
+                                  if (!calcClient || calcClient === '') {
+                                    setCalcClient('GOOGLE MAPS');
+                                  }
                                 } else {
                                   const errorData = await response.json();
                                   throw new Error(errorData.detail || 'Error al guardar la ruta');
