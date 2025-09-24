@@ -223,4 +223,16 @@ export const vacationService = {
       throw error;
     }
   },
+
+  // Obtener conteo de solicitudes pendientes (para sidebar)
+  async getPendingCount(): Promise<number> {
+    try {
+      const response = await axios.get(`${API_BASE}pending/count`, { headers: getAuthHeaders() });
+      const data = response.data;
+      if (data && typeof data.count === 'number') return data.count;
+      return 0;
+    } catch (e) {
+      return 0;
+    }
+  },
 };

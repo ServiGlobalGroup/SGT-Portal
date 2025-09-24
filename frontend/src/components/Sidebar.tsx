@@ -42,6 +42,7 @@ import {
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { canAccessRoute, getRoleText, hasPermission, Permission } from '../utils/permissions';
+import { vacationService } from '../services/vacationService'; // Importar servicio de vacaciones
 // Eliminado import de ColorModeContext tras retirar dark mode
 
 const drawerWidth = 280;
@@ -92,6 +93,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [companyAnchorEl, setCompanyAnchorEl] = useState<null | HTMLElement>(null);
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
+  const [pendingVacCount, setPendingVacCount] = useState<number>(0); // Estado para contar pendientes
   const open = Boolean(anchorEl);
   const companyOpen = Boolean(companyAnchorEl);
 
@@ -214,6 +216,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
       setExpandedMenus(new Set());
     }
   }, [isCollapsed, isMobile]);
+
+  // Efecto para cargar y actualizar el conteo de vacaciones pendientes
+  useEffect(() => {
+    const roleRaw: any = (user as any)?.role;
+    let roleStr = '';
+    try { roleStr = typeof roleRaw === 'string' ? roleRaw : (roleRaw?.value || roleRaw?.name || ''); } catch {}
+    const isAdmin = ['ADMINISTRADOR','MASTER_ADMIN'].includes(roleStr.toUpperCase());
+    if (!isAdmin) { setPendingVacCount(0); return; }
+    let active = true;
+    const load = async () => {
+      const c = await vacationService.getPendingCount();
+      if (active) setPendingVacCount(c);
+    };
+    load();
+    const intv = setInterval(load, 60000);
+    return () => { active = false; clearInterval(intv); };
+  }, [user, selectedCompany]);
 
   const drawerContent = (
     <>
@@ -344,9 +363,29 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     minWidth: (isCollapsed && !isMobile) ? 'auto' : 40,
                     justifyContent: 'center',
                     transition: 'all 0.2s ease',
+                    position: 'relative',
                   }}
                 >
                   {item.icon}
+                  {item.text === 'Ausencias' && pendingVacCount > 0 && (
+                    <Box component="span" sx={{
+                      position: 'absolute',
+                      top: -2,
+                      right: (isCollapsed && !isMobile) ? -2 : 4,
+                      width: 14,
+                      height: 14,
+                      background: '#d32f2f',
+                      borderRadius: '50%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '0.55rem',
+                      fontWeight: 600,
+                      color: '#fff',
+                      letterSpacing: 0,
+                      border: '2px solid rgba(255,255,255,0.55)', // borde claro para integrarse con degradado
+                    }}>{pendingVacCount > 99 ? '99+' : pendingVacCount}</Box>
+                  )}
                 </ListItemIcon>
                 {(!isCollapsed || isMobile) && (
                   <ListItemText 
