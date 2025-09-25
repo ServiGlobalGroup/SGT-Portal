@@ -781,11 +781,12 @@ export const Recursos: React.FC = () => {
                 {!isMobile && (
                   <>
                     <Box sx={{ overflowX:'auto' }}>
-                      <Table size="small" sx={{ minWidth:850, '& th':{ whiteSpace:'nowrap' } }}>
+                      <Table size="small" sx={{ minWidth:900, '& th':{ whiteSpace:'nowrap' } }}>
                         <TableHead>
                           <TableRow>
                             <TableCell>P.A.N.</TableCell>
                             <TableCell>Matrícula</TableCell>
+                            <TableCell>Compañía</TableCell>
                             <TableCell>Fecha de caducidad</TableCell>
                             <TableCell>Código PIN</TableCell>
                             {canAdd && <TableCell>Acciones</TableCell>}
@@ -793,11 +794,11 @@ export const Recursos: React.FC = () => {
                         </TableHead>
                         <TableBody>
                           {loadingGas && (
-                            <TableRow><TableCell colSpan={canAdd ? 5 : 4}><Box sx={{ display:'flex', alignItems:'center', gap:1 }}><CircularProgress size={18} /> <Typography variant="body2">Cargando...</Typography></Box></TableCell></TableRow>
+                            <TableRow><TableCell colSpan={canAdd ? 6 : 5}><Box sx={{ display:'flex', alignItems:'center', gap:1 }}><CircularProgress size={18} /> <Typography variant="body2">Cargando...</Typography></Box></TableCell></TableRow>
                           )}
                           {!loadingGas && searchingGas && (
                             <TableRow>
-                              <TableCell colSpan={canAdd ? 5 : 4}>
+                              <TableCell colSpan={canAdd ? 6 : 5}>
                                 <Stack spacing={1}>
                                   <Skeleton height={28} />
                                   <Skeleton height={28} />
@@ -807,18 +808,18 @@ export const Recursos: React.FC = () => {
                             </TableRow>
                           )}
                           {!loadingGas && !searchingGas && errorGas && (
-                            <TableRow><TableCell colSpan={canAdd ? 5 : 4}><Typography color="error" variant="body2">{errorGas}</Typography></TableCell></TableRow>
+                            <TableRow><TableCell colSpan={canAdd ? 6 : 5}><Typography color="error" variant="body2">{errorGas}</Typography></TableCell></TableRow>
                           )}
                           {!loadingGas && !searchingGas && gasCards.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={canAdd ? 5 : 4}>
+                              <TableCell colSpan={canAdd ? 6 : 5}>
                                 <Typography variant="body2" sx={{ color:'text.secondary' }}>No hay tarjetas registradas todavía.</Typography>
                               </TableCell>
                             </TableRow>
                           )}
                           {!loadingGas && !searchingGas && gasCards.length > 0 && filteredGasCards.length === 0 && (
                             <TableRow>
-                              <TableCell colSpan={canAdd ? 5 : 4}>
+                              <TableCell colSpan={canAdd ? 6 : 5}>
                                 <Typography variant="body2" sx={{ color:'text.secondary' }}>Sin coincidencias con los filtros aplicados.</Typography>
                               </TableCell>
                             </TableRow>
@@ -827,6 +828,7 @@ export const Recursos: React.FC = () => {
                             <TableRow key={card.id} hover>
                               <TableCell>{card.pan}</TableCell>
                               <TableCell>{card.matricula}</TableCell>
+                              <TableCell>{card.compania || '—'}</TableCell>
                               <TableCell>{card.caducidad}</TableCell>
                               <TableCell>
                                 <Box sx={{ display:'flex', alignItems:'center', gap:1 }}>
@@ -971,6 +973,7 @@ export const Recursos: React.FC = () => {
                                 <Divider sx={{ my:1 }} />
                                 <Stack spacing={0.6}>
                                   <Typography variant="body2"><strong>PAN:</strong> {card.pan}</Typography>
+                                  <Typography variant="body2"><strong>Compañía:</strong> {card.compania || '—'}</Typography>
                                   <Typography variant="body2"><strong>PIN:</strong> <span style={{ fontFamily:'monospace', letterSpacing:1 }}>{card.pin ?? card.masked_pin}</span></Typography>
                                 </Stack>
                               </CardContent>
