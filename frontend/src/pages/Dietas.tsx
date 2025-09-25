@@ -102,15 +102,16 @@ export const Dietas: React.FC = () => {
       setClientRoutes([]); setRoutesTotal(0); setLoadingRoutes(true);
       try {
         const PAGE = 500;
-        let offset = 0; let total = Infinity; const acc:any[] = [];
-        while(offset < total){
+        let offset = 0; const acc:any[] = [];
+        while(true){
           const data = await distancierosAPI.listRoutes(selectedClient, { onlyActive: showOnlyActiveRoutes, limit: PAGE, offset });
           if(cancelled) return;
-          acc.push(...data.items);
-          total = data.total ?? acc.length;
           if(data.items.length === 0) break;
+          acc.push(...data.items);
           offset += data.items.length;
-          if(offset >= 20000) break; // salvaguarda
+          // Si la página devuelta es menor que PAGE asumimos fin
+            if(data.items.length < PAGE) break;
+          if(offset >= 50000) break; // salvaguarda más alta por si hay muchas rutas
         }
         if(!cancelled){ setClientRoutes(acc); setRoutesTotal(acc.length); }
       } catch {
@@ -129,20 +130,17 @@ export const Dietas: React.FC = () => {
       setLoadingCalcRoutes(true);
       try {
         const PAGE = 500; // tamaño página alto para reducir peticiones
-        let offset = 0;
-        let total = Infinity;
-        const all: { id:number; destination:string; km:number; active:boolean; uses_tolls?:boolean; }[] = [];
-        while(offset < total){
+        let offset = 0; const all: { id:number; destination:string; km:number; active:boolean; uses_tolls?:boolean; }[] = [];
+        while(true){
           const data = await distancierosAPI.listRoutes(calcClient, { onlyActive: true, limit: PAGE, offset });
           if(cancelled) return;
-            const simple = data.items.map((r:any)=>({ id:r.id, destination:r.destination, km:r.km, active:r.active, uses_tolls:r.uses_tolls }));
-          console.log('🔍 Datos cargados para', calcClient, ':', simple.slice(0, 3)); // Log primeros 3 elementos
-          all.push(...simple);
-          total = data.total ?? all.length; // fallback
           if(data.items.length === 0) break;
+          const simple = data.items.map((r:any)=>({ id:r.id, destination:r.destination, km:r.km, active:r.active, uses_tolls:r.uses_tolls }));
+          console.log('🔍 Datos cargados para', calcClient, ':', simple.slice(0, 3));
+          all.push(...simple);
           offset += data.items.length;
-          // corte seguridad por si backend no devuelve total correcto
-          if(offset >= 10000) break;
+          if(data.items.length < PAGE) break;
+          if(offset >= 30000) break; // salvaguarda
         }
         if(!cancelled){
           setCalcRoutes(all);

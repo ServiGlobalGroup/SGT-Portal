@@ -384,7 +384,7 @@ export const Dashboard: React.FC = () => {
                   Usuarios por rol
                 </Typography>
               </Box>
-              <Box sx={{ p: { xs: 2, sm: 3 }, height: { xs: 'auto', md: 320 }, display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box sx={{ p: { xs: 2, sm: 3 }, height: { xs: 'auto', md: 320 }, display: 'flex', flexDirection: 'column', gap: 2, overflow: 'hidden' }}>
                 {loading ? (
                   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                     {[1,2,3,4].map(i => (
@@ -406,11 +406,11 @@ export const Dashboard: React.FC = () => {
                     };
                     const sorted = entries.sort((a, b) => Number(b[1]) - Number(a[1]));
                     return (
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1 }}>
+                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, flex: 1, minHeight: 0 }}>
                         <Typography variant="body2" color="text.secondary">
                           Total usuarios: <strong>{total}</strong>
                         </Typography>
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: { xs: 1.5, sm: 2 } }}>
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: { xs: 1.5, sm: 2 }, overflowY: 'auto', pr: 1, minHeight: 0 }}>
                           {sorted.map(([role, count]) => {
                             const n = Number(count) || 0;
                             const pct = total > 0 ? Math.round((n / total) * 100) : 0;
@@ -420,7 +420,7 @@ export const Dashboard: React.FC = () => {
                                 <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
                                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                     <Box sx={{ width: 10, height: 10, bgcolor: color, borderRadius: '50%' }} />
-                                    <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{role}</Typography>
+                                    <Typography variant="subtitle2" sx={{ fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: { xs: '60vw', sm: '22ch' } }}>{role}</Typography>
                                   </Box>
                                   <Typography variant="subtitle2">{n}</Typography>
                                 </Box>
