@@ -145,14 +145,14 @@ export const MobileVacations: React.FC = () => {
       const mapped: VacationRequest[] = data.map((api: any) => ({
         id: api.id,
         employeeName: api.employee_name || 'Yo',
-        startDate: api.start_date.toISOString().split('T')[0],
-        endDate: api.end_date.toISOString().split('T')[0],
+        startDate: toYMDLocal(api.start_date),
+        endDate: toYMDLocal(api.end_date),
         reason: api.reason,
         status: api.status,
         days: api.duration_days || Math.max(1, Math.ceil((api.end_date.getTime() - api.start_date.getTime()) / (1000*60*60*24)) + 1),
-        requestDate: api.created_at ? api.created_at.toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+        requestDate: api.created_at ? toYMDLocal(api.created_at) : toYMDLocal(new Date()),
         approvedBy: api.reviewer_name || undefined,
-        approvedDate: api.reviewed_at ? api.reviewed_at.toISOString().split('T')[0] : undefined,
+        approvedDate: api.reviewed_at ? toYMDLocal(api.reviewed_at) : undefined,
         comments: api.admin_response || undefined,
   type: api.absence_type === 'PERSONAL' ? 'personal' : 'vacation',
       }));
@@ -226,8 +226,26 @@ export const MobileVacations: React.FC = () => {
   ];
 
   // Funciones auxiliares
+  const parseLocalDate = (dateString: string) => {
+    if (!dateString) return null;
+    const parts = dateString.split('-');
+    if (parts.length < 3) return null;
+    const [year, month, day] = parts.map(Number);
+    if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) return null;
+    return new Date(year, month - 1, day);
+  };
+
+  const toYMDLocal = (date: Date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('es-ES', {
+    const parsed = parseLocalDate(dateString);
+    if (!parsed) return dateString;
+    return parsed.toLocaleDateString('es-ES', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric'
@@ -806,7 +824,7 @@ export const MobileVacations: React.FC = () => {
               onChange={(value) => setNewRequest(prev => ({ ...prev, startDate: String(value), ...(prev.oneDay ? { endDate: String(value) } : {}) }))}
               fullWidth
               helperText="Selecciona la fecha de inicio"
-              min={new Date().toISOString().split('T')[0]}
+              min={toYMDLocal(new Date())}
             />
             <ModernField
               label="Fecha fin"
@@ -815,7 +833,7 @@ export const MobileVacations: React.FC = () => {
               onChange={(value) => setNewRequest(prev => ({ ...prev, endDate: String(value) }))}
               fullWidth
               helperText={newRequest.oneDay ? 'Se solicitará solo el día indicado' : 'Selecciona la fecha de fin'}
-              min={newRequest.startDate || new Date().toISOString().split('T')[0]}
+              min={newRequest.startDate || toYMDLocal(new Date())}
               disabled={newRequest.oneDay}
             />
             {/* Campo de motivo eliminado: lo fijamos automáticamente según el tipo seleccionado */}

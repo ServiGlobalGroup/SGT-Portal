@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Box, Typography, Paper, TextField, Button, Fade, GlobalStyles, Alert, Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Stack, IconButton, Tooltip, ToggleButtonGroup, ToggleButton, Pagination, Autocomplete, CircularProgress, Chip } from '@mui/material';
+import { Box, Typography, Paper, TextField, Button, Fade, GlobalStyles, Alert, Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Stack, IconButton, Tooltip, ToggleButtonGroup, ToggleButton, Pagination, Autocomplete, CircularProgress, Chip, Card, CardContent, Divider } from '@mui/material';
 import { WorkOutline, DeleteOutline, History, Calculate } from '@mui/icons-material';
 import { useAuth } from '../hooks/useAuth';
 import { hasPermission, Permission } from '../utils/permissions';
 import { tripsAPI, type TripRecord } from '../services/api';
+import { useDeviceType } from '../hooks/useDeviceType';
 
 interface TripEntry { id: string; orderNumber: string; pernocta: boolean; festivo: boolean; canonTti: boolean; nota: string; createdAt: string; eventDate: string; userName: string; }
 
 export const Trips: React.FC = () => {
   const { user, selectedCompany } = useAuth();
+  const { isMobile } = useDeviceType();
   const isAdmin = !!user && hasPermission(user, Permission.MANAGE_TRIPS);
   const canViewAllTrips = !!user && (hasPermission(user, Permission.MANAGE_TRIPS) || hasPermission(user, Permission.VIEW_TRIPS));
   const [orderNumber, setOrderNumber] = useState('');
@@ -25,6 +27,8 @@ export const Trips: React.FC = () => {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(25);
   const [total, setTotal] = useState(0);
+  // Mostrar/ocultar filtros en móvil
+  const [showFilters, setShowFilters] = useState(true);
   // Filtros admin
   const [filterUserId, setFilterUserId] = useState<string>('');
   const [filterStart, setFilterStart] = useState<string>('');
@@ -83,6 +87,11 @@ export const Trips: React.FC = () => {
     setSelectedUser(null);
     setFilterUserId('');
   }, [selectedCompany]);
+
+  // Preferencia: en móvil ocultamos filtros por defecto para ganar espacio
+  useEffect(() => {
+    setShowFilters(isMobile ? false : true);
+  }, [isMobile]);
 
   const handleAdd = async () => {
     if (!orderNumber.trim()) { setError('El número de Albarán / OC es obligatorio'); return; }
@@ -392,6 +401,18 @@ export const Trips: React.FC = () => {
           <Paper sx={{ p: { xs: 2, sm: 3 }, mb: 3, borderRadius: 3, border: '1px solid #e0e0e0', position: 'relative' }}>
             <Typography variant="h6" sx={{ fontWeight: 600, mb: 2 }}>Registros de Viajes</Typography>
             <Stack spacing={2} sx={{ mb:3 }}>
+              {/* Toggle de filtros en móvil */}
+              {isMobile && (
+                <Box sx={{ display:'flex', gap:1, alignItems:'center' }}>
+                  <Button size="small" variant="outlined" onClick={() => setShowFilters(s=>!s)}>
+                    {showFilters ? 'Ocultar filtros' : 'Mostrar filtros'}
+                  </Button>
+                  <Typography variant="caption" sx={{ color:'text.secondary' }}>
+                    {total} resultados
+                  </Typography>
+                </Box>
+              )}
+              {(!isMobile || showFilters) && (
               <Stack direction={{ xs:'column', sm:'row' }} spacing={2}>
                 <Autocomplete
                   sx={{ 
@@ -479,78 +500,115 @@ export const Trips: React.FC = () => {
                   Limpiar
                 </Button>
               </Stack>
+              )}
             </Stack>
-            
-            <TableContainer sx={{ border:'1px solid #e0e0e0', borderRadius:2 }}>
-              <Table size="small">
-                <TableHead>
-                  <TableRow sx={{ background:'linear-gradient(180deg,#fafafa,#f0f0f0)', '& th': { fontWeight:600 } }}>
-                    <TableCell>Conductor</TableCell>
-                    <TableCell>Albarán / OC</TableCell>
-                    <TableCell>Pernocta</TableCell>
-                    <TableCell>Festivo</TableCell>
-                    <TableCell>Canon TTI</TableCell>
-                    <TableCell>Fecha Evento</TableCell>
-                    <TableCell>Fecha Registro</TableCell>
-                    <TableCell>Nota</TableCell>
-                    <TableCell align="right">Acciones</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {entries.length === 0 && (
-                    <TableRow>
-                      <TableCell colSpan={10} align="center" sx={{ py:6 }}>
-                        <Typography variant="body2" sx={{ opacity:0.7 }}>Sin registros todavía</Typography>
-                      </TableCell>
+            {/* Listado responsive: Tabla en escritorio, tarjetas en móvil */}
+            {!isMobile ? (
+              <TableContainer sx={{ border:'1px solid #e0e0e0', borderRadius:2 }}>
+                <Table size="small">
+                  <TableHead>
+                    <TableRow sx={{ background:'linear-gradient(180deg,#fafafa,#f0f0f0)', '& th': { fontWeight:600 } }}>
+                      <TableCell>Conductor</TableCell>
+                      <TableCell>Albarán / OC</TableCell>
+                      <TableCell>Pernocta</TableCell>
+                      <TableCell>Festivo</TableCell>
+                      <TableCell>Canon TTI</TableCell>
+                      <TableCell>Fecha Evento</TableCell>
+                      <TableCell>Fecha Registro</TableCell>
+                      <TableCell>Nota</TableCell>
+                      <TableCell align="right">Acciones</TableCell>
                     </TableRow>
-                  )}
-                  {entries.map(e => (
-                    <TableRow key={e.id} hover>
-                      <TableCell sx={{ fontWeight:500 }}>{e.userName || '—'}</TableCell>
-                      <TableCell sx={{ fontWeight:600, fontFamily:'monospace', letterSpacing:.5 }}>{e.orderNumber}</TableCell>
-                      <TableCell>
-                        <Chip size="small" label={e.pernocta ? 'Sí' : 'No'} sx={{ bgcolor: e.pernocta ? '#6d2548' : '#e4e4e4', color: e.pernocta ? '#fff' : '#555', fontWeight:500 }} />
-                      </TableCell>
-                      <TableCell>
-                        <Chip size="small" label={e.festivo ? 'Sí' : 'No'} sx={{ bgcolor: e.festivo ? '#d4a574' : '#e4e4e4', color: e.festivo ? '#4a2c12' : '#555', fontWeight:500 }} />
-                      </TableCell>
-                      <TableCell>
-                        <Chip size="small" label={e.canonTti ? 'Sí' : 'No'} sx={{ bgcolor: e.canonTti ? '#388e3c' : '#e4e4e4', color: e.canonTti ? '#fff' : '#555', fontWeight:500 }} />
-                      </TableCell>
-                      <TableCell>{new Date(e.eventDate + 'T00:00:00').toLocaleDateString('es-ES', { day:'2-digit', month:'2-digit', year:'2-digit' })}</TableCell>
-                      <TableCell>{new Date(e.createdAt).toLocaleString('es-ES', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' })}</TableCell>
-                      <TableCell>
-                        <Tooltip title={e.nota || ''} disableInteractive placement="top-start">
-                          <Typography variant="body2" sx={{ maxWidth:200, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{e.nota || '-'}</Typography>
-                        </Tooltip>
-                      </TableCell>
-                      <TableCell align="right">
+                  </TableHead>
+                  <TableBody>
+                    {entries.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={10} align="center" sx={{ py:6 }}>
+                          <Typography variant="body2" sx={{ opacity:0.7 }}>Sin registros todavía</Typography>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {entries.map(e => (
+                      <TableRow key={e.id} hover>
+                        <TableCell sx={{ fontWeight:500 }}>{e.userName || '—'}</TableCell>
+                        <TableCell sx={{ fontWeight:600, fontFamily:'monospace', letterSpacing:.5 }}>{e.orderNumber}</TableCell>
+                        <TableCell>
+                          <Chip size="small" label={e.pernocta ? 'Sí' : 'No'} sx={{ bgcolor: e.pernocta ? '#6d2548' : '#e4e4e4', color: e.pernocta ? '#fff' : '#555', fontWeight:500 }} />
+                        </TableCell>
+                        <TableCell>
+                          <Chip size="small" label={e.festivo ? 'Sí' : 'No'} sx={{ bgcolor: e.festivo ? '#d4a574' : '#e4e4e4', color: e.festivo ? '#4a2c12' : '#555', fontWeight:500 }} />
+                        </TableCell>
+                        <TableCell>
+                          <Chip size="small" label={e.canonTti ? 'Sí' : 'No'} sx={{ bgcolor: e.canonTti ? '#388e3c' : '#e4e4e4', color: e.canonTti ? '#fff' : '#555', fontWeight:500 }} />
+                        </TableCell>
+                        <TableCell>{new Date(e.eventDate + 'T00:00:00').toLocaleDateString('es-ES', { day:'2-digit', month:'2-digit', year:'2-digit' })}</TableCell>
+                        <TableCell>{new Date(e.createdAt).toLocaleString('es-ES', { day:'2-digit', month:'2-digit', year:'2-digit', hour:'2-digit', minute:'2-digit' })}</TableCell>
+                        <TableCell>
+                          <Tooltip title={e.nota || ''} disableInteractive placement="top-start">
+                            <Typography variant="body2" sx={{ maxWidth:200, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{e.nota || '-'}</Typography>
+                          </Tooltip>
+                        </TableCell>
+                        <TableCell align="right">
+                          {isAdmin && (
+                            <IconButton 
+                              size="small" 
+                              onClick={() => handleDelete(e.id)}
+                              sx={{
+                                backgroundColor: 'transparent',
+                                boxShadow: 'none',
+                                border: 'none',
+                                '&:hover': {
+                                  backgroundColor: 'rgba(0, 0, 0, 0.04)',
+                                  boxShadow: 'none'
+                                },
+                                '&:focus': {
+                                  boxShadow: 'none'
+                                }
+                              }}
+                            >
+                              <DeleteOutline fontSize="small" />
+                            </IconButton>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </TableContainer>
+            ) : (
+              <Stack spacing={1.5}>
+                {entries.length === 0 && (
+                  <Typography variant="body2" sx={{ opacity:0.7, textAlign:'center', py:2 }}>Sin registros todavía</Typography>
+                )}
+                {entries.map(e => (
+                  <Card key={e.id} variant="outlined" sx={{ borderRadius:2 }}>
+                    <CardContent sx={{ p:1.5, '&:last-child':{ pb:1.5 } }}>
+                      <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
+                        <Box>
+                          <Typography variant="subtitle2" sx={{ fontWeight:700, letterSpacing:.3 }}>{e.orderNumber}</Typography>
+                          <Typography variant="caption" sx={{ color:'text.secondary' }}>{e.userName || '—'}</Typography>
+                        </Box>
                         {isAdmin && (
-                          <IconButton 
-                            size="small" 
-                            onClick={() => handleDelete(e.id)}
-                            sx={{
-                              backgroundColor: 'transparent',
-                              boxShadow: 'none',
-                              border: 'none',
-                              '&:hover': {
-                                backgroundColor: 'rgba(0, 0, 0, 0.04)',
-                                boxShadow: 'none'
-                              },
-                              '&:focus': {
-                                boxShadow: 'none'
-                              }
-                            }}
-                          >
+                          <IconButton size="small" onClick={() => handleDelete(e.id)}>
                             <DeleteOutline fontSize="small" />
                           </IconButton>
                         )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
+                      </Stack>
+                      <Divider sx={{ my:1 }} />
+                      <Stack direction="row" spacing={1} flexWrap="wrap">
+                        <Chip size="small" label={`Evento: ${new Date(e.eventDate + 'T00:00:00').toLocaleDateString('es-ES')}`} />
+                        <Chip size="small" label={`Registro: ${new Date(e.createdAt).toLocaleDateString('es-ES')}`} />
+                        <Chip size="small" label={e.pernocta ? 'Pernocta: Sí' : 'Pernocta: No'} sx={{ bgcolor: e.pernocta ? '#6d2548' : '#e4e4e4', color: e.pernocta ? '#fff' : '#555' }} />
+                        <Chip size="small" label={e.festivo ? 'Festivo: Sí' : 'Festivo: No'} sx={{ bgcolor: e.festivo ? '#d4a574' : '#e4e4e4', color: e.festivo ? '#4a2c12' : '#555' }} />
+                        <Chip size="small" label={e.canonTti ? 'Canon TTI: Sí' : 'Canon TTI: No'} sx={{ bgcolor: e.canonTti ? '#388e3c' : '#e4e4e4', color: e.canonTti ? '#fff' : '#555' }} />
+                      </Stack>
+                      {!!e.nota && (
+                        <Typography variant="body2" sx={{ mt:1, color:'text.secondary' }}>{e.nota}</Typography>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </Stack>
+            )}
             
             {total > pageSize && (
               <Box sx={{ display:'flex', justifyContent:'center', mt:2 }}>
