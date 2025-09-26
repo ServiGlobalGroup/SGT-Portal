@@ -1200,9 +1200,7 @@ export const TruckInspectionRevisions: React.FC = () => {
             }}
           >
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-              <Badge badgeContent={pendingInspections.length} color="error" max={99}>
-                <FactCheck sx={{ color: '#501b36', fontSize: 32 }} />
-              </Badge>
+              <FactCheck sx={{ color: '#501b36', fontSize: 32 }} />
               <Box>
                 <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36', mb: 0.5 }}>
                   Centro de Revisiones - Inspecciones Pendientes
