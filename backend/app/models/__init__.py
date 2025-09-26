@@ -4,6 +4,8 @@ from .trip import TripRecord
 from .vacation import VacationRequest, VacationStatus
 from .activity_log import ActivityLog
 from .distanciero import Distanciero
+from .truck_inspection import TruckInspection
+from .truck_inspection_request import TruckInspectionRequest, InspectionRequestStatus
 
 __all__ = [
     "User", "UserRole", "MasterAdminUser", 
@@ -11,5 +13,7 @@ __all__ = [
     "TripRecord", 
     "VacationRequest", "VacationStatus",
     "ActivityLog",
-    "Distanciero"
+    "Distanciero",
+    "TruckInspection",
+    "TruckInspectionRequest", "InspectionRequestStatus",
 ]

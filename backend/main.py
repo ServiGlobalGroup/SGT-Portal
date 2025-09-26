@@ -10,7 +10,7 @@ BACKEND_DIR = os.path.dirname(os.path.abspath(__file__))
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
-from app.api import dashboard, traffic, vacations, documents, payroll, profile, settings, users, auth, user_files, documentation, activity, dietas, distancieros, folder_management, trips, resources
+from app.api import dashboard, traffic, vacations, documents, payroll, profile, settings, users, auth, user_files, documentation, activity, dietas, distancieros, folder_management, trips, resources, truck_inspections
 from app.database.connection import check_database_connection
 from app.middleware.maintenance import MaintenanceMiddleware
 from app.config import settings as app_settings
@@ -56,6 +56,7 @@ app.include_router(dietas.router, prefix="/api/dietas", tags=["dietas"])
 app.include_router(distancieros.router, prefix="/api/distancieros", tags=["distancieros"])
 app.include_router(folder_management.router, prefix="/api", tags=["folder-management"])
 app.include_router(resources.router)  # incluye /api/resources/*
+app.include_router(truck_inspections.router, prefix="/api/truck-inspections", tags=["truck-inspections"])
 
 # Inicializar sistema de carpetas al arrancar
 try:
@@ -81,6 +82,19 @@ async def health_check():
             "database": "error",
             "error": str(e)
         }
+
+@app.get("/debug-routes")
+async def debug_routes():
+    """Endpoint temporal para debuggear las rutas registradas"""
+    routes = []
+    for route in app.routes:
+        if hasattr(route, 'methods') and hasattr(route, 'path'):
+            routes.append({
+                "path": route.path,
+                "methods": list(route.methods) if hasattr(route, 'methods') else [],
+                "name": getattr(route, 'name', 'unnamed')
+            })
+    return {"routes": routes}
 
 # ---------- Static Frontend (Vite build) ----------
 # Resolver ruta absoluta al directorio dist de Vite

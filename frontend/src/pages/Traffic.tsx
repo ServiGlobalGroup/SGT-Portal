@@ -21,7 +21,9 @@ import {
   TableContainer,
   MenuItem,
   GlobalStyles,
-  Fade
+  Fade,
+  Badge,
+  CircularProgress,
 } from '@mui/material';
 import { AuthContext } from '../contexts/AuthContext';
 import { alpha } from '@mui/material/styles';
@@ -46,9 +48,13 @@ import {
   Image,
   Delete,
   FactCheck,
+  Refresh,
 } from '@mui/icons-material';
 import { trafficFilesAPI, API_BASE_URL } from '../services/api';
 import { PdfPreview } from '../components/PdfPreview';
+import { TruckInspectionRevisions } from '../components/TruckInspectionRevisions';
+import { usePendingInspections } from '../hooks/usePendingInspections';
+// useTruckInspection eliminado: ya no se muestra el bloque de recordatorios
 
 interface TrafficFolder {
   id: number;
@@ -81,8 +87,13 @@ export const Traffic: React.FC = () => {
   }
   const { user: currentUser } = authContext;
 
+  // Hook para obtener inspecciones pendientes
+  const { pendingCount } = usePendingInspections();
+
   // Helper para verificar permisos
   const canManageTraffic = currentUser?.role === 'ADMINISTRADOR' || 
+                          currentUser?.role === 'ADMINISTRACION' ||
+                          currentUser?.role === 'P_TALLER' ||
                           currentUser?.role === 'TRAFICO' || 
                           currentUser?.role === 'MASTER_ADMIN';
 
@@ -104,13 +115,25 @@ export const Traffic: React.FC = () => {
   const [unifiedItems, setUnifiedItems] = useState<UnifiedItem[]>([]);
 
   // Vista seleccionada (Documentos / Revisiones)
-  const [trafficView, setTrafficView] = useState<'files' | 'revisions'>('files');
+  const [trafficView, setTrafficView] = useState<'files' | 'revisions'>(() => {
+    if (typeof window !== 'undefined') {
+      const stored = window.sessionStorage.getItem('trafficView');
+      return stored === 'revisions' ? 'revisions' : 'files';
+    }
+    return 'files';
+  });
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem('trafficView', trafficView);
+    }
+  }, [trafficView]);
   // Última actualización silenciosa
   const [lastSilentRefresh, setLastSilentRefresh] = useState<Date | null>(null);
 
   // Estados de modales
   const [createFolderModal, setCreateFolderModal] = useState(false);
   const [uploadModal, setUploadModal] = useState(false);
+  // Eliminado: control de preferencia de auto recordatorios desde UI
 
   // Estados para preview
   const [previewOpen, setPreviewOpen] = useState(false);
@@ -263,6 +286,8 @@ export const Traffic: React.FC = () => {
     const i = Math.floor(Math.log(bytes) / Math.log(1024));
     return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
   };
+
+  // Se removieron cálculos relacionados con recordatorios automáticos
 
   const getTypeIcon = (type: 'folder' | 'location' | 'vehicle_type' | 'vehicle') => {
     switch (type) {
@@ -761,32 +786,46 @@ export const Traffic: React.FC = () => {
                   }}
                 >
                   {(['files','revisions'] as const).map(val => (
-                    <Button
+                    <Badge
                       key={val}
-                      onClick={() => setTrafficView(val)}
-                      startIcon={val === 'files' ? <FolderOpen /> : <FactCheck />}
-                      sx={{
-                        borderRadius:'20px',
-                        px:2.5,
-                        py:1,
-                        textTransform:'none',
-                        fontSize:'0.8rem',
-                        fontWeight:700,
-                        minWidth:110,
-                        background: trafficView===val ? 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 70%, #501b36 100%)' : 'rgba(255,255,255,0.8)',
-                        color: trafficView===val ? 'white' : '#501b36',
-                        boxShadow: trafficView===val ? '0 4px 12px rgba(80,27,54,0.3)' : 'none',
-                        transition:'all .3s',
-                        position:'relative',
-                        '&:hover':{
-                          background: trafficView===val ? 'linear-gradient(135deg, #3d1429 0%, #5a1d3a 30%, #6b2545 70%, #3d1429 100%)' : 'rgba(255,255,255,0.95)',
-                          transform: trafficView===val ? 'translateY(-1px)' : 'translateY(-0.5px)',
-                          boxShadow: trafficView===val ? '0 6px 16px rgba(80,27,54,0.4)' : '0 2px 8px rgba(0,0,0,0.1)'
+                      badgeContent={val === 'revisions' ? pendingCount : 0}
+                      color="error"
+                      max={99}
+                      sx={{ 
+                        '& .MuiBadge-badge': { 
+                          fontSize: '0.65rem',
+                          minWidth: 16,
+                          height: 16,
+                          fontWeight: 700
                         }
                       }}
                     >
-                      {val === 'files' ? 'Documentos' : 'Revisiones'}
-                    </Button>
+                      <Button
+                        onClick={() => setTrafficView(val)}
+                        startIcon={val === 'files' ? <FolderOpen /> : <FactCheck />}
+                        sx={{
+                          borderRadius:'20px',
+                          px:2.5,
+                          py:1,
+                          textTransform:'none',
+                          fontSize:'0.8rem',
+                          fontWeight:700,
+                          minWidth:110,
+                          background: trafficView===val ? 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 70%, #501b36 100%)' : 'rgba(255,255,255,0.8)',
+                          color: trafficView===val ? 'white' : '#501b36',
+                          boxShadow: trafficView===val ? '0 4px 12px rgba(80,27,54,0.3)' : 'none',
+                          transition:'all .3s',
+                          position:'relative',
+                          '&:hover':{
+                            background: trafficView===val ? 'linear-gradient(135deg, #3d1429 0%, #5a1d3a 30%, #6b2545 70%, #3d1429 100%)' : 'rgba(255,255,255,0.95)',
+                            transform: trafficView===val ? 'translateY(-1px)' : 'translateY(-0.5px)',
+                            boxShadow: trafficView===val ? '0 6px 16px rgba(80,27,54,0.4)' : '0 2px 8px rgba(0,0,0,0.1)'
+                          }
+                        }}
+                      >
+                        {val === 'files' ? 'Documentos' : 'Revisiones'}
+                      </Button>
+                    </Badge>
                   ))}
                 </Box>
 
@@ -1755,45 +1794,9 @@ export const Traffic: React.FC = () => {
           </Paper>
         </Fade>)}
 
-        {trafficView === 'revisions' && (
-          <Fade in timeout={1400}>
-            <Paper
-              elevation={0}
-              sx={{
-                borderRadius:3,
-                border:'1px solid #e2e8f0',
-                background:'#ffffff',
-                p:4,
-                minHeight:400
-              }}
-            >
-              <Box sx={{ display:'flex', alignItems:'center', gap:2, mb:3 }}>
-                <FactCheck sx={{ color:'#501b36', fontSize:32 }} />
-                <Box>
-                  <Typography variant="h6" sx={{ fontWeight:700, color:'#501b36', mb:0.5 }}>
-                    Centro de Revisiones
-                  </Typography>
-                  <Typography variant="body2" sx={{ color:'text.secondary' }}>
-                    Próximamente: control de ITV, seguros, mantenimientos y caducidades de documentación de flota.
-                  </Typography>
-                </Box>
-              </Box>
-              <Alert severity="info" sx={{ mb:3, borderRadius:2 }}>
-                Esta sección está en desarrollo. Aquí podrás registrar y hacer seguimiento de revisiones periódicas de vehículos.
-              </Alert>
-              <Stack spacing={2}>
-                <Paper variant="outlined" sx={{ p:2, borderRadius:2, bgcolor:'#f8fafc' }}>
-                  <Typography variant="subtitle2" sx={{ fontWeight:700, mb:1 }}>Ideas previstas</Typography>
-                  <ul style={{ margin:0, paddingLeft:'1.1rem' }}>
-                    <li><Typography variant="caption">Listado de próximos vencimientos (ITV, seguros, tacógrafo)</Typography></li>
-                    <li><Typography variant="caption">Historial de revisiones con documentos adjuntos</Typography></li>
-                    <li><Typography variant="caption">Estado por vehículo y alertas tempranas</Typography></li>
-                  </ul>
-                </Paper>
-              </Stack>
-            </Paper>
-          </Fade>
-        )}
+        {/* Se eliminó el contenedor de 'Recordatorios automáticos de inspección' */}
+
+        {trafficView === 'revisions' && <TruckInspectionRevisions />}
 
         {/* Snackbar */}
         <Snackbar

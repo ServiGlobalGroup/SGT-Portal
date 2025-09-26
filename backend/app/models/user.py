@@ -309,6 +309,7 @@ class User(Base):
     
     # Relaciones
     vacation_requests = relationship("VacationRequest", foreign_keys="VacationRequest.user_id", back_populates="user")
+    truck_inspections = relationship("TruckInspection", foreign_keys="TruckInspection.user_id", back_populates="user")
 
 class UploadHistory(Base):
     """

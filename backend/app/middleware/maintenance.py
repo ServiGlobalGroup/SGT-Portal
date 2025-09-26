@@ -1,10 +1,13 @@
-from fastapi import Request, HTTPException
+from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.types import ASGIApp
 import os
 import json
 from typing import Optional
+from jose import JWTError, jwt
+
+from app.config import settings
 
 class MaintenanceMiddleware(BaseHTTPMiddleware):
     """
@@ -43,15 +46,19 @@ class MaintenanceMiddleware(BaseHTTPMiddleware):
     def is_master_admin_token(self, authorization: Optional[str]) -> bool:
         """
         Verificar si el token pertenece al usuario maestro.
-        Implementación simplificada - en producción se haría la verificación completa del JWT.
+        Se realiza decodificación del JWT para asegurar que el claim `sub`
+        corresponde al usuario maestro configurado.
         """
         if not authorization or not authorization.startswith('Bearer '):
             return False
-            
-        # Aquí se haría la verificación completa del JWT para determinar si es el master admin
-        # Por ahora, permitimos que las peticiones con token pasen para que el sistema
-        # pueda verificar internamente si es el master admin
-        return True  # Permitir que pase al endpoint para verificación interna
+
+        token = authorization.replace('Bearer ', '').strip()
+        try:
+            payload = jwt.decode(token, settings.secret_key, algorithms=[settings.algorithm])
+            subject = payload.get('sub')
+            return subject == settings.master_admin_username
+        except JWTError:
+            return False
     
     async def dispatch(self, request: Request, call_next):
         """Procesar la petición"""
