@@ -528,14 +528,14 @@ export const Recursos: React.FC = () => {
           }
         }}
       />
-      <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: '100%', bgcolor: '#f5f5f5', minHeight: '100vh' }}>
+      <Box sx={{ p: { xs: 1, sm: 3 }, maxWidth: '100%', bgcolor: '#f5f5f5', minHeight: '100vh', overflowX: 'hidden' }}>
         {/* Banner principal */}
         <Box sx={{ mb: 4 }}>
           <Fade in timeout={800}>
             <Paper
               elevation={0}
               sx={{
-                p: { xs: 3, sm: 4 },
+                p: { xs: 2, sm: 4 },
                 background: 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 55%, #d4a574 100%)',
                 color: 'white',
                 borderRadius: 3,
@@ -591,13 +591,14 @@ export const Recursos: React.FC = () => {
         }}>
           <Box
             sx={{
-              p:0.6,
+              p: { xs: 0.4, sm: 0.6 },
               borderRadius:3,
               background: 'linear-gradient(135deg, #f5f5f5 0%, #e8e8e8 100%)',
               border: '2px solid #e0e0e0',
               boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.08)',
               display:'inline-block',
-              maxWidth:'100%'
+              maxWidth:'100%',
+              width: { xs: '100%', sm: 'auto' }
             }}
           >
             <ToggleButtonGroup
@@ -606,28 +607,30 @@ export const Recursos: React.FC = () => {
               onChange={(_, v) => { if (v) setTab(v); }}
               size="small"
               sx={{
+                width: { xs: '100%', sm: 'auto' },
                 '& .MuiToggleButtonGroup-grouped': {
                   border: 'none',
-                  '&:not(:first-of-type)': { borderRadius: 3, marginLeft: '4px' },
+                  '&:not(:first-of-type)': { borderRadius: 3, marginLeft: { xs: '2px', sm: '4px' } },
                   '&:first-of-type': { borderRadius: 3 }
                 },
                 '& .MuiToggleButton-root': {
                   borderRadius: '22px !important',
-                  px: 2.6,
-                  py: 1.1,
+                  px: { xs: 1.5, sm: 2.6 },
+                  py: { xs: 0.8, sm: 1.1 },
                   textTransform: 'none',
-                  fontSize: '0.85rem',
+                  fontSize: { xs: '0.75rem', sm: '0.85rem' },
                   fontWeight: 700,
                   border: 'none !important',
-                  minWidth: 170,
+                  minWidth: { xs: 'auto', sm: 170 },
+                  flex: { xs: 1, sm: 'none' },
                   transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
                   position: 'relative',
                   overflow: 'hidden',
                   letterSpacing: '.3px',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 0.6,
-                  '& svg': { fontSize: 20 },
+                  gap: { xs: 0.4, sm: 0.6 },
+                  '& svg': { fontSize: { xs: 16, sm: 20 } },
                   '&::before': {
                     content: '""',
                     position: 'absolute',
@@ -663,13 +666,19 @@ export const Recursos: React.FC = () => {
               }}
             >
               <ToggleButton value="gasolina">
-                <LocalGasStation /> Tarjetas Gasoil
+                <LocalGasStation /> 
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Tarjetas Gasoil</Box>
+                <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>Gasoil</Box>
               </ToggleButton>
               <ToggleButton value="viat">
-                <CreditCard /> Via T
+                <CreditCard /> 
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Via T</Box>
+                <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>Via T</Box>
               </ToggleButton>
               <ToggleButton value="telefonos">
-                <PhoneIphone /> Teléfonos
+                <PhoneIphone /> 
+                <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Teléfonos</Box>
+                <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>Tel.</Box>
               </ToggleButton>
             </ToggleButtonGroup>
           </Box>
@@ -698,7 +707,7 @@ export const Recursos: React.FC = () => {
         <Fade in timeout={400}>
           <Box>
             {tab === 'gasolina' && (
-              <Paper elevation={0} sx={{ p:{ xs:3, sm:4 }, borderRadius: 3, border: '1px solid #e0e0e0', background:'#ffffff', overflow:'hidden' }}>
+              <Paper elevation={0} sx={{ p:{ xs:2, sm:4 }, borderRadius: 3, border: '1px solid #e0e0e0', background:'#ffffff', overflow:'hidden' }}>
                 <Box sx={{ 
                   display:'flex', alignItems:'center', gap:2, flexWrap:'wrap', mb:2,
                   pb:1.5, borderBottom:'1px solid #e0e0e0'
@@ -987,7 +996,7 @@ export const Recursos: React.FC = () => {
               </Paper>
             )}
             {tab === 'viat' && (
-              <Paper elevation={0} sx={{ p:{ xs:3, sm:4 }, borderRadius: 3, border: '1px solid #e0e0e0', background:'#ffffff', overflow:'hidden' }}>
+              <Paper elevation={0} sx={{ p:{ xs:2, sm:4 }, borderRadius: 3, border: '1px solid #e0e0e0', background:'#ffffff', overflow:'hidden' }}>
                 <Box sx={{ 
                   display:'flex', alignItems:'center', gap:2, flexWrap:'wrap', mb:2,
                   pb:1.5, borderBottom:'1px solid #e0e0e0'
@@ -1289,7 +1298,7 @@ export const Recursos: React.FC = () => {
               </Paper>
             )}
             {tab === 'telefonos' && (
-              <Paper elevation={0} sx={{ p:{ xs:4, sm:6 }, borderRadius:3, border:'2px dashed #d7d7d7', background:'#ffffff', textAlign:'center' }}>
+              <Paper elevation={0} sx={{ p:{ xs:3, sm:6 }, borderRadius:3, border:'2px dashed #d7d7d7', background:'#ffffff', textAlign:'center' }}>
                 <Box sx={{ display:'flex', flexDirection:'column', alignItems:'center', gap:3 }}>
                   <Box sx={{ p:3, borderRadius:'50%', background:'linear-gradient(135deg,#f5f5f5 0%,#ededed 100%)', border:'1px solid #e0e0e0' }}>
                     <PhoneIphone sx={{ fontSize:56, color:'#7d2d52' }} />
