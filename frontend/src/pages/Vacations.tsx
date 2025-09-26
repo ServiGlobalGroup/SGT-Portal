@@ -118,8 +118,8 @@ export const Vacations: React.FC = () => {
   const { selectedCompany } = useAuth();
   const { user } = useAuth();
   const role = user?.role || '';
-  const isAdminRole = role === 'ADMINISTRADOR' || role === 'MASTER_ADMIN';
-  const isRestrictedRole = role === 'TRABAJADOR' || role === 'TRAFICO' || role === 'ADMINISTRACION';
+  const isAdminRole = role === 'ADMINISTRADOR' || role === 'ADMINISTRACION' || role === 'MASTER_ADMIN';
+  const isRestrictedRole = role === 'TRABAJADOR' || role === 'TRAFICO';
   const { useMobileVersion } = useDeviceType();
 
   // Versión móvil optimizada

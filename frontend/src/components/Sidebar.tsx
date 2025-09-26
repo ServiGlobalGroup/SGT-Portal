@@ -15,6 +15,7 @@ import {
   Menu,
   MenuItem,
   SwipeableDrawer,
+  Badge,
   GlobalStyles,
   Collapse,
 } from '@mui/material';
@@ -41,6 +42,7 @@ import {
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { usePendingInspections } from '../hooks/usePendingInspections';
 import { canAccessRoute, getRoleText, hasPermission, Permission } from '../utils/permissions';
 import { vacationService } from '../services/vacationService'; // Importar servicio de vacaciones
 // Eliminado import de ColorModeContext tras retirar dark mode
@@ -90,6 +92,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, availableCompanies, selectedCompany, selectCompany } = useAuth();
+  const { pendingCount } = usePendingInspections();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [companyAnchorEl, setCompanyAnchorEl] = useState<null | HTMLElement>(null);
   const [expandedMenus, setExpandedMenus] = useState<Set<string>>(new Set());
@@ -366,7 +369,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     position: 'relative',
                   }}
                 >
-                  {item.icon}
+                  {item.text === 'Tráfico' ? (
+                    <Badge 
+                      badgeContent={pendingCount > 0 ? pendingCount : undefined} 
+                      color="error"
+                      overlap="rectangular"
+                    >
+                      {item.icon}
+                    </Badge>
+                  ) : (
+                    item.icon
+                  )}
                   {item.text === 'Ausencias' && pendingVacCount > 0 && (
                     <Box component="span" sx={{
                       position: 'absolute',

@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext } from 'react';
 import { usePagination } from '../../hooks/usePagination';
+import { useTruckInspection } from '../../hooks/useTruckInspection';
 import {
   Box,
   Typography,
@@ -22,6 +23,7 @@ import {
   Refresh,
 } from '@mui/icons-material';
 import { PdfPreview } from '../../components/PdfPreview';
+import { TruckInspectionModal } from '../../components/TruckInspectionModal';
 import { MobileDocumentCard } from '../../components/mobile/MobileDocumentCard';
 import { MobilePagination } from '../../components/mobile/MobilePagination';
 import { MobileLoading } from '../../components/mobile/MobileLoading';
@@ -64,6 +66,13 @@ export const MobileMisDocumentos: React.FC = () => {
   }
   const { user: currentUser } = authContext;
 
+  // Hook de inspección de camión
+  const {
+    needsInspection,
+    manualRequests,
+    checkInspectionNeeded,
+  } = useTruckInspection();
+
   // Estados principales
   const [userDocuments, setUserDocuments] = useState<UserDocuments>({
     nominas: [],
@@ -80,6 +89,7 @@ export const MobileMisDocumentos: React.FC = () => {
 
   // Estados de UI
   const [alert, setAlert] = useState<AlertState | null>(null);
+  const [inspectionModalOpen, setInspectionModalOpen] = useState(false);
   const [pdfPreview, setPdfPreview] = useState({
     open: false, fileUrl: '', fileName: '', title: ''
   });
@@ -99,6 +109,28 @@ export const MobileMisDocumentos: React.FC = () => {
   useEffect(() => {
     loadUserDocuments();
   }, []);
+
+  // Efecto para abrir el modal de inspección si es necesario
+  useEffect(() => {
+    if ((needsInspection || manualRequests.length > 0) && currentUser?.role === 'TRABAJADOR') {
+      setInspectionModalOpen(true);
+    }
+  }, [needsInspection, manualRequests, currentUser]);
+
+  const handleInspectionCompleted = () => {
+    setInspectionModalOpen(false);
+    setAlert({
+      type: 'success',
+      message: 'Inspección registrada correctamente'
+    });
+    checkInspectionNeeded().catch(() => undefined);
+  };
+
+  const handleCloseInspectionModal = () => {
+    if (currentUser?.role !== 'TRABAJADOR' || (!needsInspection && manualRequests.length === 0)) {
+      setInspectionModalOpen(false);
+    }
+  };
 
   useEffect(() => {
     if (alert) {
@@ -502,6 +534,7 @@ export const MobileMisDocumentos: React.FC = () => {
           </Fade>
         )}
 
+
         {/* Pestañas con búsqueda integrada */}
         <Fade in timeout={1000}>
           <Box sx={{ mb: 3 }}>
@@ -657,6 +690,16 @@ export const MobileMisDocumentos: React.FC = () => {
             {snackbar.message}
           </Alert>
         </Snackbar>
+
+        {/* Modal de inspección de camión */}
+        {currentUser?.role === 'TRABAJADOR' && (
+          <TruckInspectionModal
+            open={inspectionModalOpen}
+            onClose={handleCloseInspectionModal}
+            onInspectionCompleted={handleInspectionCompleted}
+            manualRequests={manualRequests}
+          />
+        )}
       </Box>
     </>
   );

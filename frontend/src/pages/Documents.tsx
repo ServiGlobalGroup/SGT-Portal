@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { PaginationComponent } from '../components/PaginationComponent';
 import { usePagination } from '../hooks/usePagination';
 import { useDeviceType } from '../hooks/useDeviceType';
+import { useTruckInspection } from '../hooks/useTruckInspection';
 import { MobileMisDocumentos } from './mobile/MobileMisDocumentos';
+import { TruckInspectionModal } from '../components/TruckInspectionModal';
 import {
   Box,
   Typography,
@@ -72,6 +74,11 @@ interface FolderData {
 export const Documents: React.FC = () => {
   const { useMobileVersion } = useDeviceType();
   const { user } = useAuth();
+  const {
+    needsInspection,
+    manualRequests,
+    checkInspectionNeeded,
+  } = useTruckInspection();
   
   // Si es dispositivo móvil, usar la versión optimizada
   if (useMobileVersion) {
@@ -94,6 +101,8 @@ export const Documents: React.FC = () => {
   const [pdfPreview, setPdfPreview] = useState<{ open: boolean; fileUrl: string; fileName: string }>({
     open: false, fileUrl: '', fileName: ''
   });
+  // Estado para el modal de inspección de camión
+  const [showTruckInspectionModal, setShowTruckInspectionModal] = useState(false);
 
   // Cargar documentos del usuario actual
   useEffect(() => {
@@ -106,6 +115,13 @@ export const Documents: React.FC = () => {
       return () => clearTimeout(timer);
     }
   }, [alert]);
+
+  // Verificar si necesita inspección cuando se monta el componente
+  useEffect(() => {
+    if (user && user.role === 'TRABAJADOR' && (needsInspection || manualRequests.length > 0)) {
+      setShowTruckInspectionModal(true);
+    }
+  }, [user, needsInspection, manualRequests]);
 
   const loadDocuments = async () => {
     setLoading(true);
@@ -241,6 +257,19 @@ export const Documents: React.FC = () => {
       window.open(document.download_url, '_blank');
     }
     handleCloseMenu();
+  };
+
+  const handleTruckInspectionCompleted = () => {
+    setAlert({ type: 'success', message: 'Inspección completada correctamente' });
+    setShowTruckInspectionModal(false);
+    checkInspectionNeeded().catch(() => undefined);
+  };
+
+  const handleCloseTruckInspectionModal = () => {
+    // Solo permitir cerrar si el usuario no es trabajador o no necesita inspección
+    if (user?.role !== 'TRABAJADOR' || (!needsInspection && manualRequests.length === 0)) {
+      setShowTruckInspectionModal(false);
+    }
   };
 
   const handleDelete = async (document: UserDocument) => {
@@ -424,6 +453,7 @@ export const Documents: React.FC = () => {
           </Alert>
         </Fade>
       )}
+
 
       {/* Navegación por Carpetas */}
       <Fade in timeout={1000}>
@@ -1029,6 +1059,16 @@ export const Documents: React.FC = () => {
         fileName={pdfPreview.fileName}
         title={`Vista previa: ${pdfPreview.fileName}`}
       />
+
+      {/* Modal de Inspección de Camión */}
+      {user?.role === 'TRABAJADOR' && (
+        <TruckInspectionModal
+          open={showTruckInspectionModal}
+          onClose={handleCloseTruckInspectionModal}
+          onInspectionCompleted={handleTruckInspectionCompleted}
+          manualRequests={manualRequests}
+        />
+      )}
     </Box>
     </>
   );
