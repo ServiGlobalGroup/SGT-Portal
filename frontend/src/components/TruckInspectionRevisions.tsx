@@ -31,6 +31,7 @@ import {
   Pagination,
   Collapse,
   Snackbar,
+  Tooltip,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
@@ -47,7 +48,10 @@ import {
   Search,
   RateReview,
   Done,
+  Warning,
+  Info,
 } from '@mui/icons-material';
+import { Settings, ToggleOff, ToggleOn } from '@mui/icons-material';
 import { truckInspectionService } from '../services/truckInspectionService';
 import { usersAPI } from '../services/api';
 import {
@@ -57,6 +61,7 @@ import {
   TruckInspectionRequestCreate,
 } from '../types/truck-inspection';
 import { useAuth } from '../hooks/useAuth';
+import { useAutoInspectionSettings } from '../hooks/useAutoInspectionSettings';
 
 const extractReviewNoteParts = (note?: string | null) => {
   if (!note) {
@@ -744,6 +749,7 @@ const InspectionDetailModal: React.FC<InspectionDetailModalProps> = ({ open, ins
 
 export const TruckInspectionRevisions: React.FC = () => {
   const { selectedCompany, isAuthenticated, token, user } = useAuth();
+  const { settings: autoSettings, loading: autoLoading, updateSettings: updateAutoSettings } = useAutoInspectionSettings();
 
   // Si no está autenticado, no renderizar el componente
   if (!isAuthenticated || !token) {
@@ -788,8 +794,15 @@ export const TruckInspectionRevisions: React.FC = () => {
   const [manualFeedback, setManualFeedback] = useState<
     { severity: 'success' | 'error'; message: string } | null
   >(null);
+  
+  // Estado para el modal de advertencia de desactivación
+  const [deactivationWarningOpen, setDeactivationWarningOpen] = useState(false);
+  
   const canSendManualRequests = Boolean(
     user && ['P_TALLER', 'ADMINISTRADOR', 'ADMINISTRACION', 'TRAFICO'].includes(user.role)
+  );
+  const canManageAutoSettings = Boolean(
+    user && ['P_TALLER', 'ADMINISTRADOR', 'ADMINISTRACION', 'TRAFICO', 'MASTER_ADMIN'].includes(user.role)
   );
 
   const resetManualForm = () => {
@@ -852,14 +865,47 @@ export const TruckInspectionRevisions: React.FC = () => {
     }
   };
 
-  const handleManualFeedbackClose = (
-    _event?: React.SyntheticEvent | Event,
-    reason?: string
-  ) => {
-    if (reason === 'clickaway') {
+  const handleManualFeedbackClose = () => {
+    setManualFeedback(null);
+  };
+
+  const handleToggleAutoInspection = async () => {
+    if (!canManageAutoSettings || !autoSettings || autoLoading) return;
+
+    // Si está activado y se va a desactivar, mostrar modal de advertencia
+    if (autoSettings.auto_inspection_enabled) {
+      setDeactivationWarningOpen(true);
       return;
     }
-    setManualFeedback(null);
+
+    // Si está desactivado, activar directamente
+    await performToggleAutoInspection();
+  };
+
+  const performToggleAutoInspection = async () => {
+    if (!canManageAutoSettings || !autoSettings || autoLoading) return;
+
+    try {
+      await updateAutoSettings(!autoSettings.auto_inspection_enabled);
+      setManualFeedback({
+        severity: 'success',
+        message: `Inspecciones automáticas ${!autoSettings.auto_inspection_enabled ? 'activadas' : 'desactivadas'} correctamente`,
+      });
+    } catch (error: any) {
+      setManualFeedback({
+        severity: 'error',
+        message: error.message || 'Error al cambiar la configuración automática',
+      });
+    }
+  };
+
+  const handleConfirmDeactivation = async () => {
+    setDeactivationWarningOpen(false);
+    await performToggleAutoInspection();
+  };
+
+  const handleCancelDeactivation = () => {
+    setDeactivationWarningOpen(false);
   };
   // const [userOptions, setUserOptions] = useState<{ id: number; name: string }[]>([]);
 
@@ -1167,29 +1213,136 @@ export const TruckInspectionRevisions: React.FC = () => {
               </Box>
             </Box>
 
-            {canSendManualRequests && (
-              <Button
-                onClick={handleOpenManualModal}
-                variant="contained"
-                startIcon={<RateReview />}
-                sx={{
-                  alignSelf: { xs: 'flex-start', md: 'center' },
-                  borderRadius: 999,
-                  textTransform: 'none',
-                  fontWeight: 600,
-                  px: 3,
-                  py: 1.2,
-                  background: 'linear-gradient(135deg, #501b36 0%, #7a2b54 100%)',
-                  boxShadow: '0 6px 16px rgba(80, 27, 54, 0.25)',
-                  '&:hover': {
-                    background: 'linear-gradient(135deg, #3d1429 0%, #5a1f3d 100%)',
-                    boxShadow: '0 10px 20px rgba(80, 27, 54, 0.3)',
-                  },
-                }}
-              >
-                Solicitar inspección manual
-              </Button>
-            )}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+              {canManageAutoSettings && autoSettings && (
+                <Box
+                  sx={{
+                    p: 2,
+                    borderRadius: 2,
+                    bgcolor: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                  }}
+                >
+                  <Tooltip
+                    title={
+                      <Box>
+                        <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                          Inspecciones Automáticas cada 15 días
+                        </Typography>
+                        <Typography variant="body2" sx={{ mb: 1 }}>
+                          {autoSettings.auto_inspection_enabled ? (
+                            <>
+                              <strong>Estado:</strong> ACTIVADAS ✅<br />
+                              • Los trabajadores deben realizar una inspección cada 15 días<br />
+                              • El sistema notifica automáticamente cuando es necesaria<br />
+                              • Ayuda a mantener el mantenimiento preventivo al día
+                            </>
+                          ) : (
+                            <>
+                              <strong>Estado:</strong> DESACTIVADAS ⚠️<br />
+                              • Los trabajadores NO reciben notificaciones automáticas<br />
+                              • Solo se pueden enviar solicitudes manuales<br />
+                              • Puede afectar el cumplimiento del mantenimiento preventivo
+                            </>
+                          )}
+                        </Typography>
+                        <Typography variant="caption" sx={{ opacity: 0.8 }}>
+                          Haz clic para {autoSettings.auto_inspection_enabled ? 'desactivar' : 'activar'}
+                        </Typography>
+                      </Box>
+                    }
+                    arrow
+                    placement="top"
+                  >
+                    <Box sx={{ 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      gap: 1.5,
+                      cursor: 'pointer',
+                    }}
+                    onClick={handleToggleAutoInspection}
+                    >
+                      <Typography 
+                        variant="body2" 
+                        sx={{ 
+                          fontWeight: 600,
+                          fontSize: '0.85rem',
+                          color: autoSettings.auto_inspection_enabled ? '#4caf50' : '#64748b',
+                        }}
+                      >
+                        Automática cada 15 días
+                      </Typography>
+                      <Box
+                        sx={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          cursor: autoLoading ? 'default' : 'pointer',
+                          opacity: autoLoading ? 0.6 : 1,
+                          userSelect: 'none',
+                          transition: 'opacity 0.2s ease',
+                          '&:hover': {
+                            opacity: autoLoading ? 0.6 : 0.8,
+                          }
+                        }}
+                      >
+                        <Box
+                          sx={{
+                            width: 44,
+                            height: 24,
+                            borderRadius: 2,
+                            bgcolor: autoSettings.auto_inspection_enabled ? '#4caf50' : '#e0e0e0',
+                            position: 'relative',
+                            transition: 'background-color 0.3s ease',
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              width: 20,
+                              height: 20,
+                              borderRadius: 1,
+                              bgcolor: 'white',
+                              position: 'absolute',
+                              top: 2,
+                              left: autoSettings.auto_inspection_enabled ? 22 : 2,
+                              transition: 'left 0.3s ease',
+                              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                            }}
+                          />
+                        </Box>
+                      </Box>
+                    </Box>
+                  </Tooltip>
+                </Box>
+              )}
+
+              {canSendManualRequests && (
+                <Button
+                  onClick={handleOpenManualModal}
+                  variant="contained"
+                  startIcon={<RateReview />}
+                  sx={{
+                    borderRadius: 999,
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    px: 3,
+                    py: 1.2,
+                    background: 'linear-gradient(135deg, #501b36 0%, #7a2b54 100%)',
+                    boxShadow: '0 6px 16px rgba(80, 27, 54, 0.25)',
+                    '&:hover': {
+                      background: 'linear-gradient(135deg, #3d1429 0%, #5a1f3d 100%)',
+                      boxShadow: '0 10px 20px rgba(80, 27, 54, 0.3)',
+                    },
+                  }}
+                >
+                  Solicitar inspección manual
+                </Button>
+              )}
+            </Box>
           </Box>
 
           {error && (
@@ -1837,15 +1990,18 @@ export const TruckInspectionRevisions: React.FC = () => {
       {manualFeedback && (
         <Snackbar
           open
-          autoHideDuration={5000}
+          autoHideDuration={3000}
           onClose={handleManualFeedbackClose}
-          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         >
           <Alert
             severity={manualFeedback.severity}
             onClose={handleManualFeedbackClose}
-            variant="filled"
-            sx={{ borderRadius: 2 }}
+            sx={{ 
+              width: '100%',
+              borderRadius: 2,
+              fontWeight: 600,
+            }}
           >
             {manualFeedback.message}
           </Alert>
@@ -1861,6 +2017,64 @@ export const TruckInspectionRevisions: React.FC = () => {
         }}
         onMarkReviewed={handleMarkReviewed}
       />
+
+      {/* Modal de advertencia para desactivación */}
+      <Dialog
+        open={deactivationWarningOpen}
+        onClose={handleCancelDeactivation}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 1,
+        }}>
+          <Warning sx={{ color: '#ff5722', fontSize: 24 }} />
+          <Typography variant="h6">
+            Desactivar Inspecciones Automáticas
+          </Typography>
+        </DialogTitle>
+        
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            Estás a punto de desactivar las inspecciones automáticas cada 15 días.
+          </Typography>
+          
+          <Typography variant="body2" sx={{ mb: 1 }}>
+            Esto significa que:
+          </Typography>
+          
+          <Box component="ul" sx={{ pl: 2, mb: 2 }}>
+            <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>
+              Los trabajadores NO recibirán notificaciones automáticas
+            </Typography>
+            <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>
+              Solo podrás enviar solicitudes manuales
+            </Typography>
+            <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>
+              Puede afectar el cumplimiento del mantenimiento preventivo
+            </Typography>
+          </Box>
+          
+          <Typography variant="body2" color="text.secondary">
+            ¿Estás seguro de que quieres continuar?
+          </Typography>
+        </DialogContent>
+        
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={handleCancelDeactivation} variant="outlined">
+            Cancelar
+          </Button>
+          <Button 
+            onClick={handleConfirmDeactivation} 
+            variant="contained" 
+            color="error"
+          >
+            Sí, Desactivar
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };

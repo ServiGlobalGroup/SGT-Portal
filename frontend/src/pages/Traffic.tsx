@@ -611,31 +611,21 @@ export const Traffic: React.FC = () => {
 
         {/* Panel de Control (siempre visible para mostrar toggle) */}
         <Fade in timeout={1200}>
-          <Paper
-            elevation={0}
-            sx={{
-              p: { xs: 2, sm: 2.5 },
-              mb: 2,
-              borderRadius: 3,
-              border: '1px solid #e2e8f0',
-              background: '#ffffff',
-              boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-            }}
-          >
-            {/* Navegación breadcrumbs moderna - Simplificada */}
-            <Box sx={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'space-between',
-              mb: 2,
-              p: 2,
-              borderRadius: 2,
-              bgcolor: 'rgba(248, 250, 252, 0.8)',
-              border: '1px solid #e2e8f0',
-            }}>
-              {/* Breadcrumb Navigation */}
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
-                {currentPath !== '/' && (
+          <Box sx={{ mb: 2 }}>
+            {/* Navegación breadcrumbs moderna - Solo mostrar si no estamos en la raíz */}
+            {currentPath !== '/' && (
+              <Box sx={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'space-between',
+                mb: 2,
+                p: 2,
+                borderRadius: 2,
+                bgcolor: 'rgba(248, 250, 252, 0.8)',
+                border: '1px solid #e2e8f0',
+              }}>
+                {/* Breadcrumb Navigation */}
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: 1 }}>
                   <Button
                     startIcon={<ArrowBack />}
                     onClick={handleBackClick}
@@ -658,27 +648,12 @@ export const Traffic: React.FC = () => {
                   >
                     Volver
                   </Button>
-                )}
                 
-                {/* Breadcrumb Trail */}
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.875rem', color: '#64748b' }}>
-                  {/* Home */}
-                  <Button
-                    onClick={() => setCurrentPath('/')}
-                    sx={{
-                      minWidth: 'auto',
-                      p: 0.5,
-                      borderRadius: 1,
-                      color: currentPath === '/' ? '#501b36' : '#64748b',
-                      fontWeight: currentPath === '/' ? 600 : 400,
-                      '&:hover': { bgcolor: 'rgba(80, 27, 54, 0.08)' },
-                    }}
-                  >
-                    <Home sx={{ fontSize: 16 }} />
-                  </Button>
-
-                  {/* Breadcrumb Items */}
-                  {getBreadcrumbs().map((folderName, index) => {
+                  {/* Breadcrumb Trail - Solo mostrar si hay breadcrumbs */}
+                  {getBreadcrumbs().length > 0 && (
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, fontSize: '0.875rem', color: '#64748b' }}>
+                    {/* Breadcrumb Items */}
+                    {getBreadcrumbs().map((folderName, index) => {
                     const pathToFolder = '/' + getBreadcrumbs().slice(0, index + 1).join('/');
                     return (
                       <React.Fragment key={folderName}>
@@ -714,37 +689,13 @@ export const Traffic: React.FC = () => {
                       </React.Fragment>
                     );
                   })}
+                  </Box>
+                )}
                 </Box>
               </Box>
+            )}
 
-              {/* Level Indicator */}
-              <Box
-                sx={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1,
-                  px: 2,
-                  py: 1,
-                  borderRadius: 2,
-                  bgcolor: 'rgba(80, 27, 54, 0.08)',
-                  border: '1px solid rgba(80, 27, 54, 0.15)',
-                }}
-              >
-                <AccountTree sx={{ color: '#501b36', fontSize: 16 }} />
-                <Typography
-                  variant="caption"
-                  sx={{ 
-                    color: '#501b36',
-                    fontWeight: 600,
-                    fontSize: '0.8rem',
-                  }}
-                >
-                  Nivel {currentPath !== '/' ? getBreadcrumbs().length : 0}
-                </Typography>
-              </Box>
-            </Box>
-
-            {/* Controles de acción - Más compactos */}
+            {/* Controles de acción - Sin contenedor con fondo */}
             <Box sx={{ 
               display:'flex',
               flexWrap:'wrap',
@@ -752,29 +703,8 @@ export const Traffic: React.FC = () => {
               alignItems:'center',
               mb:2
             }}>
-              <Box sx={{ flex:1, minWidth: 240 }}>
-                {trafficView === 'files' && (
-                  <TextField
-                    size="small"
-                    placeholder="Buscar archivos y carpetas..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    InputProps={{ startAdornment: <Search sx={{ mr:1, color:'text.secondary', fontSize:20 }} /> }}
-                    sx={{
-                      width:'100%',
-                      maxWidth:{ xs:'100%', sm:350 },
-                      '& .MuiOutlinedInput-root':{
-                        borderRadius:2,
-                        bgcolor:'#f8fafc',
-                        '&:hover .MuiOutlinedInput-notchedOutline': { borderColor:'#501b36' },
-                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor:'#501b36' }
-                      }
-                    }}
-                  />
-                )}
-              </Box>
-              {/* Toggle siempre alineado a la derecha */}
-              <Stack direction="row" spacing={1} alignItems="center" sx={{ justifyContent:'flex-end' }}>
+              {/* Toggle de pestañas */}
+              <Stack direction="row" spacing={1} alignItems="center">
                 <Box
                   sx={{
                     p:0.5,
@@ -828,11 +758,10 @@ export const Traffic: React.FC = () => {
                     </Badge>
                   ))}
                 </Box>
-
-                {/* Botón de actualizar eliminado: refresco ahora automático */}
               </Stack>
             </Box>
-          </Paper>
+
+          </Box>
         </Fade>
 
         {/* Contenido Principal */}
@@ -873,6 +802,26 @@ export const Traffic: React.FC = () => {
                   )}
                 </Box>
                 <Box sx={{ display:'flex', alignItems:'center', gap:1 }}>
+                  {/* Buscador */}
+                  {trafficView === 'files' && (
+                    <TextField
+                      size="small"
+                      placeholder="Buscar archivos y carpetas..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      InputProps={{ startAdornment: <Search sx={{ mr:1, color:'text.secondary', fontSize:20 }} /> }}
+                      sx={{
+                        width: 300,
+                        mr: 2,
+                        '& .MuiOutlinedInput-root':{
+                          borderRadius:2,
+                          bgcolor:'#f8fafc',
+                          '&:hover .MuiOutlinedInput-notchedOutline': { borderColor:'#501b36' },
+                          '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor:'#501b36' }
+                        }
+                      }}
+                    />
+                  )}
                   {trafficView==='files' && canManageTraffic && (
                     <Stack direction="row" spacing={1} sx={{ mr:2 }}>
                       <Button
@@ -1801,7 +1750,7 @@ export const Traffic: React.FC = () => {
         {/* Snackbar */}
         <Snackbar
           open={snackbar.open}
-          autoHideDuration={6000}
+          autoHideDuration={3000}
           onClose={() => setSnackbar(prev => ({ ...prev, open: false }))}
           anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         >

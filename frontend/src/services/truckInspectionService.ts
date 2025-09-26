@@ -9,6 +9,7 @@ import {
   MarkInspectionReviewedResponse,
   TruckInspectionRequestCreate,
   TruckInspectionRequestResult,
+  AutoInspectionSettings,
 
 } from '../types/truck-inspection';
 
@@ -305,6 +306,64 @@ class TruckInspectionService {
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
       throw new Error(errorData.detail || `Error enviando solicitudes de inspección: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async getAutoInspectionSettings(): Promise<AutoInspectionSettings> {
+    const token = localStorage.getItem('access_token');
+
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/settings/auto-inspection`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.');
+      }
+      if (response.status === 403) {
+        throw new Error('No tienes permisos para ver la configuración de inspecciones automáticas.');
+      }
+      throw new Error(`Error obteniendo la configuración automática: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  async updateAutoInspectionSettings(enabled: boolean): Promise<AutoInspectionSettings> {
+    const token = localStorage.getItem('access_token');
+
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const response = await fetch(`${API_BASE_URL}/settings/auto-inspection`, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ auto_inspection_enabled: enabled }),
+    });
+
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Sesión expirada. Por favor, inicia sesión nuevamente.');
+      }
+      if (response.status === 403) {
+        throw new Error('No cuentas con permisos para modificar la configuración automática.');
+      }
+
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Error actualizando la configuración automática: ${response.statusText}`);
     }
 
     return response.json();

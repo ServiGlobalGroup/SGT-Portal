@@ -15,6 +15,7 @@ interface UseTruckInspectionResult {
   error: string | null;
   checkInspectionNeeded: () => Promise<void>;
   inspectionIntervalDays: number;
+  autoInspectionEnabled: boolean;
 }
 
 /**
@@ -30,6 +31,7 @@ export const useTruckInspection = (): UseTruckInspectionResult => {
     message: '',
     manual_requests: [],
     inspection_interval_days: 15,
+    auto_inspection_enabled: true,
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +48,7 @@ export const useTruckInspection = (): UseTruckInspectionResult => {
         message: 'Solo los trabajadores necesitan realizar inspecciones',
         manual_requests: [],
         inspection_interval_days: 15,
+        auto_inspection_enabled: true,
       });
       return;
     }
@@ -59,6 +62,7 @@ export const useTruckInspection = (): UseTruckInspectionResult => {
         ...response,
         manual_requests: response.manual_requests ?? [],
         inspection_interval_days: response.inspection_interval_days ?? inspectionStatus.inspection_interval_days,
+        auto_inspection_enabled: response.auto_inspection_enabled ?? true,
       });
     } catch (err: any) {
       // Manejar específicamente errores de autenticación
@@ -73,6 +77,7 @@ export const useTruckInspection = (): UseTruckInspectionResult => {
           message: 'Sesión no válida',
           manual_requests: [],
           inspection_interval_days: 15,
+          auto_inspection_enabled: true,
         });
       } else {
         setError(err?.message || 'Error verificando estado de inspección');
@@ -133,5 +138,6 @@ export const useTruckInspection = (): UseTruckInspectionResult => {
     error,
     checkInspectionNeeded,
     inspectionIntervalDays: inspectionStatus.inspection_interval_days,
+    autoInspectionEnabled: inspectionStatus.auto_inspection_enabled,
   };
 };

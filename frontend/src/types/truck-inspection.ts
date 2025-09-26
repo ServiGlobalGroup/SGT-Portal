@@ -71,6 +71,13 @@ export interface MarkInspectionReviewedResponse {
   reviewed_at: string;
 }
 
+export interface AutoInspectionSettings {
+  auto_inspection_enabled: boolean;
+  updated_at?: string | null;
+  updated_by?: string | null;
+  updated_by_id?: number | null;
+}
+
 export interface TruckInspectionSummary {
   id: number;
   user_id: number;
@@ -98,6 +105,7 @@ export interface InspectionNeededResponse {
   inspection_interval_days: number;
   message: string;
   manual_requests?: ManualInspectionRequest[];
+  auto_inspection_enabled: boolean;
 }
 
 export interface TruckInspectionRequestRecipient {

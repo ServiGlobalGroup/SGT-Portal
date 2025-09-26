@@ -156,6 +156,7 @@ class InspectionNeededResponse(BaseModel):
     message: str
     manual_requests: Optional[List["ManualInspectionRequest"]] = None
     inspection_interval_days: int = 15
+    auto_inspection_enabled: bool = True
 
 
 class InspectionStatsResponse(BaseModel):
@@ -229,3 +230,27 @@ class TruckInspectionRequestResult(BaseModel):
     skipped_existing: int
     recipients: List[TruckInspectionRequestRecipient]
     message: str
+
+
+class AutoInspectionSettings(BaseModel):
+    """Configuración para las inspecciones automáticas cada 15 días."""
+
+    auto_inspection_enabled: bool = Field(True, description="Si las inspecciones automáticas están activas")
+    updated_at: Optional[datetime] = Field(
+        None,
+        description="Fecha de la última actualización"
+    )
+    updated_by: Optional[str] = Field(
+        None,
+        description="Nombre de quien realizó la última actualización"
+    )
+    updated_by_id: Optional[int] = Field(
+        None,
+        description="Identificador del usuario que realizó la última actualización"
+    )
+
+
+class AutoInspectionSettingsUpdate(BaseModel):
+    """Payload para actualizar el estado de las inspecciones automáticas."""
+
+    auto_inspection_enabled: bool = Field(..., description="Nuevo estado para las inspecciones automáticas")

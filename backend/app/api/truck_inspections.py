@@ -1,5 +1,6 @@
 ﻿# pyright: reportGeneralTypeIssues=false
 """API endpoints para inspecciones de camiones."""
+import json
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Any, List, Optional, Tuple, cast
@@ -10,7 +11,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import desc, func, and_, or_
 
 from app.database.connection import get_db
-from app.models.user import User, UserRole, UserStatus
+from app.models.user import MasterAdminUser, User, UserRole, UserStatus
 from app.models.truck_inspection import TruckInspection
 from app.models.truck_inspection_request import TruckInspectionRequest, InspectionRequestStatus
 from app.schemas.truck_inspection import (
@@ -25,6 +26,8 @@ from app.schemas.truck_inspection import (
     TruckInspectionRequestResult,
     TruckInspectionRequestRecipient,
     ManualInspectionRequest,
+    AutoInspectionSettings,
+    AutoInspectionSettingsUpdate,
 )
 from app.api.auth import get_current_user
 from app.services.activity_service import ActivityService
@@ -37,6 +40,66 @@ TRUCK_INSPECTION_FOLDER = "files/truck_inspections"
 INSPECTION_INTERVAL_DAYS = 15  # 2 veces al mes = cada 15 días
 ALLOWED_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10MB
+AUTO_INSPECTION_SETTINGS_FILE = "truck_inspection_settings.json"
+
+AUTO_INSPECTION_MANAGEMENT_ROLES: list[UserRole] = [
+    UserRole.P_TALLER,
+    UserRole.ADMINISTRADOR,
+    UserRole.ADMINISTRACION,
+    UserRole.TRAFICO,
+    UserRole.MASTER_ADMIN,
+]
+
+
+def _load_auto_inspection_settings() -> AutoInspectionSettings:
+    """Carga la configuración de inspecciones automáticas desde archivo."""
+
+    if not os.path.exists(AUTO_INSPECTION_SETTINGS_FILE):
+        default_settings = AutoInspectionSettings(
+            auto_inspection_enabled=True,
+            updated_at=None,
+            updated_by=None,
+            updated_by_id=None,
+        )
+        _save_auto_inspection_settings(default_settings)
+        return default_settings
+
+    try:
+        with open(AUTO_INSPECTION_SETTINGS_FILE, "r", encoding="utf-8") as file:
+            data = json.load(file)
+        return AutoInspectionSettings.model_validate(data)
+    except Exception as exc:  # pragma: no cover - fallback
+        print(f"ERROR cargando configuración de inspecciones automáticas: {exc}")
+        return AutoInspectionSettings(
+            auto_inspection_enabled=True,
+            updated_at=None,
+            updated_by=None,
+            updated_by_id=None,
+        )
+
+
+def _save_auto_inspection_settings(settings: AutoInspectionSettings) -> None:
+    """Guarda la configuración de inspecciones automáticas en archivo."""
+
+    try:
+        with open(AUTO_INSPECTION_SETTINGS_FILE, "w", encoding="utf-8") as file:
+            json.dump(settings.model_dump(mode="json"), file, ensure_ascii=False, indent=2)
+    except Exception as exc:  # pragma: no cover - filesystem issues
+        print(f"ERROR guardando configuración de inspecciones automáticas: {exc}")
+        raise HTTPException(
+            status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="No se pudo guardar la configuración de inspecciones automáticas.",
+        )
+
+
+def _user_can_manage_auto_settings(user: User | MasterAdminUser) -> bool:
+    """Determina si el usuario puede gestionar la configuración automática."""
+
+    if isinstance(user, MasterAdminUser):
+        return True
+
+    role_value = getattr(user, "role", None)
+    return role_value is not None and _role_in(role_value, AUTO_INSPECTION_MANAGEMENT_ROLES)
 
 
 def _role_equals(role_value, expected: UserRole) -> bool:
@@ -91,6 +154,9 @@ def _build_inspection_summary(inspection: TruckInspection) -> TruckInspectionSum
 
 
 def _compute_inspection_status(current_user: User, db: Session) -> InspectionNeededResponse:
+    settings = _load_auto_inspection_settings()
+    auto_enabled = settings.auto_inspection_enabled
+
     if not _role_equals(current_user.role, UserRole.TRABAJADOR):
         return InspectionNeededResponse(
             needs_inspection=False,
@@ -99,9 +165,8 @@ def _compute_inspection_status(current_user: User, db: Session) -> InspectionNee
             days_since_last_inspection=None,
             message="Solo los trabajadores necesitan realizar inspecciones",
             inspection_interval_days=INSPECTION_INTERVAL_DAYS,
+            auto_inspection_enabled=auto_enabled,
         )
-
-    # La inspección automática está siempre habilitada
 
     pending_requests = (
         db.query(TruckInspectionRequest)
@@ -133,17 +198,45 @@ def _compute_inspection_status(current_user: User, db: Session) -> InspectionNee
     )
 
     if not last_inspection:
-        message = "Debes completar tu primera inspección de camión"
         if has_manual_requests:
-            message = "Tienes una solicitud manual de inspección pendiente. " + message
+            message = "Tienes una solicitud manual de inspección pendiente. Realiza la inspección para atenderla."
+            return InspectionNeededResponse(
+                needs_inspection=True,
+                last_inspection_date=None,
+                next_inspection_date=None,
+                days_since_last_inspection=None,
+                message=message,
+                manual_requests=manual_requests_payload or None,
+                inspection_interval_days=INSPECTION_INTERVAL_DAYS,
+                auto_inspection_enabled=auto_enabled,
+            )
+
+        if auto_enabled:
+            message = "Debes completar tu primera inspección de camión."
+            return InspectionNeededResponse(
+                needs_inspection=True,
+                last_inspection_date=None,
+                next_inspection_date=None,
+                days_since_last_inspection=None,
+                message=message,
+                manual_requests=None,
+                inspection_interval_days=INSPECTION_INTERVAL_DAYS,
+                auto_inspection_enabled=auto_enabled,
+            )
+
+        message = (
+            "Las inspecciones automáticas están desactivadas temporalmente. "
+            "Recibirás recordatorios únicamente si el taller lo solicita manualmente."
+        )
         return InspectionNeededResponse(
-            needs_inspection=True,
+            needs_inspection=False,
             last_inspection_date=None,
             next_inspection_date=None,
             days_since_last_inspection=None,
             message=message,
-            manual_requests=manual_requests_payload or None,
+            manual_requests=None,
             inspection_interval_days=INSPECTION_INTERVAL_DAYS,
+            auto_inspection_enabled=auto_enabled,
         )
 
     last_inspection_date = cast(datetime, last_inspection.inspection_date)
@@ -152,10 +245,13 @@ def _compute_inspection_status(current_user: User, db: Session) -> InspectionNee
 
     now_utc = datetime.now(timezone.utc)
     days_since = (now_utc - last_inspection_date).days
-    next_inspection_date = last_inspection_date + timedelta(days=INSPECTION_INTERVAL_DAYS)
+    next_inspection_date: Optional[datetime] = None
+    if auto_enabled:
+        next_inspection_date = last_inspection_date + timedelta(days=INSPECTION_INTERVAL_DAYS)
+        if next_inspection_date.tzinfo is None or next_inspection_date.utcoffset() is None:
+            next_inspection_date = next_inspection_date.replace(tzinfo=timezone.utc)
 
-    # La inspección automática siempre está habilitada - verificar si necesita inspección por tiempo
-    needs_due_interval = days_since >= INSPECTION_INTERVAL_DAYS
+    needs_due_interval = auto_enabled and days_since >= INSPECTION_INTERVAL_DAYS
     needs_inspection = needs_due_interval or has_manual_requests
 
     message_parts: list[str] = []
@@ -169,15 +265,34 @@ def _compute_inspection_status(current_user: User, db: Session) -> InspectionNee
                 f"Tienes {len(manual_requests_payload)} solicitudes manuales de inspección pendientes."
             )
 
-    message_parts.append(f"Última inspección hace {days_since} días.")
-    message_parts.append(
-        f"Próxima revisión programada para el {next_inspection_date.astimezone(timezone.utc).strftime('%d/%m/%Y')}"
-    )
+    if auto_enabled:
+        message_parts.append(f"Última inspección hace {days_since} días.")
+        if next_inspection_date is not None:
+            message_parts.append(
+                "Próxima revisión programada para el "
+                f"{next_inspection_date.astimezone(timezone.utc).strftime('%d/%m/%Y')}"
+            )
 
-    if needs_inspection:
-        message_parts.append("Realiza una nueva inspección a la mayor brevedad posible.")
+        if needs_inspection:
+            if needs_due_interval:
+                message_parts.append(
+                    "Han pasado 15 días desde la última revisión, realiza una nueva inspección."
+                )
+            else:
+                message_parts.append("Atiende la solicitud manual a la mayor brevedad posible.")
+        else:
+            message_parts.append("Aún no es obligatorio realizarla.")
     else:
-        message_parts.append("Aún no es obligatorio realizarla.")
+        message_parts.append(
+            "Las inspecciones automáticas cada 15 días están desactivadas temporalmente."
+        )
+        message_parts.append(f"Última inspección hace {days_since} días.")
+        if has_manual_requests:
+            message_parts.append("Atiende la solicitud manual lo antes posible.")
+        else:
+            message_parts.append(
+                "Solo recibirás avisos manuales mientras dure la suspensión de revisiones automáticas."
+            )
 
     message = " ".join(message_parts)
 
@@ -189,7 +304,74 @@ def _compute_inspection_status(current_user: User, db: Session) -> InspectionNee
         message=message,
         manual_requests=manual_requests_payload or None,
         inspection_interval_days=INSPECTION_INTERVAL_DAYS,
+        auto_inspection_enabled=auto_enabled,
     )
+
+@router.get("/settings/auto-inspection", response_model=AutoInspectionSettings)
+async def get_auto_inspection_settings_endpoint(
+    current_user: User | MasterAdminUser = Depends(get_current_user),
+):
+    """Obtiene el estado actual de las inspecciones automáticas cada 15 días."""
+
+    if not _user_can_manage_auto_settings(current_user):
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos para consultar esta configuración.",
+        )
+
+    return _load_auto_inspection_settings()
+
+
+@router.put("/settings/auto-inspection", response_model=AutoInspectionSettings)
+async def update_auto_inspection_settings_endpoint(
+    payload: AutoInspectionSettingsUpdate,
+    current_user: User | MasterAdminUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Actualiza el estado de las inspecciones automáticas cada 15 días."""
+
+    if not _user_can_manage_auto_settings(current_user):
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos para modificar esta configuración.",
+        )
+
+    timestamp = datetime.now(timezone.utc)
+    full_name = getattr(current_user, "full_name", None)
+    if not full_name:
+        first_name = getattr(current_user, "first_name", "")
+        last_name = getattr(current_user, "last_name", "")
+        full_name = (first_name + " " + last_name).strip() or None
+
+    updated_settings = AutoInspectionSettings(
+        auto_inspection_enabled=payload.auto_inspection_enabled,
+        updated_at=timestamp,
+        updated_by=full_name,
+        updated_by_id=getattr(current_user, "id", None),
+    )
+
+    _save_auto_inspection_settings(updated_settings)
+
+    try:
+        ActivityService.log_from_user(
+            db,
+            user=current_user,
+            event_type=ActivityService.EVENT_OTHER,
+            message=(
+                "Inspecciones automáticas cada 15 días "
+                + ("activadas" if payload.auto_inspection_enabled else "desactivadas")
+            ),
+            entity_type="truck_inspections",
+            entity_id="auto_settings",
+            meta={
+                "auto_inspection_enabled": payload.auto_inspection_enabled,
+                "timestamp": timestamp.isoformat(),
+            },
+        )
+    except Exception as exc:  # pragma: no cover - logging shouldn't break request
+        print(f"ERROR registrando actividad de configuración de inspecciones: {exc}")
+
+    return updated_settings
 
 
 @router.get("/check-needed", response_model=InspectionNeededResponse)
