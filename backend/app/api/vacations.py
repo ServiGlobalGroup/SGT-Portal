@@ -576,6 +576,33 @@ async def get_pending_requests_for_admin(
     
     return response
 
+@router.get("/pending/count")
+async def get_pending_count(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    x_company: str | None = Header(default=None, alias="X-Company")
+):
+    """
+    Obtiene el conteo de solicitudes de vacaciones pendientes para el sidebar.
+    Solo accesible para administradores.
+    """
+    # Verificar permisos de administrador
+    if current_user.role.value not in ['ADMINISTRADOR', 'MASTER_ADMIN']:
+        return {"count": 0}
+    
+    # Contar solicitudes pendientes
+    query = db.query(VacationRequest).filter(
+        VacationRequest.status == VacationStatus.PENDING
+    )
+    
+    # Filtro por empresa del usuario actual
+    comp_obj = effective_company_for_request(current_user, x_company)
+    if comp_obj is not None:
+        query = query.filter(VacationRequest.company == comp_obj)
+    
+    count = query.count()
+    return {"count": count}
+
 @router.get("/usage", response_model=VacationUsage)
 async def get_vacation_usage(
     user_id: int | None = None,

@@ -377,27 +377,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     >
                       {item.icon}
                     </Badge>
+                  ) : item.text === 'Ausencias' ? (
+                    <Badge 
+                      badgeContent={pendingVacCount > 0 ? pendingVacCount : undefined} 
+                      color="error"
+                      overlap="rectangular"
+                    >
+                      {item.icon}
+                    </Badge>
                   ) : (
                     item.icon
-                  )}
-                  {item.text === 'Ausencias' && pendingVacCount > 0 && (
-                    <Box component="span" sx={{
-                      position: 'absolute',
-                      top: -2,
-                      right: (isCollapsed && !isMobile) ? -2 : 4,
-                      width: 14,
-                      height: 14,
-                      background: '#d32f2f',
-                      borderRadius: '50%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontSize: '0.55rem',
-                      fontWeight: 600,
-                      color: '#fff',
-                      letterSpacing: 0,
-                      border: '2px solid rgba(255,255,255,0.55)', // borde claro para integrarse con degradado
-                    }}>{pendingVacCount > 99 ? '99+' : pendingVacCount}</Box>
                   )}
                 </ListItemIcon>
                 {(!isCollapsed || isMobile) && (

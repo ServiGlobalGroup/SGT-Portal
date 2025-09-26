@@ -333,3 +333,23 @@ async def get_pending_requests_for_admin(
         response.append(response_item)
     
     return response
+
+@router.get("/pending/count")
+async def get_pending_count(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Obtiene el conteo de solicitudes de vacaciones pendientes para el sidebar.
+    Solo accesible para administradores.
+    """
+    # Verificar permisos de administrador
+    if current_user.role.value not in ['ADMINISTRADOR', 'MASTER_ADMIN']:
+        return {"count": 0}
+    
+    # Contar solicitudes pendientes
+    count = db.query(VacationRequest).filter(
+        VacationRequest.status == VacationStatus.PENDING
+    ).count()
+    
+    return {"count": count}
