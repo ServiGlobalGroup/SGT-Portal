@@ -1,13 +1,14 @@
-"""Add complete truck inspections system
+"""Add truck inspections system
 
 This migration creates the full truck inspection system including:
 - truck_inspections table with all components and fields
 - truck_inspection_requests table for manual requests
 - Associated indexes and foreign keys
 
-Revision ID: 2025_09_25_truck_inspections_complete  
-Revises: 432bc7e530ae
-Create Date: 2025-09-25 16:00:00
+Revision ID: 74d9478ead70
+Revises: 0ffe0a087dbe
+Create Date: 2025-09-26 14:34:21.649497
+
 """
 from typing import Sequence, Union
 
@@ -17,8 +18,8 @@ from sqlalchemy.dialects import postgresql
 
 
 # revision identifiers, used by Alembic.
-revision: str = "2025_09_25_truck_inspections_complete"
-down_revision: Union[str, None] = "432bc7e530ae" 
+revision: str = '74d9478ead70'
+down_revision: Union[str, None] = '0ffe0a087dbe'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
