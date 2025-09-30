@@ -29,6 +29,7 @@ import {
   Badge,
   Checkbox,
   FormControlLabel,
+  Autocomplete,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
@@ -178,6 +179,20 @@ export const Vacations: React.FC = () => {
     absenceType: 'VACATION' as AbsenceType,
   });
   const [personalDaysWarning, setPersonalDaysWarning] = useState<string | null>(null);
+
+  // Estados para el modal de creación de ausencias por administradores
+  const [openAdminDialog, setOpenAdminDialog] = useState(false);
+  const [adminRequest, setAdminRequest] = useState({
+    userId: null as number | null,
+    selectedUser: null as { id: number; name: string } | null,
+    startDate: '',
+    endDate: '',
+    reason: 'Vacaciones',
+    oneDay: false,
+    absenceType: 'VACATION' as AbsenceType,
+  });
+  const [adminUserSearch, setAdminUserSearch] = useState('');
+  const [adminUserOptions, setAdminUserOptions] = useState<{ id: number; name: string }[]>([]);
 
   // Estados para pestaña de búsqueda de usuarios (solo desktop)
   const currentYearDefault = new Date().getFullYear();
@@ -448,6 +463,60 @@ export const Vacations: React.FC = () => {
     return () => { if (t) window.clearTimeout(t); };
   }, [userSearch]);
 
+  // Buscar usuarios para el modal de administrador con debounce
+  useEffect(() => {
+    let t: number | undefined;
+    const run = async () => {
+      if (!adminUserSearch || adminUserSearch.trim().length < 2) { 
+        // Si no hay búsqueda, cargar usuarios iniciales
+        if (adminUserSearch.trim().length === 0 && adminUserOptions.length === 0) {
+          try {
+            const res = await usersAPI.getAllUsers({ active_only: true, per_page: 10 });
+            const opts = (res.users || []).map((u:any) => ({ 
+              id: Number(u.id), 
+              name: `${u.first_name || ''} ${u.last_name || ''}`.trim() || (u.email || `Usuario ${u.id}`) 
+            }));
+            setAdminUserOptions(opts);
+          } catch (e) {
+            setAdminUserOptions([]);
+          }
+        }
+        return; 
+      }
+      try {
+        const res = await usersAPI.getAllUsers({ search: adminUserSearch.trim(), active_only: true });
+        const opts = (res.users || []).map((u:any) => ({ 
+          id: Number(u.id), 
+          name: `${u.first_name || ''} ${u.last_name || ''}`.trim() || (u.email || `Usuario ${u.id}`) 
+        }));
+        setAdminUserOptions(opts);
+      } catch (e) {
+        setAdminUserOptions([]);
+      }
+    };
+    t = window.setTimeout(run, 300);
+    return () => { if (t) window.clearTimeout(t); };
+  }, [adminUserSearch, adminUserOptions.length]);
+
+  // Cargar usuarios iniciales cuando se abre el modal de administrador
+  useEffect(() => {
+    if (openAdminDialog && adminUserOptions.length === 0) {
+      const loadInitialUsers = async () => {
+        try {
+          const res = await usersAPI.getAllUsers({ active_only: true, per_page: 10 });
+          const opts = (res.users || []).map((u:any) => ({ 
+            id: Number(u.id), 
+            name: `${u.first_name || ''} ${u.last_name || ''}`.trim() || (u.email || `Usuario ${u.id}`) 
+          }));
+          setAdminUserOptions(opts);
+        } catch (e) {
+          console.error('Error loading initial users:', e);
+        }
+      };
+      loadInitialUsers();
+    }
+  }, [openAdminDialog, adminUserOptions.length]);
+
   // Cargar métricas para usuario/año seleccionados
   const loadUserUsage = async (userId: number, year: number) => {
     try {
@@ -471,6 +540,29 @@ export const Vacations: React.FC = () => {
       void loadUserUsage(selectedUser.id, lookupYear);
     }
   }, [selectedUser?.id, lookupYear]);
+
+  // Buscar usuarios para el modal de administrador con debounce
+  useEffect(() => {
+    let t: number | undefined;
+    const run = async () => {
+      if (!adminUserSearch || adminUserSearch.trim().length < 2) { 
+        setAdminUserOptions([]); 
+        return; 
+      }
+      try {
+        const res = await usersAPI.getAllUsers({ search: adminUserSearch.trim(), active_only: true });
+        const opts = (res.users || []).map((u:any) => ({ 
+          id: Number(u.id), 
+          name: `${u.first_name || ''} ${u.last_name || ''}`.trim() || (u.email || `Usuario ${u.id}`)
+        }));
+        setAdminUserOptions(opts);
+      } catch (e) {
+        setAdminUserOptions([]);
+      }
+    };
+    t = window.setTimeout(run, 300);
+    return () => { if (t) window.clearTimeout(t); };
+  }, [adminUserSearch]);
 
   // Auto-refresh silencioso para evitar parpadeos
   useEffect(() => {
@@ -896,6 +988,86 @@ export const Vacations: React.FC = () => {
       setAlert({ 
         type: 'error', 
         message: error.response?.data?.detail || 'Error al enviar la solicitud de vacaciones'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Función para crear ausencia como administrador
+  const handleCreateAdminRequest = async () => {
+    if (!adminRequest.selectedUser) {
+      setAlert({ type: 'error', message: 'Debe seleccionar un usuario' });
+      return;
+    }
+
+    if (!adminRequest.startDate || !adminRequest.endDate) {
+      setAlert({ type: 'error', message: 'Debe seleccionar las fechas de inicio y fin' });
+      return;
+    }
+
+    if (!adminRequest.reason.trim()) {
+      setAlert({ type: 'error', message: 'Debe proporcionar un motivo' });
+      return;
+    }
+
+    const startDate = parseYMDToLocalDate(adminRequest.startDate);
+    const endDate = parseYMDToLocalDate(adminRequest.endDate);
+    
+    if (startDate > endDate) {
+      setAlert({ type: 'error', message: `La fecha de fin (${adminRequest.endDate}) debe ser posterior o igual a la fecha de inicio (${adminRequest.startDate})` });
+      return;
+    }
+
+    try {
+      setLoading(true);
+
+      const requestData: VacationRequestCreate = {
+        start_date: startDate,
+        end_date: endDate,
+        reason: adminRequest.reason.trim(),
+        absence_type: adminRequest.absenceType,
+      };
+
+      const createdRequest = await vacationService.createVacationForUser(adminRequest.selectedUser.id, requestData);
+      
+      // Convertir la respuesta del API al formato local
+      const newLocalRequest: VacationRequest = {
+        id: createdRequest.id!,
+        employeeName: createdRequest.employee_name || adminRequest.selectedUser.name,
+        startDate: toYMDLocal(createdRequest.start_date),
+        endDate: toYMDLocal(createdRequest.end_date),
+        reason: createdRequest.reason,
+        status: createdRequest.status,
+        days: createdRequest.duration_days ?? calculateDays(
+          toYMDLocal(createdRequest.start_date),
+          toYMDLocal(createdRequest.end_date)
+        ),
+        requestDate: createdRequest.created_at ? toYMDLocal(createdRequest.created_at) : '',
+        approvedBy: createdRequest.reviewer_name || '',
+        approvedDate: createdRequest.reviewed_at ? toYMDLocal(createdRequest.reviewed_at) : '',
+        comments: createdRequest.admin_response || ''
+      };
+
+      setRequests(prev => [newLocalRequest, ...prev]);
+      setOpenAdminDialog(false);
+      setAdminRequest({ 
+        userId: null, 
+        selectedUser: null, 
+        startDate: '', 
+        endDate: '', 
+        reason: 'Vacaciones', 
+        oneDay: false, 
+        absenceType: 'VACATION' 
+      });
+      setAdminUserSearch('');
+      setAdminUserOptions([]);
+      setAlert({ type: 'success', message: `Ausencia creada exitosamente para ${adminRequest.selectedUser.name}` });
+    } catch (error: any) {
+      console.error('Error creating admin vacation request:', error);
+      setAlert({ 
+        type: 'error', 
+        message: error.response?.data?.detail || 'Error al crear la ausencia'
       });
     } finally {
       setLoading(false);
@@ -1542,6 +1714,30 @@ export const Vacations: React.FC = () => {
                   </Tooltip>
                 )}
                 
+                {/* Botón circular para añadir ausencias */}
+                {isAdminRole && scope === 'all' && (
+                  <Tooltip title="Añadir Ausencia">
+                    <IconButton
+                      onClick={() => setOpenAdminDialog(true)}
+                      sx={{
+                        width: 40,
+                        height: 40,
+                        background: 'linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 70%, #501b36 100%)',
+                        color: 'white',
+                        boxShadow: '0 4px 12px rgba(80,27,54,0.3), 0 2px 4px rgba(80,27,54,0.2)',
+                        '&:hover': {
+                          background: 'linear-gradient(135deg, #3d1429 0%, #5a1d3a 30%, #6b2545 70%, #3d1429 100%)',
+                          boxShadow: '0 6px 16px rgba(80,27,54,0.4), 0 2px 8px rgba(80,27,54,0.3)',
+                          transform: 'translateY(-1px)',
+                        },
+                        transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                      }}
+                    >
+                      <EditCalendar fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                )}
+                
                 {/* Toggle Vista Calendar/Table mejorado */}
                 {isAdminRole && scope === 'all' && (
                   <Box
@@ -1644,7 +1840,7 @@ export const Vacations: React.FC = () => {
                 
                 {/* Botón Actualizar eliminado: hay auto-refresh silencioso */}
 
-                {(!isAdminRole || scope === 'mine') && (
+{(!isAdminRole || scope === 'mine') && (
                   <Button
                     variant="contained"
                     startIcon={<Add />}
@@ -3051,6 +3247,164 @@ export const Vacations: React.FC = () => {
                 </Paper>
               ))
             )}
+          </Box>
+        </ModernModal>
+
+        {/* Modal para que administradores añadan ausencias a usuarios */}
+        <ModernModal
+          open={openAdminDialog}
+          onClose={() => setOpenAdminDialog(false)}
+          title="Añadir Ausencia"
+          subtitle="Crear ausencia directamente para cualquier empleado"
+          icon={<EditCalendar />}
+          maxWidth="md"
+          headerColor="#501b36"
+          customHeaderGradient="linear-gradient(135deg, #501b36 0%, #6d2548 30%, #7d2d52 70%, #501b36 100%)"
+          actions={
+            <>
+              <ModernButton
+                variant="outlined"
+                onClick={() => setOpenAdminDialog(false)}
+                size="large"
+              >
+                Cancelar
+              </ModernButton>
+              <ModernButton
+                variant="contained"
+                onClick={handleCreateAdminRequest}
+                disabled={!adminRequest.selectedUser || !adminRequest.startDate || !adminRequest.endDate || !adminRequest.reason.trim()}
+                size="large"
+                customColor="#501b36"
+              >
+                Crear Ausencia
+              </ModernButton>
+            </>
+          }
+        >
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {/* Selección de usuario */}
+            <Autocomplete
+              options={adminUserOptions}
+              getOptionLabel={(option) => option.name}
+              isOptionEqualToValue={(option, value) => option.id === value.id}
+              value={adminRequest.selectedUser}
+              onChange={(_, newValue) => setAdminRequest(prev => ({ ...prev, selectedUser: newValue }))}
+              onInputChange={(_, newInputValue) => setAdminUserSearch(newInputValue)}
+              renderInput={(params) => (
+                <TextField
+                  {...params}
+                  label="Usuario *"
+                  placeholder="Buscar empleado..."
+                  helperText="Selecciona el empleado para el que crear la ausencia"
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      borderRadius: 2,
+                    },
+                  }}
+                />
+              )}
+              sx={{ mb: 1 }}
+            />
+
+            {/* Tipo de ausencia */}
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              <Typography variant="subtitle2" sx={{ minWidth: 160 }}>Tipo de ausencia</Typography>
+              <Box
+                sx={{
+                  p: 0.5,
+                  border: '1px solid #e0e0e0',
+                  borderRadius: 2,
+                  display: 'flex',
+                  gap: 1,
+                  bgcolor: '#fafafa',
+                }}
+              >
+                <Button
+                  size="small"
+                  onClick={() => setAdminRequest(prev => ({ ...prev, absenceType: 'VACATION' }))}
+                  sx={{
+                    bgcolor: adminRequest.absenceType === 'VACATION' ? '#501b36' : 'transparent',
+                    color: adminRequest.absenceType === 'VACATION' ? 'white' : '#501b36',
+                    '&:hover': { bgcolor: adminRequest.absenceType === 'VACATION' ? '#3d1429' : 'rgba(80,27,54,0.08)' },
+                    borderRadius: 1,
+                    textTransform: 'none',
+                    fontWeight: adminRequest.absenceType === 'VACATION' ? 600 : 400
+                  }}
+                >
+                  🏖️ Vacaciones
+                </Button>
+                <Button
+                  size="small"
+                  onClick={() => setAdminRequest(prev => ({ ...prev, absenceType: 'PERSONAL' }))}
+                  sx={{
+                    bgcolor: adminRequest.absenceType === 'PERSONAL' ? '#501b36' : 'transparent',
+                    color: adminRequest.absenceType === 'PERSONAL' ? 'white' : '#501b36',
+                    '&:hover': { bgcolor: adminRequest.absenceType === 'PERSONAL' ? '#3d1429' : 'rgba(80,27,54,0.08)' },
+                    borderRadius: 1,
+                    textTransform: 'none',
+                    fontWeight: adminRequest.absenceType === 'PERSONAL' ? 600 : 400
+                  }}
+                >
+                  👤 Asuntos Propios
+                </Button>
+              </Box>
+            </Box>
+
+            {/* Fechas */}
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Box sx={{ flex: 1 }}>
+                <ModernField
+                  label="Fecha de inicio"
+                  type="date"
+                  value={adminRequest.startDate}
+                  onChange={(value) => setAdminRequest(prev => ({ 
+                    ...prev, 
+                    startDate: String(value),
+                    ...(prev.oneDay && { endDate: String(value) })
+                  }))}
+                  required
+                />
+              </Box>
+              <Box sx={{ flex: 1 }}>
+                <ModernField
+                  label="Fecha de fin"
+                  type="date"
+                  value={adminRequest.endDate}
+                  onChange={(value) => setAdminRequest(prev => ({ ...prev, endDate: String(value) }))}
+                  required
+                  disabled={adminRequest.oneDay}
+                />
+              </Box>
+            </Box>
+
+            {/* Checkbox para un solo día */}
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={adminRequest.oneDay}
+                  onChange={(e) => setAdminRequest(prev => ({
+                    ...prev,
+                    oneDay: e.target.checked,
+                    endDate: e.target.checked ? prev.startDate : prev.endDate
+                  }))}
+                  sx={{ color: '#1976d2' }}
+                />
+              }
+              label="Es para un solo día"
+              sx={{ color: 'text.secondary' }}
+            />
+
+            {/* Motivo */}
+            <ModernField
+              label="Motivo"
+              value={adminRequest.reason}
+              onChange={(value) => setAdminRequest(prev => ({ ...prev, reason: String(value) }))}
+              multiline
+              rows={3}
+              placeholder="Describe el motivo de la ausencia..."
+              required
+              helperText="Esta ausencia se creará directamente como aprobada"
+            />
           </Box>
         </ModernModal>
 

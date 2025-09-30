@@ -235,4 +235,29 @@ export const vacationService = {
       return 0;
     }
   },
+
+  // Crear ausencia directamente para cualquier usuario (solo administradores)
+  async createVacationForUser(
+    userId: number, 
+    request: VacationRequestCreate
+  ): Promise<VacationRequest> {
+    try {
+      const response = await axios.post(`${API_BASE}admin/create?user_id=${userId}`, request, {
+        headers: getAuthHeaders(),
+      });
+      
+      return {
+        ...response.data,
+        status: (String(response.data.status || '')).toLowerCase() as VacationRequest['status'],
+        start_date: new Date(response.data.start_date),
+        end_date: new Date(response.data.end_date),
+        created_at: response.data.created_at ? new Date(response.data.created_at) : undefined,
+        updated_at: response.data.updated_at ? new Date(response.data.updated_at) : undefined,
+        reviewed_at: response.data.reviewed_at ? new Date(response.data.reviewed_at) : undefined,
+      };
+    } catch (error) {
+      console.error('Error creating vacation for user:', error);
+      throw error;
+    }
+  },
 };

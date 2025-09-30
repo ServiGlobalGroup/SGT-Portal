@@ -647,6 +647,7 @@ async def get_vacation_usage(
         q = q.filter(VacationRequest.company == comp_obj)
 
     # Filtro opcional por tipo de ausencia
+    at = None
     if absence_type:
         try:
             at = ModelAbsenceType(absence_type)
@@ -664,7 +665,7 @@ async def get_vacation_usage(
     # Restringir por empresa también en pendientes
     if comp_obj is not None:
         pending_q = pending_q.filter(VacationRequest.company == comp_obj)
-    if absence_type:
+    if absence_type and at is not None:
         pending_q = pending_q.filter(VacationRequest.absence_type == at)
     pending_requests = pending_q.all()
 
@@ -677,3 +678,121 @@ async def get_vacation_usage(
         approved_days_used=int(approved_days_used),
         pending_days_requested=int(pending_days_requested),
     )
+
+
+@router.post("/admin/create", response_model=VacationRequestResponse)
+async def create_vacation_for_user(
+    user_id: int,
+    request: VacationRequestCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    x_company: str | None = Header(default=None, alias="X-Company")
+):
+    """
+    Permite a los administradores crear ausencias para cualquier usuario.
+    Las ausencias se crean directamente como APROBADAS, sin necesidad de confirmación.
+    """
+    
+    # Verificar permisos de administrador
+    if current_user.role.value not in ['ADMINISTRADOR', 'MASTER_ADMIN', 'ADMINISTRACION']:
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail="Solo los administradores pueden crear ausencias para otros usuarios"
+        )
+    
+    # Verificar que el usuario objetivo existe
+    target_user = db.query(User).filter(User.id == user_id).first()
+    if not target_user:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado"
+        )
+    
+    # Validaciones de fechas
+    if request.end_date < request.start_date:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail="La fecha de fin debe ser posterior a la fecha de inicio"
+        )
+    
+    # Verificar si ya existe una solicitud aprobada en las mismas fechas para el usuario
+    overlapping = db.query(VacationRequest).filter(
+        VacationRequest.user_id == user_id,
+        VacationRequest.status == VacationStatus.APPROVED,
+        VacationRequest.start_date <= request.end_date,
+        VacationRequest.end_date >= request.start_date
+    ).first()
+    
+    if overlapping:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail="Ya existe una ausencia aprobada para este usuario en ese período"
+        )
+    
+    # Crear nueva ausencia directamente como APROBADA
+    db_request = VacationRequest(
+        user_id=user_id,
+        start_date=request.start_date,
+        end_date=request.end_date,
+        reason=request.reason,
+        status=VacationStatus.APPROVED,  # Directamente aprobada
+        absence_type=ModelAbsenceType(
+            request.absence_type.value if hasattr(request.absence_type, 'value') else str(request.absence_type)
+        ),
+        reviewed_by=current_user.id,  # El administrador que la creó
+        reviewed_at=datetime.now(),   # Fecha de aprobación inmediata
+        admin_response=None,  # Sin comentario automático
+        company=effective_company_for_request(current_user, x_company)
+    )
+    
+    db.add(db_request)
+    db.commit()
+    db.refresh(db_request)
+
+    # Log actividad
+    try:
+        days = (request.end_date.date() - request.start_date.date()).days + 1
+        ActivityService.log_from_user(
+            db,
+            user=current_user,
+            event_type=ActivityService.EVENT_VACATION_CREATED,
+            message=f"Creó ausencia directa para {target_user.full_name} ({days} días)",
+            entity_type="vacation_request",
+            entity_id=str(db_request.id),
+            meta={
+                "request_id": db_request.id,
+                "target_user_id": user_id,
+                "target_user_name": target_user.full_name,
+                "start_date": request.start_date.isoformat(),
+                "end_date": request.end_date.isoformat(),
+                "days": days,
+                "created_as_approved": True,
+            },
+        )
+    except Exception:
+        pass
+    
+    # Cargar relaciones para la respuesta
+    db_request = db.query(VacationRequest).options(
+        joinedload(VacationRequest.user),
+        joinedload(VacationRequest.reviewer)
+    ).filter(VacationRequest.id == db_request.id).first()
+    
+    assert db_request is not None
+    return {
+        "id": db_request.id,
+        "user_id": db_request.user_id,
+        "start_date": db_request.start_date,
+        "end_date": db_request.end_date,
+        "reason": db_request.reason,
+        "status": db_request.status,
+        "absence_type": db_request.absence_type,
+        "admin_response": db_request.admin_response,
+        "reviewed_by": db_request.reviewed_by,
+        "reviewed_at": db_request.reviewed_at,
+        "created_at": db_request.created_at,
+        "updated_at": db_request.updated_at,
+        "duration_days": db_request.duration_days,
+        "employee_name": db_request.user.full_name if db_request.user else None,
+        "reviewer_name": db_request.reviewer.full_name if db_request.reviewer else None,
+    }
