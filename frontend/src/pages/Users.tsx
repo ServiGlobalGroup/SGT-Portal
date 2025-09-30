@@ -1172,7 +1172,7 @@ export const Users: React.FC = () => {
                           />
                         </TableCell>
                         <TableCell>
-                          {(user.role === 'TRABAJADOR' || user.role === 'P_TALLER') && (
+                          {user.role === 'TRABAJADOR' && (
                             <Chip
                               label={user.worker_type === 'nuevo' ? 'Nuevo' : 'Antiguo'}
                               size="small"
@@ -1819,7 +1819,7 @@ export const Users: React.FC = () => {
                     </MenuItem>
                   </Select>
                 </FormControl>
-                {(editUserData.role === 'TRABAJADOR' || editUserData.role === 'P_TALLER') && (
+                {editUserData.role === 'TRABAJADOR' && (
                   <FormControl fullWidth>
                     <InputLabel sx={{ fontWeight: 600, '&.Mui-focused': { color: '#501b36' } }}>
                       Tipo Trabajador
@@ -2102,7 +2102,7 @@ export const Users: React.FC = () => {
               helperText="Se guardará siempre en MAYÚSCULAS"
             />
           </Box>
-          {(createUserData.role === 'TRABAJADOR' || createUserData.role === 'P_TALLER') && (
+          {createUserData.role === 'TRABAJADOR' && (
             <Box sx={{ mt: 1 }}>
               <ModernField
                 label="Tipo de Empleado"
@@ -2289,7 +2289,7 @@ export const Users: React.FC = () => {
         createUserData.role === 'P_TALLER' ? 'P. Taller' : 'Trabajador'
                 }
                 ,
-                ...((createUserData.role === 'TRABAJADOR' || createUserData.role === 'P_TALLER') ? [{
+                ...(createUserData.role === 'TRABAJADOR' ? [{
                   icon: <People sx={{ fontSize: 16 }} />,
                   label: 'Tipo',
                   value: createUserData.worker_type === 'nuevo' ? 'Nuevo' : 'Antiguo'
