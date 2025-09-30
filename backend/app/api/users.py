@@ -201,6 +201,8 @@ async def update_user(
         db.rollback()
         print(f"DEBUG Exception general: {e}")
         print(f"DEBUG Exception type: {type(e)}")
+        import traceback
+        print(f"DEBUG Traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error actualizando usuario: {str(e)}")
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

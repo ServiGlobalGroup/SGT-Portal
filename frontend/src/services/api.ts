@@ -504,7 +504,8 @@ export const usersAPI = {
     postal_code: string;
     emergency_contact_name: string;
     emergency_contact_phone: string;
-  worker_type: 'antiguo' | 'nuevo';
+    worker_type: 'antiguo' | 'nuevo';
+    company: 'SERVIGLOBAL' | 'EMATRA';
   }>) => api.put(`/api/users/${id}`, userData).then(res => res.data),
 
   // Desactivar usuario (soft delete)

@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator
 from typing import Optional
 from datetime import datetime
 from app.models.user import UserRole, UserStatus
+from app.models.company_enum import Company
 from app.utils.dni_validation import validate_dni_nie_format, sanitize_dni_nie_for_login
 
 # Esquemas base
@@ -59,9 +60,23 @@ class UserUpdate(BaseModel):
     emergency_contact_name: Optional[str] = Field(None, max_length=200)
     emergency_contact_phone: Optional[str] = Field(None, max_length=20)
     status: Optional[UserStatus] = None
+    company: Optional[Company] = None
 
 # Esquemas de respuesta
-class UserResponse(UserBase):
+class UserResponseBase(BaseModel):
+    """Esquema base para respuestas de usuario sin validaciones estrictas"""
+    dni_nie: str = Field(..., description="DNI o NIE del usuario")
+    first_name: str = Field(..., min_length=2, max_length=100, description="Nombre")
+    last_name: str = Field(..., min_length=2, max_length=100, description="Apellidos")
+    email: EmailStr = Field(..., description="Correo electrónico")
+    phone: Optional[str] = Field(None, max_length=20, description="Teléfono")
+    department: str = Field(..., min_length=2, max_length=100, description="Departamento")
+    position: str = Field(..., max_length=100, description="Cargo/Posición")
+    role: UserRole = Field(..., description="Rol del usuario")
+    worker_type: Optional[str] = Field(None, pattern="^(antiguo|nuevo)$", description="Tipo trabajador")
+    company: Optional[Company] = Field(None, description="Empresa asociada")
+
+class UserResponse(UserResponseBase):
     """Esquema de respuesta con información completa del usuario"""
     id: int
     hire_date: Optional[datetime] = None

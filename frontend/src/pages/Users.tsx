@@ -167,7 +167,8 @@ export const Users: React.FC = () => {
   role: 'TRABAJADOR' as 'ADMINISTRADOR' | 'ADMINISTRACION' | 'TRAFICO' | 'TRABAJADOR' | 'P_TALLER',
     department: '',
   position: '',
-  worker_type: 'antiguo' as 'antiguo' | 'nuevo'
+  worker_type: 'antiguo' as 'antiguo' | 'nuevo',
+    company: null as 'SERVIGLOBAL' | 'EMATRA' | null
   });
   const [editUserLoading, setEditUserLoading] = useState(false);
 
@@ -483,7 +484,8 @@ export const Users: React.FC = () => {
       role: user.role,
       department: user.department || '',
   position: user.position || '',
-  worker_type: user.worker_type || 'antiguo'
+  worker_type: user.worker_type || 'antiguo',
+      company: (user as any).company || null
     });
     setOpenEditModal(true);
     handleCloseMenu();
@@ -500,7 +502,8 @@ export const Users: React.FC = () => {
       role: 'TRABAJADOR',
       department: '',
   position: '',
-  worker_type: 'antiguo'
+  worker_type: 'antiguo',
+      company: null
     });
   };
 
@@ -532,7 +535,11 @@ export const Users: React.FC = () => {
 
     setEditUserLoading(true);
     try {
-      await usersAPI.updateUser(selectedUser.id, editUserData);
+      // Filtrar valores null/undefined antes de enviar
+      const cleanedData = Object.fromEntries(
+        Object.entries(editUserData).filter(([_, value]) => value !== null && value !== undefined && value !== '')
+      );
+      await usersAPI.updateUser(selectedUser.id, cleanedData);
       
       setSnackbar({
         open: true,
@@ -1902,6 +1909,53 @@ export const Users: React.FC = () => {
                     },
                   }}
                 />
+                
+                {/* Campo de empresa (solo para administradores) */}
+                {isAdmin && (
+                  <FormControl fullWidth>
+                    <InputLabel sx={{ fontWeight: 600, '&.Mui-focused': { color: '#501b36' } }}>
+                      Empresa
+                    </InputLabel>
+                    <Select
+                      value={editUserData.company || ''}
+                      label="Empresa"
+                      onChange={(e) => setEditUserData(prev => ({ 
+                        ...prev, 
+                        company: (e.target.value === '' ? null : e.target.value) as 'SERVIGLOBAL' | 'EMATRA' | null
+                      }))}
+                      disabled={editUserLoading}
+                      sx={{
+                        borderRadius: 2,
+                        '&:hover .MuiOutlinedInput-notchedOutline': {
+                          borderColor: '#501b36',
+                        },
+                        '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                          borderColor: '#501b36',
+                        },
+                      }}
+                    >
+                      <MenuItem value="">
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Typography variant="body2" sx={{ fontStyle: 'italic', color: 'text.secondary' }}>
+                            Sin empresa asignada
+                          </Typography>
+                        </Box>
+                      </MenuItem>
+                      <MenuItem value="SERVIGLOBAL">
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Business fontSize="small" sx={{ color: '#501b36' }} />
+                          SERVIGLOBAL
+                        </Box>
+                      </MenuItem>
+                      <MenuItem value="EMATRA">
+                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                          <Business fontSize="small" sx={{ color: '#501b36' }} />
+                          EMATRA
+                        </Box>
+                      </MenuItem>
+                    </Select>
+                  </FormControl>
+                )}
               </Box>
             </Box>
           </Box>
