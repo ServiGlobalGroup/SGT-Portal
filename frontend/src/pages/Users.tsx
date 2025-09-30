@@ -56,6 +56,7 @@ import {
   People,
   SupervisorAccount,
   Build,
+  Warning,
 } from '@mui/icons-material';
 import { ModernModal } from '../components/ModernModal';
 import { ModernField, InfoCard } from '../components/ModernFormComponents';
@@ -153,12 +154,6 @@ export const Users: React.FC = () => {
   
   // Estados para modal de restablecer contraseña
   const [openResetPasswordModal, setOpenResetPasswordModal] = useState(false);
-  const [resetPasswordData, setResetPasswordData] = useState({
-    newPassword: '',
-    confirmPassword: ''
-  });
-  const [showNewPassword, setShowNewPassword] = useState(false);
-  const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
   const [resetPasswordLoading, setResetPasswordLoading] = useState(false);
 
   // Estados para modal de edición de usuarios
@@ -397,83 +392,23 @@ export const Users: React.FC = () => {
 
     setSelectedUser(user);
     setOpenResetPasswordModal(true);
-    
-    // Auto-focus en el primer campo después de un pequeño delay
-    setTimeout(() => {
-      const firstInput = document.querySelector('input[name="newPassword"]') as HTMLInputElement;
-      if (firstInput) {
-        firstInput.focus();
-      }
-    }, 100);
   };
 
   const handleCloseResetPasswordModal = () => {
     setOpenResetPasswordModal(false);
-    setShowNewPassword(false);
-    setShowConfirmNewPassword(false);
-    setResetPasswordData({
-      newPassword: '',
-      confirmPassword: ''
-    });
     setSelectedUser(null);
   };
 
   const handleConfirmResetPassword = async () => {
     if (!selectedUser) return;
 
-    // Validaciones
-    if (!resetPasswordData.newPassword || !resetPasswordData.confirmPassword) {
-      setSnackbar({
-        open: true,
-        message: 'Por favor, complete ambos campos de contraseña',
-        severity: 'error'
-      });
-      return;
-    }
-
-    if (resetPasswordData.newPassword !== resetPasswordData.confirmPassword) {
-      setSnackbar({
-        open: true,
-        message: 'Las contraseñas no coinciden',
-        severity: 'error'
-      });
-      return;
-    }
-
-    if (resetPasswordData.newPassword.length < 8) {
-      setSnackbar({
-        open: true,
-        message: 'La contraseña debe tener al menos 8 caracteres',
-        severity: 'error'
-      });
-      return;
-    }
-
-    // Validación adicional de seguridad de contraseña
-    const hasNumber = /\d/.test(resetPasswordData.newPassword);
-    const hasLetter = /[a-zA-Z]/.test(resetPasswordData.newPassword);
-    
-    if (!hasNumber || !hasLetter) {
-      setSnackbar({
-        open: true,
-        message: 'La contraseña debe contener al menos una letra y un número',
-        severity: 'warning'
-      });
-      return;
-    }
-
     setResetPasswordLoading(true);
     try {
-      const requestData = {
-        new_password: resetPasswordData.newPassword,
-        confirm_password: resetPasswordData.confirmPassword
-      };
-      
-      await usersAPI.changePassword(selectedUser.id, requestData);
+      await usersAPI.resetPassword(selectedUser.id);
       
       setSnackbar({
         open: true,
-        message: `✅ Contraseña restablecida exitosamente para ${selectedUser.first_name} ${selectedUser.last_name}. El usuario deberá usar la nueva contraseña en su próximo inicio de sesión.`,
+        message: `✅ Contraseña restablecida exitosamente para ${selectedUser.first_name} ${selectedUser.last_name}. La contraseña temporal es "12345678". El usuario deberá cambiarla en su próximo inicio de sesión.`,
         severity: 'success'
       });
       
@@ -488,7 +423,7 @@ export const Users: React.FC = () => {
       if (errorMessage?.includes('permission') || errorMessage?.includes('unauthorized')) {
         setSnackbar({
           open: true,
-          message: '❌ No tienes permisos suficientes para cambiar contraseñas',
+          message: '❌ No tienes permisos suficientes para restablecer contraseñas',
           severity: 'error'
         });
       } else if (errorMessage?.includes('user not found')) {
@@ -1457,13 +1392,7 @@ export const Users: React.FC = () => {
               <Button
                 variant="contained"
                 onClick={handleConfirmResetPassword}
-                disabled={
-                  resetPasswordLoading ||
-                  !resetPasswordData.newPassword || 
-                  !resetPasswordData.confirmPassword ||
-                  resetPasswordData.newPassword !== resetPasswordData.confirmPassword ||
-                  resetPasswordData.newPassword.length < 8
-                }
+                disabled={resetPasswordLoading}
                 size="large"
                 sx={{
                   borderRadius: 2,
@@ -1486,10 +1415,10 @@ export const Users: React.FC = () => {
                 {resetPasswordLoading ? (
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <CircularProgress size={16} color="inherit" />
-                    Procesando...
+                    Restableciendo...
                   </Box>
                 ) : (
-                  'Restablecer Contraseña'
+                  'Confirmar Restablecimiento'
                 )}
               </Button>
             </Box>
@@ -1539,153 +1468,48 @@ export const Users: React.FC = () => {
               </Paper>
             )}
 
-            <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36', mb: 1 }}>
-              Nueva Contraseña
-            </Typography>
-            
-            <Box sx={{ display: 'grid', gap: 3 }}>
-              <TextField
-                label="Nueva Contraseña"
-                name="newPassword"
-                type={showNewPassword ? 'text' : 'password'}
-                required
-                fullWidth
-                autoFocus
-                value={resetPasswordData.newPassword}
-                onChange={(e) => setResetPasswordData(prev => ({ ...prev, newPassword: e.target.value }))}
-                error={
-                  resetPasswordData.newPassword !== '' && 
-                  resetPasswordData.confirmPassword !== '' && 
-                  resetPasswordData.newPassword !== resetPasswordData.confirmPassword
-                }
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Key sx={{ color: 'rgba(0, 0, 0, 0.54)' }} />
-                    </InputAdornment>
-                  ),
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        onClick={() => setShowNewPassword(!showNewPassword)}
-                        edge="end"
-                        tabIndex={-1}
-                      >
-                        {showNewPassword ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
-                helperText={
-                  resetPasswordData.newPassword !== '' && 
-                  resetPasswordData.confirmPassword !== '' && 
-                  resetPasswordData.newPassword !== resetPasswordData.confirmPassword
-                    ? "Las contraseñas no coinciden"
-                    : resetPasswordData.newPassword !== '' && resetPasswordData.newPassword.length < 8
-                    ? "Mínimo 8 caracteres"
-                    : "Mínimo 8 caracteres requeridos"
-                }
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 2,
-                    '& fieldset': {
-                      borderColor: 'rgba(0, 0, 0, 0.15)',
-                      borderWidth: '1px',
-                    },
-                    '&:hover fieldset': {
-                      borderColor: '#501b36',
-                    },
-                    '&.Mui-focused fieldset': {
-                      borderColor: '#501b36',
-                      borderWidth: '2px',
-                    },
-                  },
-                  '& .MuiInputLabel-root': {
-                    fontWeight: 600,
-                    '&.Mui-focused': {
-                      color: '#501b36',
-                    },
-                  },
-                }}
-              />
-
-              <TextField
-                label="Confirmar Nueva Contraseña"
-                name="confirmPassword"
-                type={showConfirmNewPassword ? 'text' : 'password'}
-                required
-                fullWidth
-                value={resetPasswordData.confirmPassword}
-                onChange={(e) => setResetPasswordData(prev => ({ ...prev, confirmPassword: e.target.value }))}
-                error={
-                  resetPasswordData.confirmPassword !== '' && 
-                  resetPasswordData.newPassword !== resetPasswordData.confirmPassword
-                }
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <Key sx={{ color: 'rgba(0, 0, 0, 0.54)' }} />
-                    </InputAdornment>
-                  ),
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton
-                        onClick={() => setShowConfirmNewPassword(!showConfirmNewPassword)}
-                        edge="end"
-                        tabIndex={-1}
-                      >
-                        {showConfirmNewPassword ? <VisibilityOff /> : <Visibility />}
-                      </IconButton>
-                    </InputAdornment>
-                  ),
-                }}
-                helperText={
-                  resetPasswordData.confirmPassword !== '' && resetPasswordData.newPassword !== resetPasswordData.confirmPassword 
-                    ? "Las contraseñas no coinciden" 
-                    : resetPasswordData.confirmPassword !== '' && resetPasswordData.newPassword === resetPasswordData.confirmPassword && resetPasswordData.newPassword.length >= 8
-                    ? "Las contraseñas coinciden ✓"
-                    : "Confirma la nueva contraseña"
-                }
-                sx={{
-                  '& .MuiOutlinedInput-root': {
-                    borderRadius: 2,
-                    '& fieldset': {
-                      borderColor: 'rgba(0, 0, 0, 0.15)',
-                      borderWidth: '1px',
-                    },
-                    '&:hover fieldset': {
-                      borderColor: '#501b36',
-                    },
-                    '&.Mui-focused fieldset': {
-                      borderColor: '#501b36',
-                      borderWidth: '2px',
-                    },
-                  },
-                  '& .MuiInputLabel-root': {
-                    fontWeight: 600,
-                    '&.Mui-focused': {
-                      color: '#501b36',
-                    },
-                  },
-                }}
-              />
-            </Box>
-
             <Alert 
               severity="info" 
               sx={{ 
                 borderRadius: 2,
-                border: '1px solid #e3f2fd',
-                bgcolor: '#f8fbff',
-                '& .MuiAlert-icon': {
-                  color: '#1976d2',
-                },
+                bgcolor: alpha('#2196f3', 0.08),
+                border: '1px solid #2196f3',
+                mb: 2
               }}
             >
+              <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
+                ¿Estás seguro de que deseas restablecer la contraseña?
+              </Typography>
               <Typography variant="body2">
-                <strong>Importante:</strong> La nueva contraseña debe tener al menos 8 caracteres. El usuario deberá usar esta contraseña en su próximo inicio de sesión.
+                La contraseña se establecerá automáticamente como <strong>"12345678"</strong> y el usuario deberá cambiarla en su próximo inicio de sesión.
               </Typography>
             </Alert>
+            
+            <Paper
+              elevation={0}
+              sx={{
+                p: 3,
+                borderRadius: 2,
+                border: '1px solid #e0e0e0',
+                bgcolor: alpha('#ff9800', 0.05),
+              }}
+            >
+              <Typography variant="h6" sx={{ fontWeight: 700, color: '#f57c00', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Warning />
+                Información Importante
+              </Typography>
+              <Box component="ul" sx={{ pl: 2, m: 0 }}>
+                <Typography component="li" variant="body2" sx={{ mb: 1 }}>
+                  El usuario recibirá la contraseña temporal: <strong>12345678</strong>
+                </Typography>
+                <Typography component="li" variant="body2" sx={{ mb: 1 }}>
+                  Deberá cambiar la contraseña obligatoriamente en su próximo inicio de sesión
+                </Typography>
+                <Typography component="li" variant="body2">
+                  No podrá acceder al sistema hasta que cambie la contraseña temporal
+                </Typography>
+              </Box>
+            </Paper>
           </Box>
         </ModernModal>
 

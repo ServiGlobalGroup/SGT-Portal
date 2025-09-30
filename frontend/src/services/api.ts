@@ -523,11 +523,8 @@ export const usersAPI = {
   setUserStatus: (id: number, status: 'ACTIVO' | 'INACTIVO' | 'BAJA') => 
     api.patch(`/api/users/${id}/set-status`, { status }).then(res => res.data),
 
-  // Cambiar contraseña de usuario
-  changePassword: (id: number, passwordData: {
-    new_password: string;
-    confirm_password: string;
-  }) => api.patch(`/api/users/${id}/password`, passwordData).then(res => res.data),
+  // Restablecer contraseña de usuario (automáticamente a 12345678)
+  resetPassword: (id: number) => api.patch(`/api/users/${id}/password`).then(res => res.data),
 
   // Obtener estadísticas de usuarios
   getUserStats: () => 

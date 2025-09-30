@@ -320,11 +320,11 @@ async def toggle_user_status(
 @router.patch("/users/{user_id}/password", response_model=dict)
 async def change_user_password(
     user_id: int,
-    password_data: AdminPasswordReset,
     db: Session = Depends(get_db)
 ):
     """
-    Cambiar la contraseña de un usuario (solo para administradores).
+    Restablecer contraseña de un usuario a la contraseña por defecto (solo para administradores).
+    La contraseña se establece automáticamente como "12345678" y el usuario deberá cambiarla en su próximo login.
     """
     user = UserService.get_user_by_id(db, user_id)
     if not user:
@@ -333,30 +333,25 @@ async def change_user_password(
             detail="Usuario no encontrado"
         )
     
-    # Verificar que las contraseñas coincidan
-    if password_data.new_password != password_data.confirm_password:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Las contraseñas no coinciden"
-        )
-    
     try:
-        success = UserService.change_password(db, user_id, password_data.new_password)
+        # Establecer contraseña por defecto automáticamente
+        default_password = "12345678"
+        success = UserService.change_password(db, user_id, default_password)
         if not success:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Error al cambiar la contraseña"
+                detail="Error al restablecer la contraseña"
             )
         
         # Forzar cambio de contraseña en el próximo login
         setattr(user, 'must_change_password', True)
         db.commit()
         
-        return {"message": "Contraseña cambiada exitosamente"}
+        return {"message": "Contraseña restablecida exitosamente. El usuario debe usar la contraseña temporal '12345678' y cambiarla en su próximo inicio de sesión."}
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Error al cambiar la contraseña: {str(e)}"
+            detail=f"Error al restablecer la contraseña: {str(e)}"
         )
 
 @router.post("/users/{user_id}/activate", response_model=UserResponse)

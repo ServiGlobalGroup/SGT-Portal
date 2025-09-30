@@ -152,8 +152,8 @@ class PasswordChange(BaseModel):
 
 class AdminPasswordReset(BaseModel):
     """Esquema para reseteo de contraseña por administrador"""
-    new_password: str = Field(..., min_length=8, description="Nueva contraseña")
-    confirm_password: str = Field(..., min_length=8, description="Confirmar nueva contraseña")
+    # Ya no se requieren campos de contraseña - se asigna automáticamente "12345678"
+    pass
 
 class PasswordReset(BaseModel):
     """Esquema para reseteo de contraseña"""
