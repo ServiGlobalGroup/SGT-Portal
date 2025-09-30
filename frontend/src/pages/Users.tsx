@@ -195,17 +195,25 @@ export const Users: React.FC = () => {
   const updateSingleUser = useCallback(async (userId: number) => {
     try {
       const response = await usersAPI.getUserById(userId);
-      setUsers(prevUsers => 
-        prevUsers.map(user => 
-          user.id === userId ? response : user
-        )
-      );
+      setUsers(prevUsers => {
+        // Reemplazar usuario y después filtrar por empresa seleccionada
+        return prevUsers
+          .map(u => u.id === userId ? response : u)
+          .filter(u => {
+            const comp = (() => {
+              const c = (u as any).company; if (!c) return null; if (typeof c === 'string') return c.toUpperCase();
+              if (typeof c === 'object') { const v = (c.value ?? c.name ?? '').toString().toUpperCase(); return v || null; }
+              return null; })();
+            if (!selectedCompany) return true; // sin empresa seleccionada mostramos todo
+            if (!comp) return false; // registros sin empresa no se muestran en un contexto de empresa
+            return comp === selectedCompany;
+          });
+      });
     } catch (error) {
       console.error('Error actualizando usuario específico:', error);
-      // Si falla la actualización específica, recargar toda la lista como fallback
       await loadUsers();
     }
-  }, [loadUsers]);
+  }, [loadUsers, selectedCompany]);
 
   // Función para filtrar usuarios
   const filteredUsers = users.filter(user => {
@@ -226,7 +234,17 @@ export const Users: React.FC = () => {
     // Filtro por rol
     const matchesRole = roleFilter === 'all' || user.role === roleFilter;
 
-    return matchesSearch && matchesStatus && matchesRole;
+    // Filtro por empresa seleccionada (solo admins que cambian de empresa)
+    let matchesCompany = true;
+    if (selectedCompany) {
+      const comp = (() => {
+        const c = (user as any).company; if (!c) return null; if (typeof c === 'string') return c.toUpperCase();
+        if (typeof c === 'object') { const v = (c.value ?? c.name ?? '').toString().toUpperCase(); return v || null; }
+        return null; })();
+      matchesCompany = comp === selectedCompany; // si comp es null no se muestra en contexto de empresa
+    }
+
+    return matchesSearch && matchesStatus && matchesRole && matchesCompany;
   });
 
   // Estados para paginación
@@ -475,6 +493,19 @@ export const Users: React.FC = () => {
       return;
     }
 
+    const normalizedCompany = ((): any => {
+      const c = (user as any).company;
+      if (!c) return null;
+      if (typeof c === 'string') {
+        const U = c.toUpperCase();
+        return (U === 'SERVIGLOBAL' || U === 'EMATRA') ? U : null;
+      }
+      if (typeof c === 'object') {
+        const v = (c.value ?? c.name ?? '').toString().toUpperCase();
+        return (v === 'SERVIGLOBAL' || v === 'EMATRA') ? v : null;
+      }
+      return null;
+    })();
     setEditUserData({
       dni_nie: user.dni_nie,
       first_name: user.first_name,
@@ -485,7 +516,7 @@ export const Users: React.FC = () => {
       department: user.department || '',
   position: user.position || '',
   worker_type: user.worker_type || 'antiguo',
-      company: (user as any).company || null
+      company: normalizedCompany
     });
     setOpenEditModal(true);
     handleCloseMenu();
@@ -536,9 +567,14 @@ export const Users: React.FC = () => {
     setEditUserLoading(true);
     try {
       // Filtrar valores null/undefined antes de enviar
-      const cleanedData = Object.fromEntries(
-        Object.entries(editUserData).filter(([_, value]) => value !== null && value !== undefined && value !== '')
-      );
+      const cleanedDataEntries = Object.entries(editUserData)
+        .filter(([key, value]) => {
+          // Permitir company aunque sea null para limpiar en backend
+          if (key === 'company') return true;
+          return value !== null && value !== undefined && value !== '';
+        })
+        .map(([k, v]) => [k, v]);
+      const cleanedData = Object.fromEntries(cleanedDataEntries);
       await usersAPI.updateUser(selectedUser.id, cleanedData);
       
       setSnackbar({
@@ -1919,9 +1955,9 @@ export const Users: React.FC = () => {
                     <Select
                       value={editUserData.company || ''}
                       label="Empresa"
-                      onChange={(e) => setEditUserData(prev => ({ 
-                        ...prev, 
-                        company: (e.target.value === '' ? null : e.target.value) as 'SERVIGLOBAL' | 'EMATRA' | null
+                      onChange={(e) => setEditUserData(prev => ({
+                        ...prev,
+                        company: (e.target.value && (e.target.value === 'SERVIGLOBAL' || e.target.value === 'EMATRA')) ? e.target.value as 'SERVIGLOBAL' | 'EMATRA' : null
                       }))}
                       disabled={editUserLoading}
                       sx={{

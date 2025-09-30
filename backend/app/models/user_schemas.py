@@ -121,6 +121,8 @@ class UserList(BaseModel):
     status: UserStatus
     last_login: Optional[datetime] = None
     created_at: datetime
+    # Nuevo: incluir empresa para que el frontend pueda reabrir el modal con el valor actual
+    company: Optional[Company] = Field(None, description="Empresa asociada")
     
     # Propiedades calculadas
     full_name: str
