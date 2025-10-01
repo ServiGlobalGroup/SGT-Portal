@@ -26,6 +26,7 @@ import { MobileFilters } from '../../components/mobile/MobileFilters';
 import { MobilePagination } from '../../components/mobile/MobilePagination';
 import { MobileStatsCard } from '../../components/mobile/MobileStatsCard';
 import { MobileLoading } from '../../components/mobile/MobileLoading';
+import { documentationAPI } from '../../services/api';
 
 // Interfaces
 interface User {
@@ -91,6 +92,8 @@ export const MobileDocumentationPanel: React.FC = () => {
     isBlobUrl: false
   });
 
+
+
   // Efectos
   useEffect(() => {
     loadUsers();
@@ -110,12 +113,7 @@ export const MobileDocumentationPanel: React.FC = () => {
   const loadUsers = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/documentation/users');
-      if (!response.ok) {
-        throw new Error('Error al cargar usuarios');
-      }
-      
-      const userData = await response.json();
+      const userData = await documentationAPI.getUsers();
       setUsers(userData);
     } catch (error) {
       console.error('Error loading users:', error);
@@ -182,18 +180,13 @@ export const MobileDocumentationPanel: React.FC = () => {
     try {
       setLoadingActions(prev => ({ ...prev, [documentFile.id]: 'downloading' }));
       
-      const response = await fetch(`/api/documentation/download/${documentFile.user_dni}/${documentFile.folder}/${documentFile.name}`, {
-        method: 'GET',
-        headers: {
-          'Authorization': `Bearer ${localStorage.getItem('token')}`,
-        },
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al descargar el documento');
-      }
-
-      const blob = await response.blob();
+      // Usar la API igual que en desktop
+      const blob = await documentationAPI.downloadDocument(
+        documentFile.user_dni,
+        documentFile.folder,
+        documentFile.name
+      );
+      
       const url = window.URL.createObjectURL(blob);
       
       const link = document.createElement('a');
@@ -244,27 +237,77 @@ export const MobileDocumentationPanel: React.FC = () => {
       setLoadingActions(prev => ({ ...prev, [documentFile.id]: 'previewing' }));
       
       if (documentFile.type === '.pdf') {
-        const response = await fetch(`/api/documentation/preview/${documentFile.user_dni}/${documentFile.folder}/${documentFile.name}`, {
-          method: 'GET',
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('token')}`,
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error('Error al obtener el archivo para preview');
-        }
-
-        const blob = await response.blob();
-        const blobUrl = window.URL.createObjectURL(blob);
+        console.log('Previewing document:', documentFile);
         
-        setPreviewModal({
-          open: true,
-          fileUrl: blobUrl,
-          fileName: documentFile.name,
-          title: `${documentFile.name} - ${documentFile.user_dni}`,
-          isBlobUrl: true
-        });
+        // En móvil, abrir PDFs en nueva pestaña ya que los iframes no funcionan bien
+        // Detectar si es móvil usando user agent
+        const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        
+        if (isMobile) {
+          // Para móvil: descargar y abrir en el visor nativo
+          const blob = await documentationAPI.downloadDocument(
+            documentFile.user_dni,
+            documentFile.folder,
+            documentFile.name
+          );
+
+          if (!blob || blob.size === 0) {
+            throw new Error('Archivo PDF vacío o no válido');
+          }
+
+          // Crear blob URL y abrir en nueva pestaña
+          const blobUrl = window.URL.createObjectURL(blob);
+          const newWindow = window.open(blobUrl, '_blank');
+          
+          if (!newWindow) {
+            // Si no se puede abrir nueva ventana, forzar descarga
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = documentFile.name;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            
+            setSnackbar({
+              open: true,
+              message: 'PDF descargado. Ábrelo desde tu gestor de archivos.',
+              severity: 'info'
+            });
+          } else {
+            setSnackbar({
+              open: true,
+              message: 'PDF abierto en nueva pestaña',
+              severity: 'success'
+            });
+          }
+          
+          // Limpiar blob URL después de un tiempo
+          setTimeout(() => {
+            window.URL.revokeObjectURL(blobUrl);
+          }, 60000); // 1 minuto
+          
+        } else {
+          // Para desktop: usar modal como siempre
+          const blob = await documentationAPI.downloadDocument(
+            documentFile.user_dni,
+            documentFile.folder,
+            documentFile.name
+          );
+
+          if (!blob || blob.size === 0) {
+            throw new Error('Archivo PDF vacío o no válido');
+          }
+
+          const blobUrl = window.URL.createObjectURL(blob);
+          
+          setPreviewModal({
+            open: true,
+            fileUrl: blobUrl,
+            fileName: documentFile.name,
+            title: `${documentFile.name} - ${documentFile.user_dni}`,
+            isBlobUrl: true
+          });
+        }
       } else {
         await handleDownloadDocument(documentFile);
         setSnackbar({
@@ -277,7 +320,7 @@ export const MobileDocumentationPanel: React.FC = () => {
       console.error('Error previewing document:', error);
       setSnackbar({
         open: true,
-        message: 'Error al previsualizar el documento',
+        message: 'Error al previsualizar el documento: ' + (error as Error).message,
         severity: 'error'
       });
     } finally {

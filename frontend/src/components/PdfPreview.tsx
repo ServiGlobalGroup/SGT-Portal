@@ -60,6 +60,15 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
     setError(true);
   };
 
+  // Función adicional para manejar la carga en móvil
+  const handleIframeLoad = useCallback(() => {
+    // Pequeño delay para asegurarse de que el contenido se renderice
+    setTimeout(() => {
+      setLoading(false);
+      setError(false);
+    }, 500);
+  }, []);
+
   const handleDownload = () => {
     if (fileUrl) {
       const link = document.createElement('a');
@@ -135,8 +144,18 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
   useEffect(() => {
     if (open) {
       resetState();
+      
+      // En móvil, agregar un timeout de seguridad para quitar el loading
+      // ya que los iframes con PDFs no siempre disparan onLoad correctamente
+      if (isMobile && fileUrl) {
+        const timeoutId = setTimeout(() => {
+          setLoading(false);
+        }, 3000); // 3 segundos máximo de loading
+        
+        return () => clearTimeout(timeoutId);
+      }
     }
-  }, [open]);
+  }, [open, isMobile, fileUrl]);
 
   // Recargar iframe cuando cambie el zoom en móvil
   useEffect(() => {
@@ -701,7 +720,7 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
                   touchAction: isMobile ? 'pinch-zoom' : 'auto',
                 }}
                 title={fileName}
-                onLoad={handleLoad}
+                onLoad={isMobile ? handleIframeLoad : handleLoad}
                 onError={handleError}
               />
             </Box>
