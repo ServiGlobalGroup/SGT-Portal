@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { usePagination } from '../../hooks/usePagination';
 import {
   Box,
@@ -69,7 +69,7 @@ interface AlertState {
 }
 
 export const MobileVacations: React.FC = () => {
-  const { user } = useAuth();
+  const { user, selectedCompany, isLoading } = useAuth();
   // Estados principales
   const [vacationRequests, setVacationRequests] = useState<VacationRequest[]>([]);
   
@@ -107,12 +107,6 @@ export const MobileVacations: React.FC = () => {
     }
   }, [alert]);
 
-  // Cargar solicitudes al montar
-  useEffect(() => {
-    loadVacationRequests();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // Comparador superficial para evitar re-render innecesario
   const isSameRequests = (a: VacationRequest[], b: VacationRequest[]) => {
     if (a.length !== b.length) return false;
@@ -136,7 +130,7 @@ export const MobileVacations: React.FC = () => {
   };
 
   // Funciones principales
-  const loadVacationRequests = async (opts?: { silent?: boolean }) => {
+  const loadVacationRequests = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = !!opts?.silent;
     if (!silent) setLoading(true);
     try {
@@ -166,7 +160,13 @@ export const MobileVacations: React.FC = () => {
     } finally {
       if (!silent) setLoading(false);
     }
-  };
+  }, [user?.id]);
+
+  // Cargar solicitudes cuando la autenticación y compañía estén listas
+  useEffect(() => {
+    if (isLoading) return;
+    void loadVacationRequests();
+  }, [loadVacationRequests, isLoading, selectedCompany]);
 
   // Filtrar solicitudes
   const filteredRequests = vacationRequests.filter(request => {
@@ -192,6 +192,7 @@ export const MobileVacations: React.FC = () => {
 
   // Auto-refresh silencioso en móvil
   useEffect(() => {
+    if (isLoading) return undefined;
     const intervalMs = 30000; // 30s
     const id = window.setInterval(() => {
       if (document.visibilityState === 'visible') {
@@ -199,7 +200,7 @@ export const MobileVacations: React.FC = () => {
       }
     }, intervalMs);
     return () => window.clearInterval(id);
-  }, [user?.id]);
+  }, [isLoading, loadVacationRequests]);
 
   // Función para manejar cambio de página con loading
   const handlePageChange = async (page: number) => {
