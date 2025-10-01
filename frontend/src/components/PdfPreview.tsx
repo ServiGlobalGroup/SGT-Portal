@@ -12,20 +12,14 @@ import {
   Alert,
   useTheme,
   useMediaQuery,
-  Tooltip,
   alpha,
   Backdrop,
   Fade,
 } from '@mui/material';
 import {
   Close,
-  Download,
-  Print,
   PictureAsPdf,
   Refresh,
-  Fullscreen,
-  ZoomIn,
-  ZoomOut,
 } from '@mui/icons-material';
 
 interface PdfPreviewProps {
@@ -48,7 +42,6 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const isSmall = useMediaQuery(theme.breakpoints.down('sm'));
-  const [zoomLevel, setZoomLevel] = useState(50);
 
   const handleLoad = () => {
     setLoading(false);
@@ -69,34 +62,6 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
     }, 500);
   }, []);
 
-  const handleDownload = () => {
-    if (fileUrl) {
-      const link = document.createElement('a');
-      link.href = fileUrl;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-  };
-
-  const handlePrint = () => {
-    if (fileUrl) {
-      const printWindow = window.open(fileUrl, '_blank');
-      if (printWindow) {
-        printWindow.onload = () => {
-          printWindow.print();
-        };
-      }
-    }
-  };
-
-  const handleFullscreen = () => {
-    if (fileUrl) {
-      window.open(fileUrl, '_blank');
-    }
-  };
-
   const handleRefresh = () => {
     setLoading(true);
     setError(false);
@@ -111,30 +76,10 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
     }
   };
 
-  const handleZoomIn = () => {
-    setZoomLevel(prev => Math.min(prev + 25, 200));
-  };
-
-  const handleZoomOut = () => {
-    setZoomLevel(prev => Math.max(prev - 25, 25));
-  };
-
-  const handleZoomReset = () => {
-    setZoomLevel(isMobile ? 50 : 100);
-  };
-
   const getPdfUrl = useCallback(() => {
     if (!fileUrl) return '';
-    
-    // Para móviles, añadir parámetros de zoom para mejor visualización
-    if (isMobile) {
-      // Si la URL ya tiene parámetros, añadir con &, si no, añadir con ?
-      const separator = fileUrl.includes('?') ? '&' : '?';
-      return `${fileUrl}${separator}zoom=${zoomLevel}&view=FitH`;
-    }
-    
     return fileUrl;
-  }, [fileUrl, isMobile, zoomLevel]);
+  }, [fileUrl]);
 
   const resetState = () => {
     setLoading(true);
@@ -157,19 +102,7 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
     }
   }, [open, isMobile, fileUrl]);
 
-  // Recargar iframe cuando cambie el zoom en móvil
-  useEffect(() => {
-    if (open && isMobile && fileUrl) {
-      const iframe = document.querySelector('#pdf-preview-iframe') as HTMLIFrameElement;
-      if (iframe) {
-        const newSrc = getPdfUrl();
-        if (iframe.src !== newSrc) {
-          setLoading(true);
-          iframe.src = newSrc;
-        }
-      }
-    }
-  }, [zoomLevel, isMobile, open, fileUrl, getPdfUrl]);
+
 
   return (
     <Dialog
@@ -194,8 +127,8 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
       }}
       PaperProps={{
         sx: {
-          height: isMobile ? '100vh' : '95vh',
-          maxHeight: isMobile ? '100vh' : '95vh',
+          height: isMobile ? '100vh' : '98vh',
+          maxHeight: isMobile ? '100vh' : '98vh',
           // Permitir zoom y gestos táctiles en móvil
           touchAction: isMobile ? 'pinch-zoom' : 'auto',
           userSelect: isMobile ? 'none' : 'auto',
@@ -206,7 +139,7 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
           }),
           display: 'flex',
           flexDirection: 'column',
-          m: isMobile ? 0 : 2,
+          m: isMobile ? 0 : 1,
           borderRadius: isMobile ? 0 : 4,
           boxShadow: isMobile 
             ? 'none' 
@@ -310,253 +243,6 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
           </IconButton>
         </Box>
       </DialogTitle>
-
-      {/* Toolbar de controles */}
-      <Box
-        sx={{
-          backgroundColor: '#f8f9fa',
-          borderBottom: '1px solid rgba(0, 0, 0, 0.08)',
-          px: 3,
-          py: 2,
-          flexShrink: 0,
-        }}
-      >
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1.5,
-            flexWrap: isSmall ? 'wrap' : 'nowrap',
-            justifyContent: 'center',
-          }}
-        >
-          <Tooltip title="Descargar PDF">
-            <Button
-              startIcon={<Download />}
-              size="medium"
-              onClick={handleDownload}
-              variant="contained"
-              disabled={!fileUrl}
-              sx={{
-                backgroundColor: '#501b36',
-                color: 'white',
-                fontWeight: 600,
-                px: 3,
-                py: 1,
-                borderRadius: 2.5,
-                textTransform: 'none',
-                minWidth: isSmall ? 40 : 120,
-                '&:hover': {
-                  backgroundColor: '#501b36dd',
-                  transform: 'translateY(-1px)',
-                  boxShadow: '0 6px 20px rgba(80, 27, 54, 0.3)',
-                },
-                '&:active': {
-                  transform: 'translateY(0)',
-                },
-                transition: 'all 0.2s ease',
-              }}
-            >
-              {!isSmall && 'Descargar'}
-            </Button>
-          </Tooltip>
-          
-          <Tooltip title="Imprimir">
-            <Button
-              startIcon={<Print />}
-              size="medium"
-              onClick={handlePrint}
-              variant="outlined"
-              disabled={!fileUrl}
-              sx={{
-                borderColor: '#501b36',
-                color: '#501b36',
-                fontWeight: 600,
-                px: 3,
-                py: 1,
-                borderRadius: 2.5,
-                textTransform: 'none',
-                minWidth: isSmall ? 40 : 100,
-                '&:hover': {
-                  backgroundColor: alpha('#501b36', 0.08),
-                  borderColor: '#501b36dd',
-                  transform: 'translateY(-1px)',
-                },
-                '&:active': {
-                  transform: 'translateY(0)',
-                },
-                transition: 'all 0.2s ease',
-              }}
-            >
-              {!isSmall && 'Imprimir'}
-            </Button>
-          </Tooltip>
-
-          <Tooltip title="Recargar">
-            <Button
-              startIcon={<Refresh />}
-              size="medium"
-              onClick={handleRefresh}
-              variant="outlined"
-              disabled={!fileUrl}
-              sx={{
-                borderColor: '#501b36',
-                color: '#501b36',
-                fontWeight: 600,
-                px: 3,
-                py: 1,
-                borderRadius: 2.5,
-                textTransform: 'none',
-                minWidth: isSmall ? 40 : 100,
-                '&:hover': {
-                  backgroundColor: alpha('#501b36', 0.08),
-                  borderColor: '#501b36dd',
-                  transform: 'translateY(-1px)',
-                },
-                '&:active': {
-                  transform: 'translateY(0)',
-                },
-                transition: 'all 0.2s ease',
-              }}
-            >
-              {!isSmall && 'Recargar'}
-            </Button>
-          </Tooltip>
-
-          <Tooltip title="Abrir en nueva ventana">
-            <Button
-              startIcon={<Fullscreen />}
-              size="medium"
-              onClick={handleFullscreen}
-              variant="outlined"
-              disabled={!fileUrl}
-              sx={{
-                borderColor: '#501b36',
-                color: '#501b36',
-                fontWeight: 600,
-                px: 3,
-                py: 1,
-                borderRadius: 2.5,
-                textTransform: 'none',
-                minWidth: isSmall ? 40 : 140,
-                '&:hover': {
-                  backgroundColor: alpha('#501b36', 0.08),
-                  borderColor: '#501b36dd',
-                  transform: 'translateY(-1px)',
-                },
-                '&:active': {
-                  transform: 'translateY(0)',
-                },
-                transition: 'all 0.2s ease',
-              }}
-            >
-              {!isSmall && 'Nueva ventana'}
-            </Button>
-          </Tooltip>
-
-          {/* Controles de zoom para móvil */}
-          {isMobile && (
-            <>
-              <Tooltip title="Zoom Out">
-                <Button
-                  startIcon={<ZoomOut />}
-                  size="medium"
-                  onClick={handleZoomOut}
-                  variant="outlined"
-                  disabled={!fileUrl || zoomLevel <= 25}
-                  sx={{
-                    borderColor: '#501b36',
-                    color: '#501b36',
-                    fontWeight: 600,
-                    px: 2,
-                    py: 1,
-                    borderRadius: 2.5,
-                    textTransform: 'none',
-                    minWidth: 40,
-                    '&:hover': {
-                      backgroundColor: alpha('#501b36', 0.08),
-                      borderColor: '#501b36dd',
-                      transform: 'translateY(-1px)',
-                    },
-                    '&:active': {
-                      transform: 'translateY(0)',
-                    },
-                    transition: 'all 0.2s ease',
-                  }}
-                >
-                </Button>
-              </Tooltip>
-
-              <Typography 
-                variant="caption" 
-                sx={{ 
-                  color: '#501b36', 
-                  fontWeight: 600, 
-                  minWidth: 40, 
-                  textAlign: 'center',
-                  fontSize: '0.75rem'
-                }}
-              >
-                {zoomLevel}%
-              </Typography>
-
-              <Tooltip title="Zoom In">
-                <Button
-                  startIcon={<ZoomIn />}
-                  size="medium"
-                  onClick={handleZoomIn}
-                  variant="outlined"
-                  disabled={!fileUrl || zoomLevel >= 200}
-                  sx={{
-                    borderColor: '#501b36',
-                    color: '#501b36',
-                    fontWeight: 600,
-                    px: 2,
-                    py: 1,
-                    borderRadius: 2.5,
-                    textTransform: 'none',
-                    minWidth: 40,
-                    '&:hover': {
-                      backgroundColor: alpha('#501b36', 0.08),
-                      borderColor: '#501b36dd',
-                      transform: 'translateY(-1px)',
-                    },
-                    '&:active': {
-                      transform: 'translateY(0)',
-                    },
-                    transition: 'all 0.2s ease',
-                  }}
-                >
-                </Button>
-              </Tooltip>
-
-              <Tooltip title="Restablecer zoom">
-                <Button
-                  size="medium"
-                  onClick={handleZoomReset}
-                  variant="text"
-                  disabled={!fileUrl}
-                  sx={{
-                    color: '#501b36',
-                    fontWeight: 600,
-                    px: 1,
-                    py: 1,
-                    borderRadius: 2.5,
-                    textTransform: 'none',
-                    minWidth: 30,
-                    fontSize: '0.7rem',
-                    '&:hover': {
-                      backgroundColor: alpha('#501b36', 0.08),
-                    },
-                  }}
-                >
-                  Reset
-                </Button>
-              </Tooltip>
-            </>
-          )}
-        </Box>
-      </Box>
 
       {/* Content */}
       <DialogContent
@@ -693,14 +379,14 @@ export const PdfPreview: React.FC<PdfPreviewProps> = ({
               flex: 1,
               display: 'flex',
               overflow: 'hidden',
-              p: isMobile ? 1 : 3,
+              p: isMobile ? 0.5 : 1,
             }}
           >
             <Box
               sx={{
                 flex: 1,
                 backgroundColor: 'white',
-                borderRadius: 3,
+                borderRadius: isMobile ? 1 : 2,
                 boxShadow: '0 8px 32px rgba(0, 0, 0, 0.08), 0 4px 16px rgba(0, 0, 0, 0.04)',
                 overflow: 'hidden',
                 border: '1px solid rgba(0, 0, 0, 0.08)',
