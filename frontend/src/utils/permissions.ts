@@ -69,11 +69,13 @@ const ROLE_PERMISSIONS: Record<string, Permission[]> = {
     Permission.VIEW_VACATIONS,
   ],
   P_TALLER: [
-    // Personal de Taller - acceso a documentos, vacaciones y tráfico (NO viajes)
+    // Personal de Taller - acceso a documentos, vacaciones, tráfico y viajes
     Permission.VIEW_DOCUMENTS,
     Permission.UPLOAD_DOCUMENTS,
+    Permission.VIEW_TRIPS,        // Acceso a viajes
+    Permission.MANAGE_TRIPS,      // Puede crear y gestionar viajes
     Permission.VIEW_VACATIONS,
-    Permission.VIEW_TRAFFIC,  // Acceso a carpeta de tráfico
+    Permission.VIEW_TRAFFIC,      // Acceso a carpeta de tráfico
   ],
   TRAFICO: [
     Permission.VIEW_DOCUMENTS,

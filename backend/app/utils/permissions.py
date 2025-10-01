@@ -64,8 +64,9 @@ ROLE_PERMISSIONS: Dict[UserRole, Set[Permission]] = {
     },
     
     UserRole.P_TALLER: {
-        # Personal de Taller - acceso a documentos, vacaciones y carpeta de tráfico (NO viajes)
+        # Personal de Taller - acceso a documentos, vacaciones, tráfico y viajes
         Permission.VIEW_DOCUMENTS,
+        Permission.VIEW_ORDERS,       # Acceso a viajes
         Permission.VIEW_VACATIONS,
         Permission.VIEW_PROFILE,
         Permission.EDIT_PROFILE,

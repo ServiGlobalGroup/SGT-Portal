@@ -25,6 +25,7 @@ import {
   // CalendarToday, // Temporalmente oculto
   Receipt,
   RestaurantMenu,
+  LocalShipping,
 } from '@mui/icons-material';
 import { useAuth } from '../../hooks/useAuth';
 import { hasPermission, Permission } from '../../utils/permissions';
@@ -53,6 +54,8 @@ export const MobileSidebar: React.FC<MobileSidebarProps> = ({
     { icon: <Receipt />, text: 'Nóminas', path: '/payroll' },
     // Mostrar Dietas solo si tiene permiso
     ...(hasPermission(user, Permission.VIEW_DIETAS) ? [{ icon: <RestaurantMenu />, text: 'Dietas', path: '/dietas' }] : []),
+    // Mostrar Viajes solo si tiene permiso
+    ...(hasPermission(user, Permission.VIEW_TRIPS) ? [{ icon: <LocalShipping />, text: 'Viajes', path: '/trips' }] : []),
     // Vacaciones temporalmente oculto
     // { icon: <CalendarToday />, text: 'Vacaciones', path: '/vacations' },
     { icon: <Assignment />, text: 'Permisos', path: '/permissions' },
