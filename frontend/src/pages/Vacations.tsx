@@ -56,6 +56,7 @@ import {
   Close,
   Delete,
   PersonSearch,
+  Work,
 } from '@mui/icons-material';
 import { Calendar, momentLocalizer, Event, Views } from 'react-big-calendar';
 import moment from 'moment';
@@ -203,6 +204,7 @@ export const Vacations: React.FC = () => {
   const [lookupLoading, setLookupLoading] = useState(false);
   const [usagePersonal, setUsagePersonal] = useState<{ approved:number; pending:number } | null>(null);
   const [usageVacation, setUsageVacation] = useState<{ approved:number; pending:number } | null>(null);
+  const [usageMoving, setUsageMoving] = useState<{ approved:number; pending:number } | null>(null);
 
   // Tabla de solicitudes por usuario/año (subcomponente)
   const UserRequestsTable: React.FC<{ userId: number; userName: string; year: number; }> = ({ userId, userName, year }) => {
@@ -521,15 +523,18 @@ export const Vacations: React.FC = () => {
   const loadUserUsage = async (userId: number, year: number) => {
     try {
       setLookupLoading(true);
-      const [per, vac] = await Promise.all([
+      const [per, vac, mov] = await Promise.all([
         vacationService.getVacationUsage({ user_id: userId, year, absence_type: 'PERSONAL' }),
         vacationService.getVacationUsage({ user_id: userId, year, absence_type: 'VACATION' }),
+        vacationService.getVacationUsage({ user_id: userId, year, absence_type: 'MOVING' }),
       ]);
       setUsagePersonal({ approved: per.approved_days_used || 0, pending: per.pending_days_requested || 0 });
       setUsageVacation({ approved: vac.approved_days_used || 0, pending: vac.pending_days_requested || 0 });
+      setUsageMoving({ approved: mov.approved_days_used || 0, pending: mov.pending_days_requested || 0 });
     } catch (e) {
       setUsagePersonal(null);
       setUsageVacation(null);
+      setUsageMoving(null);
     } finally {
       setLookupLoading(false);
     }
@@ -1258,8 +1263,10 @@ export const Vacations: React.FC = () => {
                   return user.status === 'pending' ? '#ff9800' : '#f44336';
                 }
                 // Solo para eventos aprobados aplicamos los colores por tipo
-                // Verificar si es vacación o asunto propio basado en el reason
-                return user.reason === 'Asuntos propios' ? '#2196f3' : '#4caf50';
+                // Verificar si es vacación, asunto propio o mudanza basado en el reason
+                if (user.reason === 'Asuntos propios') return '#2196f3';
+                if (user.reason === 'Mudanza') return '#ff9800';
+                return '#4caf50';
               };
               
               return (
@@ -1403,7 +1410,7 @@ export const Vacations: React.FC = () => {
                       Mis Ausencias
                     </Typography>
                     <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400 }}>
-                      Gestiona tus solicitudes de vacaciones y asuntos propios
+                      Gestiona tus solicitudes de vacaciones, asuntos propios y mudanza
                     </Typography>
                   </Box>
                 </Box>
@@ -2103,6 +2110,17 @@ export const Vacations: React.FC = () => {
                         Asuntos propios
                       </Typography>
                     </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Box sx={{ 
+                        width: 12, 
+                        height: 12, 
+                        bgcolor: '#ff9800', 
+                        borderRadius: '3px' 
+                      }} />
+                      <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                        Mudanza
+                      </Typography>
+                    </Box>
                   </Box>
                   
                   {/* Controles de navegación del calendario */}
@@ -2506,7 +2524,7 @@ export const Vacations: React.FC = () => {
                           <CircularProgress sx={{ color: '#501b36' }} />
                         </Box>
                       ) : (
-                        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mb: 2 }}>
+                        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' }, gap: 2, mb: 2 }}>
                           <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, height: 160, display: 'flex', flexDirection: 'column' }}>
                             <Typography variant="subtitle2" sx={{ color: '#501b36', mb: 1 }}>
                               Asuntos propios ({lookupYear})
@@ -2534,6 +2552,21 @@ export const Vacations: React.FC = () => {
                             </Typography>
                             <Box sx={{ mt: 'auto' }}>
                               <Chip label={`Pendientes: ${usageVacation?.pending ?? '—'}`} size="small" />
+                            </Box>
+                          </Paper>
+                          <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, height: 160, display: 'flex', flexDirection: 'column' }}>
+                            <Typography variant="subtitle2" sx={{ color: '#501b36', mb: 1 }}>
+                              Mudanza ({lookupYear})
+                            </Typography>
+                            <Typography variant="h4" sx={{ fontWeight: 800, mb: 0.5 }}>
+                              {usageMoving?.approved ?? 0}
+                            </Typography>
+                            <Typography variant="body2" sx={{ color: 'text.secondary', flex: 1 }}>
+                              Días aprobados utilizados
+                            </Typography>
+                            <Box sx={{ mt: 'auto' }}>
+                              <Chip label={`Aprobados: ${usageMoving?.approved ?? '—'}`} size="small" sx={{ mr: 1 }} />
+                              <Chip label={`Pendientes: ${usageMoving?.pending ?? '—'}`} size="small" />
                             </Box>
                           </Paper>
                         </Box>
@@ -2972,7 +3005,7 @@ export const Vacations: React.FC = () => {
                     setNewRequest(prev => ({
                       ...prev,
                       absenceType: val as AbsenceType,
-                      reason: (val as AbsenceType) === 'PERSONAL' ? 'Asuntos propios' : 'Vacaciones',
+                      reason: (val as AbsenceType) === 'PERSONAL' ? 'Asuntos propios' : (val as AbsenceType) === 'MOVING' ? 'Mudanza' : 'Vacaciones',
                     }));
                   }}
                   size="small"
@@ -3047,6 +3080,10 @@ export const Vacations: React.FC = () => {
                     <EventNote sx={{ mr: 0.5, fontSize: 18 }} />
                     Asuntos propios
                   </ToggleButton>
+                  <ToggleButton value="MOVING">
+                    <Work sx={{ mr: 0.5, fontSize: 18 }} />
+                    Mudanza
+                  </ToggleButton>
                 </ToggleButtonGroup>
               </Box>
             </Box>
@@ -3112,7 +3149,7 @@ export const Vacations: React.FC = () => {
                   {
                     icon: <EventNote sx={{ fontSize: 16 }} />,
                     label: "Tipo",
-                    value: newRequest.absenceType === 'PERSONAL' ? 'Asuntos propios' : 'Vacaciones'
+                    value: newRequest.absenceType === 'PERSONAL' ? 'Asuntos propios' : newRequest.absenceType === 'MOVING' ? 'Mudanza' : 'Vacaciones'
                   },
                   {
                     icon: <EventNote sx={{ fontSize: 16 }} />,
@@ -3346,6 +3383,20 @@ export const Vacations: React.FC = () => {
                   }}
                 >
                   👤 Asuntos Propios
+                </Button>
+                <Button
+                  size="small"
+                  onClick={() => setAdminRequest(prev => ({ ...prev, absenceType: 'MOVING' }))}
+                  sx={{
+                    bgcolor: adminRequest.absenceType === 'MOVING' ? '#501b36' : 'transparent',
+                    color: adminRequest.absenceType === 'MOVING' ? 'white' : '#501b36',
+                    '&:hover': { bgcolor: adminRequest.absenceType === 'MOVING' ? '#3d1429' : 'rgba(80,27,54,0.08)' },
+                    borderRadius: 1,
+                    textTransform: 'none',
+                    fontWeight: adminRequest.absenceType === 'MOVING' ? 600 : 400
+                  }}
+                >
+                  📦 Mudanza
                 </Button>
               </Box>
             </Box>

@@ -58,7 +58,7 @@ interface VacationRequest {
   approvedBy?: string;
   approvedDate?: string;
   comments?: string;
-  type: 'vacation' | 'personal' | 'sick' | 'maternity' | 'study';
+  type: 'vacation' | 'personal' | 'moving' | 'sick' | 'maternity' | 'study';
 }
 
 type VacationStatus = 'all' | 'pending' | 'approved' | 'rejected';
@@ -283,6 +283,7 @@ export const MobileVacations: React.FC = () => {
   const getTypeIcon = (type: string) => {
     switch (type) {
       case 'personal': return <Person sx={{ fontSize: 16 }} />;
+      case 'moving': return <Work sx={{ fontSize: 16 }} />;
       case 'sick': return <Business sx={{ fontSize: 16 }} />;
       case 'maternity': return <Work sx={{ fontSize: 16 }} />;
       case 'study': return <Schedule sx={{ fontSize: 16 }} />;
@@ -294,6 +295,7 @@ export const MobileVacations: React.FC = () => {
     switch (type) {
       case 'personal': return 'Asuntos propios';
       case 'vacation': return 'Vacaciones';
+      case 'moving': return 'Mudanza';
       case 'sick': return 'Médica';
       case 'maternity': return 'Maternidad';
       case 'study': return 'Estudios';
@@ -304,6 +306,7 @@ export const MobileVacations: React.FC = () => {
   const getTypeColor = (type: string) => {
     switch (type) {
       case 'personal': return '#2196f3';
+      case 'moving': return '#ff9800';
       case 'sick': return '#f44336';
       case 'maternity': return '#9c27b0';
       case 'study': return '#ff9800';
@@ -568,7 +571,7 @@ export const MobileVacations: React.FC = () => {
                     Mis Ausencias
                   </Typography>
                   <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400 }}>
-                    Gestiona tus solicitudes de vacaciones y asuntos propios
+                    Gestiona tus solicitudes de vacaciones, asuntos propios y mudanza
                   </Typography>
                 </Box>
               </Box>
@@ -768,7 +771,7 @@ export const MobileVacations: React.FC = () => {
                     setNewRequest(prev => ({
                       ...prev,
                       absenceType: val as AbsenceType,
-                      reason: (val as AbsenceType) === 'PERSONAL' ? 'Asuntos propios' : 'Vacaciones',
+                      reason: (val as AbsenceType) === 'PERSONAL' ? 'Asuntos propios' : (val as AbsenceType) === 'MOVING' ? 'Mudanza' : 'Vacaciones',
                     }));
                   }}
                   size="small"
@@ -801,6 +804,7 @@ export const MobileVacations: React.FC = () => {
                 >
                   <ToggleButton value="VACATION">Vacaciones</ToggleButton>
                   <ToggleButton value="PERSONAL">Asuntos propios</ToggleButton>
+                  <ToggleButton value="MOVING">Mudanza</ToggleButton>
                 </ToggleButtonGroup>
               </Box>
             </Box>

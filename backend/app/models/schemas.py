@@ -28,6 +28,7 @@ class VacationStatus(str, Enum):
 class AbsenceType(str, Enum):
     VACATION = "VACATION"
     PERSONAL = "PERSONAL"
+    MOVING = "MOVING"
 
 class VacationRequestBase(BaseModel):
     start_date: datetime

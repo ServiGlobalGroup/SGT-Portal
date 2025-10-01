@@ -14,6 +14,7 @@ class VacationStatus(enum.Enum):
 class AbsenceType(enum.Enum):
     VACATION = "VACATION"
     PERSONAL = "PERSONAL"
+    MOVING = "MOVING"
 
 class VacationRequest(Base):
     """

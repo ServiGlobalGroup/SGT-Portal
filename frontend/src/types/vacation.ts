@@ -1,4 +1,4 @@
-export type AbsenceType = 'VACATION' | 'PERSONAL';
+export type AbsenceType = 'VACATION' | 'PERSONAL' | 'MOVING';
 
 export interface VacationRequest {
   id?: number;
