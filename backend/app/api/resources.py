@@ -162,7 +162,18 @@ def list_fuel_cards(
             where_clause = "WHERE " + " AND ".join(where_conditions)
         
         final_query = f"""
-            SELECT id, pan, matricula, compania, caducidad, pin, created_by, created_at 
+            SELECT id, pan, matricula, compania, 
+                   CASE 
+                       WHEN caducidad IS NULL THEN NULL
+                       WHEN EXTRACT(YEAR FROM caducidad) > 9999 OR EXTRACT(YEAR FROM caducidad) < 1 THEN NULL
+                       ELSE caducidad::text
+                   END as caducidad,
+                   pin, created_by,
+                   CASE 
+                       WHEN created_at IS NULL THEN NULL
+                       WHEN EXTRACT(YEAR FROM created_at) > 9999 OR EXTRACT(YEAR FROM created_at) < 1 THEN NULL
+                       ELSE created_at::text
+                   END as created_at
             FROM fuel_cards 
             {where_clause}
             ORDER BY id DESC 
@@ -191,13 +202,18 @@ def list_fuel_cards(
         items = []
         for row in rows:
             pin_val = row[5] if len(row) > 5 and row[5] else ''
+            
+            # Las fechas ahora vienen como texto desde SQL, solo necesitamos validarlas
+            caducidad_val = row[4] if row[4] else None
+            created_at_val = row[7] if len(row) > 7 and row[7] else None
+            
             item = {
                 "id": row[0],
                 "pan": row[1] or '',
                 "matricula": row[2] or '', 
                 "compania": row[3] or '',
-                "caducidad": row[4].isoformat() if row[4] else None,
-                "created_at": row[7].isoformat() if len(row) > 7 and row[7] else None,
+                "caducidad": caducidad_val,
+                "created_at": created_at_val,
                 "masked_pin": "•" * len(pin_val),
                 "pin": pin_val
             }

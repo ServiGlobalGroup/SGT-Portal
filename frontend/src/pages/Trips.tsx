@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Box, Typography, Paper, TextField, Button, Fade, GlobalStyles, Alert, Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Stack, IconButton, Tooltip, ToggleButtonGroup, ToggleButton, Pagination, Autocomplete, CircularProgress, Chip, Card, CardContent, Divider } from '@mui/material';
+import { Box, Typography, Paper, TextField, Button, Fade, GlobalStyles, Alert, Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Stack, IconButton, Tooltip, ToggleButtonGroup, ToggleButton, Pagination, Autocomplete, CircularProgress, Chip, Card, CardContent, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { WorkOutline, DeleteOutline, History, Calculate } from '@mui/icons-material';
 import { useAuth } from '../hooks/useAuth';
 import { hasPermission, Permission } from '../utils/permissions';
 import { tripsAPI, type TripRecord } from '../services/api';
 import { useDeviceType } from '../hooks/useDeviceType';
 
-interface TripEntry { id: string; orderNumber: string; pernocta: boolean; festivo: boolean; canonTti: boolean; nota: string; createdAt: string; eventDate: string; userName: string; }
+interface TripEntry { id: string; orderNumber: string; pernocta: boolean; festivo: boolean; canonTti: boolean; nota: string; createdAt: string; eventDate: string; userName: string; userId: number; }
 
 export const Trips: React.FC = () => {
   const { user, selectedCompany } = useAuth();
@@ -40,6 +40,9 @@ export const Trips: React.FC = () => {
   const [loadingUsers, setLoadingUsers] = useState(false);
   const searchTimeoutRef = useRef<number | null>(null);
   const lastQueryRef = useRef<string>('');
+  // Modal de confirmación para eliminar
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [tripToDelete, setTripToDelete] = useState<{ id: string; orderNumber: string } | null>(null);
 
   // Cargar registros (mis viajes o todos si admin)
   useEffect(() => {
@@ -54,7 +57,8 @@ export const Trips: React.FC = () => {
       nota: t.note || '',
       createdAt: t.created_at,
       eventDate: t.event_date,
-      userName: t.user_name || '—'
+      userName: t.user_name || '—',
+      userId: t.user_id
     });
     if (canViewAllTrips) {
       tripsAPI.listAll({
@@ -96,6 +100,7 @@ export const Trips: React.FC = () => {
   const handleAdd = async () => {
     if (!orderNumber.trim()) { setError('El número de Albarán / OC es obligatorio'); return; }
     if (!eventDate) { setError('La fecha del evento es obligatoria'); return; }
+    if (!pernocta && !festivo && !canonTti) { setError('Debes seleccionar al menos una opción (Pernocta, Festivo o Canon TTI)'); return; }
     setError(null);
     try {
       const created = await tripsAPI.create({
@@ -115,7 +120,8 @@ export const Trips: React.FC = () => {
         nota: created.note || '',
         createdAt: created.created_at,
         eventDate: created.event_date,
-        userName: created.user_name || user?.full_name || '—'
+        userName: created.user_name || user?.full_name || '—',
+        userId: created.user_id
       };
       setEntries(p => [entry, ...p]);
       setOrderNumber(''); setPernocta(false); setFestivo(false); setCanonTti(false); setNota(''); setEventDate(new Date().toISOString().slice(0,10)); setSuccess('Registro guardado'); setTimeout(() => setSuccess(null), 3000);
@@ -124,16 +130,32 @@ export const Trips: React.FC = () => {
     }
   };
   const handleClear = () => { setOrderNumber(''); setPernocta(false); setFestivo(false); setCanonTti(false); setNota(''); setEventDate(new Date().toISOString().slice(0,10)); setError(null); };
-  const handleDelete = async (id: string) => {
+  
+  const handleDeleteClick = (id: string, orderNumber: string) => {
+    setTripToDelete({ id, orderNumber });
+    setDeleteModalOpen(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!tripToDelete) return;
     const prev = entries;
-    setEntries(p => p.filter(e => e.id !== id));
+    setEntries(p => p.filter(e => e.id !== tripToDelete.id));
+    setDeleteModalOpen(false);
     try {
-      await tripsAPI.remove(Number(id));
+      await tripsAPI.remove(Number(tripToDelete.id));
+      setTripToDelete(null);
     } catch (e) {
       setEntries(prev);
       setError('No se pudo eliminar');
+      setTripToDelete(null);
     }
   };
+
+  const handleCancelDelete = () => {
+    setDeleteModalOpen(false);
+    setTripToDelete(null);
+  };
+
   const handleChangeTab = (_: React.SyntheticEvent, v: number) => { if(v!==null) setTab(v); };
 
   // Autocomplete usuarios (solo admin o quienes pueden ver todos los viajes)
@@ -305,7 +327,10 @@ export const Trips: React.FC = () => {
               </Stack>
               
               <Box>
-                <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>Indicadores</Typography>
+                <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600 }}>Indicadores *</Typography>
+                <Typography variant="caption" sx={{ display: 'block', mb: 1.5, color: 'text.secondary', fontStyle: 'italic' }}>
+                  * Si el viaje fue en sábado o domingo, marcar la casilla de Festivo
+                </Typography>
                 <Stack direction="row" spacing={1} flexWrap="wrap">
                   <ToggleButtonGroup
                     value={indicatorValues}
@@ -388,7 +413,7 @@ export const Trips: React.FC = () => {
               />
               
               <Box sx={{ display:'flex', flexWrap:'wrap', gap:2 }}>
-                <Button variant="contained" onClick={handleAdd} disabled={!orderNumber.trim() || !eventDate} sx={{ fontWeight:600, px:3 }}>Guardar</Button>
+                <Button variant="contained" onClick={handleAdd} disabled={!orderNumber.trim() || !eventDate || (!pernocta && !festivo && !canonTti)} sx={{ fontWeight:600, px:3 }}>Guardar</Button>
                 <Button variant="outlined" onClick={handleClear} sx={{ fontWeight:500 }}>Limpiar</Button>
               </Box>
             </Stack>
@@ -548,10 +573,10 @@ export const Trips: React.FC = () => {
                           </Tooltip>
                         </TableCell>
                         <TableCell align="right">
-                          {isAdmin && (
+                          {(isAdmin || e.userId === user?.id) && (
                             <IconButton 
                               size="small" 
-                              onClick={() => handleDelete(e.id)}
+                              onClick={() => handleDeleteClick(e.id, e.orderNumber)}
                               sx={{
                                 backgroundColor: 'transparent',
                                 boxShadow: 'none',
@@ -575,34 +600,145 @@ export const Trips: React.FC = () => {
                 </Table>
               </TableContainer>
             ) : (
-              <Stack spacing={1.5}>
+              <Stack spacing={2}>
                 {entries.length === 0 && (
                   <Typography variant="body2" sx={{ opacity:0.7, textAlign:'center', py:2 }}>Sin registros todavía</Typography>
                 )}
                 {entries.map(e => (
-                  <Card key={e.id} variant="outlined" sx={{ borderRadius:2 }}>
-                    <CardContent sx={{ p:1.5, '&:last-child':{ pb:1.5 } }}>
-                      <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1}>
-                        <Box>
-                          <Typography variant="subtitle2" sx={{ fontWeight:700, letterSpacing:.3 }}>{e.orderNumber}</Typography>
-                          <Typography variant="caption" sx={{ color:'text.secondary' }}>{e.userName || '—'}</Typography>
+                  <Card 
+                    key={e.id} 
+                    sx={{ 
+                      borderRadius: 3,
+                      border: '1px solid #e0e0e0',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                      overflow: 'hidden',
+                      transition: 'transform 0.2s, box-shadow 0.2s',
+                      '&:hover': {
+                        transform: 'translateY(-2px)',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.12)'
+                      }
+                    }}
+                  >
+                    {/* Header con gradiente */}
+                    <Box sx={{ 
+                      background: 'linear-gradient(135deg, #501b36 0%, #6d2548 50%, #7d2d52 100%)',
+                      p: 2,
+                      position: 'relative'
+                    }}>
+                      <Stack direction="row" alignItems="center" justifyContent="space-between">
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="h6" sx={{ fontWeight: 700, color: 'white', letterSpacing: 0.5, fontSize: '1.1rem' }}>
+                            {e.orderNumber}
+                          </Typography>
+                          <Typography variant="caption" sx={{ color: 'rgba(255,255,255,0.85)', fontSize: '0.8rem' }}>
+                            {e.userName || '—'}
+                          </Typography>
                         </Box>
-                        {isAdmin && (
-                          <IconButton size="small" onClick={() => handleDelete(e.id)}>
+                        {(isAdmin || e.userId === user?.id) && (
+                          <IconButton 
+                            size="small" 
+                            onClick={() => handleDeleteClick(e.id, e.orderNumber)}
+                            sx={{ 
+                              color: 'white',
+                              bgcolor: 'rgba(255,255,255,0.15)',
+                              '&:hover': { bgcolor: 'rgba(255,255,255,0.25)' }
+                            }}
+                          >
                             <DeleteOutline fontSize="small" />
                           </IconButton>
                         )}
                       </Stack>
-                      <Divider sx={{ my:1 }} />
-                      <Stack direction="row" spacing={1} flexWrap="wrap">
-                        <Chip size="small" label={`Evento: ${new Date(e.eventDate + 'T00:00:00').toLocaleDateString('es-ES')}`} />
-                        <Chip size="small" label={`Registro: ${new Date(e.createdAt).toLocaleDateString('es-ES')}`} />
-                        <Chip size="small" label={e.pernocta ? 'Pernocta: Sí' : 'Pernocta: No'} sx={{ bgcolor: e.pernocta ? '#6d2548' : '#e4e4e4', color: e.pernocta ? '#fff' : '#555' }} />
-                        <Chip size="small" label={e.festivo ? 'Festivo: Sí' : 'Festivo: No'} sx={{ bgcolor: e.festivo ? '#d4a574' : '#e4e4e4', color: e.festivo ? '#4a2c12' : '#555' }} />
-                        <Chip size="small" label={e.canonTti ? 'Canon TTI: Sí' : 'Canon TTI: No'} sx={{ bgcolor: e.canonTti ? '#388e3c' : '#e4e4e4', color: e.canonTti ? '#fff' : '#555' }} />
+                    </Box>
+
+                    {/* Contenido */}
+                    <CardContent sx={{ p: 2 }}>
+                      {/* Fechas */}
+                      <Stack direction="row" spacing={1.5} sx={{ mb: 2 }}>
+                        <Box sx={{ flex: 1, bgcolor: '#f5f5f5', p: 1.5, borderRadius: 2 }}>
+                          <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', fontWeight: 600 }}>
+                            EVENTO
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.5, fontSize: '0.85rem' }}>
+                            {new Date(e.eventDate + 'T00:00:00').toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: '2-digit' })}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ flex: 1, bgcolor: '#f5f5f5', p: 1.5, borderRadius: 2 }}>
+                          <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', fontWeight: 600 }}>
+                            REGISTRO
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600, mt: 0.5, fontSize: '0.85rem' }}>
+                            {new Date(e.createdAt).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}
+                          </Typography>
+                        </Box>
                       </Stack>
+
+                      {/* Indicadores - Grid de 3 columnas */}
+                      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, mb: e.nota ? 2 : 0 }}>
+                        <Box sx={{ 
+                          bgcolor: e.pernocta ? '#6d2548' : '#f0f0f0',
+                          color: e.pernocta ? 'white' : '#666',
+                          p: 1,
+                          borderRadius: 2,
+                          textAlign: 'center',
+                          transition: 'all 0.2s'
+                        }}>
+                          <Typography variant="caption" sx={{ fontSize: '0.65rem', fontWeight: 700, display: 'block', opacity: 0.9 }}>
+                            PERNOCTA
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '0.9rem', mt: 0.3 }}>
+                            {e.pernocta ? 'SÍ' : 'NO'}
+                          </Typography>
+                        </Box>
+                        
+                        <Box sx={{ 
+                          bgcolor: e.festivo ? '#d4a574' : '#f0f0f0',
+                          color: e.festivo ? '#4a2c12' : '#666',
+                          p: 1,
+                          borderRadius: 2,
+                          textAlign: 'center',
+                          transition: 'all 0.2s'
+                        }}>
+                          <Typography variant="caption" sx={{ fontSize: '0.65rem', fontWeight: 700, display: 'block', opacity: 0.9 }}>
+                            FESTIVO
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '0.9rem', mt: 0.3 }}>
+                            {e.festivo ? 'SÍ' : 'NO'}
+                          </Typography>
+                        </Box>
+                        
+                        <Box sx={{ 
+                          bgcolor: e.canonTti ? '#388e3c' : '#f0f0f0',
+                          color: e.canonTti ? 'white' : '#666',
+                          p: 1,
+                          borderRadius: 2,
+                          textAlign: 'center',
+                          transition: 'all 0.2s'
+                        }}>
+                          <Typography variant="caption" sx={{ fontSize: '0.65rem', fontWeight: 700, display: 'block', opacity: 0.9 }}>
+                            CANON TTI
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 700, fontSize: '0.9rem', mt: 0.3 }}>
+                            {e.canonTti ? 'SÍ' : 'NO'}
+                          </Typography>
+                        </Box>
+                      </Box>
+
+                      {/* Nota si existe */}
                       {!!e.nota && (
-                        <Typography variant="body2" sx={{ mt:1, color:'text.secondary' }}>{e.nota}</Typography>
+                        <Box sx={{ 
+                          mt: 2, 
+                          p: 1.5, 
+                          bgcolor: '#fafafa', 
+                          borderRadius: 2,
+                          borderLeft: '3px solid #501b36'
+                        }}>
+                          <Typography variant="caption" sx={{ color: 'text.secondary', fontSize: '0.7rem', fontWeight: 600, display: 'block', mb: 0.5 }}>
+                            NOTA
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontSize: '0.85rem', color: 'text.primary' }}>
+                            {e.nota}
+                          </Typography>
+                        </Box>
                       )}
                     </CardContent>
                   </Card>
@@ -620,6 +756,51 @@ export const Trips: React.FC = () => {
       )}
 
       {loading && <Box sx={{ position:'fixed', top:70, right:20, zIndex:2000, background:'#501b36', color:'#fff', px:2, py:1, borderRadius:2, boxShadow:3 }}>Cargando...</Box>}
+      
+      {/* Modal de confirmación para eliminar */}
+      <Dialog
+        open={deleteModalOpen}
+        onClose={handleCancelDelete}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 3,
+            mx: 2
+          }
+        }}
+      >
+        <DialogTitle sx={{ pb: 1, fontWeight: 600 }}>
+          Confirmar eliminación
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+            ¿Estás seguro de que deseas eliminar el registro del viaje <strong>{tripToDelete?.orderNumber}</strong>?
+          </Typography>
+          <Typography variant="body2" sx={{ mt: 1.5, color: 'error.main', fontSize: '0.85rem' }}>
+            Esta acción no se puede deshacer.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button 
+            onClick={handleCancelDelete} 
+            variant="outlined" 
+            size="small"
+            sx={{ fontWeight: 500 }}
+          >
+            Cancelar
+          </Button>
+          <Button 
+            onClick={handleConfirmDelete} 
+            variant="contained" 
+            size="small"
+            color="error"
+            sx={{ fontWeight: 600 }}
+          >
+            Eliminar
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   </>);
 };

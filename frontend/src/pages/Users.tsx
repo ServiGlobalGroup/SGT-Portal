@@ -2188,8 +2188,8 @@ export const Users: React.FC = () => {
               value={createUserData.position}
               onChange={(value) => setCreateUserData(prev => ({ ...prev, position: String(value).toUpperCase() }))}
               startIcon={<Badge />}
-              placeholder="Puesto/Cargo del empleado"
-              helperText="Se guardará siempre en MAYÚSCULAS"
+              placeholder="Ej: EMATRA, SERVIGLOBAL"
+              helperText="Indicar EMATRA o SERVIGLOBAL"
             />
           </Box>
           {createUserData.role === 'TRABAJADOR' && (

@@ -84,11 +84,17 @@ async def my_trips(db: Session = Depends(get_db), current_user: User = Depends(g
 
 @router.delete("/{trip_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_trip(trip_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user), x_company: str | None = Header(default=None, alias="X-Company")):
-    if current_user.role not in MANAGE_ROLES:
-        raise HTTPException(status_code=403, detail="Permiso denegado")
     trip = db.query(TripRecord).get(trip_id)
     if not trip:
         raise HTTPException(status_code=404, detail="Registro no encontrado")
+    
+    # Permitir eliminar si es admin con permisos de gestión O si es el propietario del registro
+    is_owner = trip.user_id == current_user.id
+    is_manager = current_user.role in MANAGE_ROLES
+    
+    if not (is_owner or is_manager):
+        raise HTTPException(status_code=403, detail="No tienes permiso para eliminar este registro")
+    
     # Restringir por empresa
     comp_obj = effective_company_for_request(current_user, x_company)
     if comp_obj is not None and getattr(trip, 'company', None) not in (None, comp_obj):
