@@ -10,7 +10,11 @@ import {
   TruckInspectionRequestCreate,
   TruckInspectionRequestResult,
   AutoInspectionSettings,
-
+  DirectInspectionOrderCreate,
+  DirectInspectionOrderResponse,
+  DirectInspectionOrderSummary,
+  MarkDirectOrderReviewedRequest,
+  MarkDirectOrderReviewedResponse,
 } from '../types/truck-inspection';
 
 const API_BASE_URL = '/api/truck-inspections';
@@ -369,8 +373,6 @@ class TruckInspectionService {
     return response.json();
   }
 
-
-
   /**
    * Función auxiliar para subir múltiples imágenes después de crear la inspección
    */
@@ -437,6 +439,159 @@ class TruckInspectionService {
       console.error('Error fetching image:', error);
       throw error;
     }
+  }
+
+  /**
+   * Crea una orden directa de inspección
+   */
+  async createDirectInspectionOrder(payload: DirectInspectionOrderCreate): Promise<DirectInspectionOrderResponse> {
+    const token = localStorage.getItem('access_token');
+
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    };
+
+    try {
+      const selectedCompany = localStorage.getItem('selected_company');
+      if (selectedCompany === 'SERVIGLOBAL' || selectedCompany === 'EMATRA') {
+        headers['X-Company'] = selectedCompany;
+      }
+    } catch {
+      /* noop */
+    }
+
+    const response = await fetch(`${API_BASE_URL}/direct-orders`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Error al crear la orden directa: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Lista todas las órdenes directas, con filtro opcional por estado de revisión
+   */
+  async getDirectInspectionOrders(isReviewed?: boolean): Promise<DirectInspectionOrderSummary[]> {
+    const token = localStorage.getItem('access_token');
+
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${token}`,
+    };
+
+    try {
+      const selectedCompany = localStorage.getItem('selected_company');
+      if (selectedCompany === 'SERVIGLOBAL' || selectedCompany === 'EMATRA') {
+        headers['X-Company'] = selectedCompany;
+      }
+    } catch {
+      /* noop */
+    }
+
+    const queryParams = isReviewed !== undefined ? `?is_reviewed=${isReviewed}` : '';
+    const response = await fetch(`${API_BASE_URL}/direct-orders${queryParams}`, {
+      method: 'GET',
+      headers,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Error al obtener órdenes directas: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Obtiene el detalle completo de una orden directa
+   */
+  async getDirectInspectionOrderDetail(orderId: number): Promise<DirectInspectionOrderResponse> {
+    const token = localStorage.getItem('access_token');
+
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${token}`,
+    };
+
+    try {
+      const selectedCompany = localStorage.getItem('selected_company');
+      if (selectedCompany === 'SERVIGLOBAL' || selectedCompany === 'EMATRA') {
+        headers['X-Company'] = selectedCompany;
+      }
+    } catch {
+      /* noop */
+    }
+
+    const response = await fetch(`${API_BASE_URL}/direct-orders/${orderId}`, {
+      method: 'GET',
+      headers,
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Error al obtener detalle de orden: ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Marca una orden directa como revisada
+   */
+  async markDirectOrderReviewed(orderId: number, revisionNotes?: string): Promise<MarkDirectOrderReviewedResponse> {
+    const token = localStorage.getItem('access_token');
+
+    if (!token) {
+      throw new Error('No authentication token found');
+    }
+
+    const headers: Record<string, string> = {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    };
+
+    try {
+      const selectedCompany = localStorage.getItem('selected_company');
+      if (selectedCompany === 'SERVIGLOBAL' || selectedCompany === 'EMATRA') {
+        headers['X-Company'] = selectedCompany;
+      }
+    } catch {
+      /* noop */
+    }
+
+    const payload: MarkDirectOrderReviewedRequest = {
+      revision_notes: revisionNotes || null,
+    };
+
+    const response = await fetch(`${API_BASE_URL}/direct-orders/${orderId}/mark-reviewed`, {
+      method: 'PATCH',
+      headers,
+      body: JSON.stringify(payload),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `Error al marcar orden como revisada: ${response.statusText}`);
+    }
+
+    return response.json();
   }
 }
 

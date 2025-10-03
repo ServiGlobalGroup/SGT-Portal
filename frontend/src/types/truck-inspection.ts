@@ -128,6 +128,57 @@ export interface TruckInspectionRequestResult {
 }
 
 
+// ---------------- Órdenes directas de inspección (nueva funcionalidad) ----------------
+export type VehicleKind = 'TRACTORA' | 'SEMIREMOLQUE';
+
+export interface DirectInspectionOrderModule {
+  temp_id?: string; // solo frontend para key
+  title: string;    // Título del problema / módulo
+  notes?: string;   // Observaciones / descripción ampliada
+}
+
+export interface DirectInspectionOrderCreate {
+  truck_license_plate: string;     // Matrícula objetivo
+  vehicle_kind: VehicleKind;       // Tractora o Semirremolque
+  modules: DirectInspectionOrderModule[]; // Lista dinámica de bloques
+}
+
+export interface DirectInspectionOrderResponse {
+  order_id: number;
+  truck_license_plate: string;
+  vehicle_kind: VehicleKind;
+  modules: { id: number; title: string; notes?: string; created_at: string }[];
+  created_at: string;
+  created_by: string;
+  created_by_id: number;
+  is_reviewed: boolean;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+  revision_notes?: string | null;
+  message?: string; // Mensaje de confirmación opcional
+}
+
+export interface DirectInspectionOrderSummary {
+  id: number;
+  truck_license_plate: string;
+  vehicle_kind: VehicleKind;
+  created_at: string;
+  created_by: string;
+  company?: string | null;
+  is_reviewed: boolean;
+  modules_count: number;
+}
+
+export interface MarkDirectOrderReviewedRequest {
+  revision_notes?: string | null;
+}
+
+export interface MarkDirectOrderReviewedResponse {
+  message: string;
+  order_id: number;
+}
+
+
 
 export interface InspectionStatsResponse {
   total_inspections: number;

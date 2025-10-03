@@ -29,6 +29,18 @@ from app.schemas.truck_inspection import (
     AutoInspectionSettings,
     AutoInspectionSettingsUpdate,
 )
+from app.schemas.direct_inspection_order import (
+    DirectInspectionOrderCreate,
+    DirectInspectionOrderResponse,
+    DirectInspectionOrderModuleOut,
+    DirectInspectionOrderSummary,
+    MarkDirectOrderReviewedRequest,
+)
+from app.models.direct_inspection_order import (
+    DirectInspectionOrder,
+    DirectInspectionOrderModule,
+    VehicleKind,
+)
 from app.api.auth import get_current_user
 from app.services.activity_service import ActivityService
 from app.utils.company_context import effective_company_for_request
@@ -43,6 +55,14 @@ MAX_IMAGE_SIZE = 10 * 1024 * 1024  # 10MB
 AUTO_INSPECTION_SETTINGS_FILE = "truck_inspection_settings.json"
 
 AUTO_INSPECTION_MANAGEMENT_ROLES: list[UserRole] = [
+    UserRole.P_TALLER,
+    UserRole.ADMINISTRADOR,
+    UserRole.ADMINISTRACION,
+    UserRole.TRAFICO,
+    UserRole.MASTER_ADMIN,
+]
+
+DIRECT_ORDER_CREATION_ROLES: list[UserRole] = [
     UserRole.P_TALLER,
     UserRole.ADMINISTRADOR,
     UserRole.ADMINISTRACION,
@@ -306,6 +326,269 @@ def _compute_inspection_status(current_user: User, db: Session) -> InspectionNee
         inspection_interval_days=INSPECTION_INTERVAL_DAYS,
         auto_inspection_enabled=auto_enabled,
     )
+
+
+@router.post("/direct-orders", response_model=DirectInspectionOrderResponse, status_code=http_status.HTTP_201_CREATED)
+async def create_direct_inspection_order(
+    payload: DirectInspectionOrderCreate,
+    current_user: User | MasterAdminUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    x_company: Optional[str] = Header(None, alias="X-Company"),
+):
+    """Crea una orden directa de inspección (taller) con módulos estructurados.
+
+    Permite a roles superiores (taller / administración / tráfico / master) registrar incidencias
+    antes de la revisión periódica. Devuelve la orden con sus módulos.
+    """
+
+    # Verificación de permiso
+    role_value = getattr(current_user, "role", None)
+    if not _role_in(role_value, DIRECT_ORDER_CREATION_ROLES):
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos para crear órdenes directas.",
+        )
+
+    effective_company = effective_company_for_request(current_user, x_company)
+
+    # Normalizar matrícula (ya se normaliza en schema, redundante pero asegura consistencia)
+    plate = payload.truck_license_plate.strip().upper()
+
+    # Crear la orden
+    order = DirectInspectionOrder(
+        truck_license_plate=plate,
+        vehicle_kind=payload.vehicle_kind,
+        company=effective_company,
+        created_by_id=getattr(current_user, "id", None),
+    )
+    db.add(order)
+    db.flush()  # Obtener ID para relacionar módulos
+
+    module_entities: list[DirectInspectionOrderModule] = []
+    for module_in in payload.modules:
+        module_entity = DirectInspectionOrderModule(
+            order_id=order.id,
+            title=module_in.title.strip(),
+            notes=(module_in.notes.strip() if module_in.notes else None),
+        )
+        db.add(module_entity)
+        module_entities.append(module_entity)
+
+    db.commit()
+    db.refresh(order)
+    for m in module_entities:
+        db.refresh(m)
+
+    creator_name = getattr(current_user, "full_name", None) or getattr(current_user, "username", "Usuario")
+    creator_id = getattr(current_user, "id", None)
+
+    # Extraer valores simples (evita problemas de tipado estático con Column[])
+    order_id_val = getattr(order, "id")
+    truck_plate_val = getattr(order, "truck_license_plate")
+    vehicle_kind_val = getattr(order, "vehicle_kind")
+    created_at_val = getattr(order, "created_at")
+
+    modules_out: list[DirectInspectionOrderModuleOut] = []
+    for m in module_entities:
+        modules_out.append(
+            DirectInspectionOrderModuleOut(
+                id=getattr(m, "id"),
+                title=getattr(m, "title"),
+                notes=getattr(m, "notes"),
+                created_at=getattr(m, "created_at"),
+            )
+        )
+
+    return DirectInspectionOrderResponse(
+        order_id=order_id_val,
+        truck_license_plate=truck_plate_val,
+        vehicle_kind=vehicle_kind_val,
+        created_at=created_at_val,
+        created_by=creator_name,
+        created_by_id=creator_id or 0,
+        modules=modules_out,
+        is_reviewed=False,
+        message="Orden directa creada correctamente",
+    )
+
+
+@router.get("/direct-orders", response_model=List[DirectInspectionOrderSummary])
+async def get_direct_inspection_orders(
+    is_reviewed: Optional[bool] = None,
+    limit: int = 100,
+    offset: int = 0,
+    current_user: User | MasterAdminUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+    x_company: Optional[str] = Header(None, alias="X-Company"),
+):
+    """Obtiene listado de órdenes directas de inspección.
+    
+    Filtrable por estado de revisión. Personal de taller y administradores
+    ven las órdenes de su empresa.
+    """
+    
+    role_value = getattr(current_user, "role", None)
+    if not _role_in(role_value, DIRECT_ORDER_CREATION_ROLES):
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos para ver órdenes directas.",
+        )
+    
+    effective_company = effective_company_for_request(current_user, x_company)
+    
+    query = db.query(DirectInspectionOrder).options(
+        joinedload(DirectInspectionOrder.created_by),
+        joinedload(DirectInspectionOrder.modules)
+    )
+    
+    # Filtrar por empresa
+    if effective_company is not None:
+        query = query.filter(DirectInspectionOrder.company == effective_company)
+    
+    # Filtrar por estado de revisión
+    if is_reviewed is not None:
+        query = query.filter(DirectInspectionOrder.is_reviewed == is_reviewed)
+    
+    query = query.order_by(desc(DirectInspectionOrder.created_at))
+    orders = query.offset(offset).limit(limit).all()
+    
+    results = []
+    for order in orders:
+        creator_name = getattr(order.created_by, "full_name", None) if order.created_by else "Desconocido"
+        company_val = getattr(order.company, "value", order.company) if order.company else None
+        
+        order_id_val = getattr(order, "id", 0)
+        plate_val = getattr(order, "truck_license_plate", "")
+        veh_kind_val = getattr(order, "vehicle_kind", VehicleKind.TRACTORA)  # Default
+        created_at_val = getattr(order, "created_at", datetime.now(timezone.utc))
+        is_reviewed_val = getattr(order, "is_reviewed", False)
+        company_val = getattr(order, "company", None)
+        
+        results.append(DirectInspectionOrderSummary(
+            id=int(order_id_val),
+            truck_license_plate=str(plate_val),
+            vehicle_kind=veh_kind_val,
+            created_at=created_at_val,
+            created_by=creator_name or "Desconocido",
+            company=str(company_val) if company_val else None,
+            is_reviewed=bool(is_reviewed_val),
+            modules_count=len(order.modules) if order.modules else 0,
+        ))
+    
+    return results
+
+
+@router.get("/direct-orders/{order_id}", response_model=DirectInspectionOrderResponse)
+async def get_direct_inspection_order_detail(
+    order_id: int,
+    current_user: User | MasterAdminUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Obtiene detalle completo de una orden directa incluyendo módulos."""
+    
+    role_value = getattr(current_user, "role", None)
+    if not _role_in(role_value, DIRECT_ORDER_CREATION_ROLES):
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail="No tienes permisos para ver órdenes directas.",
+        )
+    
+    order = db.query(DirectInspectionOrder).options(
+        joinedload(DirectInspectionOrder.created_by),
+        joinedload(DirectInspectionOrder.reviewed_by),
+        joinedload(DirectInspectionOrder.modules)
+    ).filter(DirectInspectionOrder.id == order_id).first()
+    
+    if not order:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail="Orden directa no encontrada",
+        )
+    
+    creator_name = getattr(order.created_by, "full_name", None) if order.created_by else "Desconocido"
+    creator_id = order.created_by_id
+    reviewer_name = getattr(order.reviewed_by, "full_name", None) if order.reviewed_by else None
+    
+    modules_out = [
+        DirectInspectionOrderModuleOut(
+            id=m.id,
+            title=m.title,
+            notes=m.notes,
+            created_at=m.created_at,
+        )
+        for m in (order.modules or [])
+    ]
+    
+    order_id_val = getattr(order, "id", 0)
+    plate_val = getattr(order, "truck_license_plate", "")
+    veh_kind_val = getattr(order, "vehicle_kind", VehicleKind.TRACTORA)  # Default
+    created_at_val = getattr(order, "created_at", datetime.now(timezone.utc))
+    is_reviewed_val = getattr(order, "is_reviewed", False)
+    reviewed_at_val = getattr(order, "reviewed_at", None)
+    revision_notes_val = getattr(order, "revision_notes", None)
+    creator_id_val = getattr(order.created_by, "id", 0) if order.created_by else 0
+    
+    return DirectInspectionOrderResponse(
+        order_id=int(order_id_val),
+        truck_license_plate=str(plate_val),
+        vehicle_kind=veh_kind_val,
+        created_at=created_at_val,
+        created_by=creator_name or "Desconocido",
+        created_by_id=int(creator_id_val),
+        modules=modules_out,
+        is_reviewed=bool(is_reviewed_val),
+        reviewed_by=reviewer_name,
+        reviewed_at=reviewed_at_val,
+        revision_notes=revision_notes_val,
+    )
+
+
+@router.patch("/direct-orders/{order_id}/mark-reviewed", response_model=dict)
+async def mark_direct_order_reviewed(
+    order_id: int,
+    payload: MarkDirectOrderReviewedRequest,
+    current_user: User | MasterAdminUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """Marca una orden directa como revisada por personal de taller."""
+    
+    role_value = getattr(current_user, "role", None)
+    if not _role_in(role_value, [UserRole.P_TALLER, UserRole.ADMINISTRADOR, UserRole.ADMINISTRACION]):
+        raise HTTPException(
+            status_code=http_status.HTTP_403_FORBIDDEN,
+            detail="Solo el personal de taller y administradores pueden marcar órdenes como revisadas",
+        )
+    
+    order = db.query(DirectInspectionOrder).filter(DirectInspectionOrder.id == order_id).first()
+    
+    if not order:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail="Orden directa no encontrada",
+        )
+    
+    if order.is_reviewed:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail="Esta orden ya está marcada como revisada",
+        )
+    
+    # Marcar como revisada
+    setattr(order, "is_reviewed", True)
+    setattr(order, "reviewed_by_id", getattr(current_user, "id", None))
+    setattr(order, "reviewed_at", datetime.now(timezone.utc))
+    setattr(order, "revision_notes", payload.revision_notes)
+    
+    db.commit()
+    
+    reviewer_name = getattr(current_user, "full_name", None) or getattr(current_user, "username", "Equipo de Taller")
+    
+    return {
+        "message": "Orden directa marcada como revisada exitosamente",
+        "order_id": order_id,
+        "reviewed_by": reviewer_name,
+        "reviewed_at": order.reviewed_at,
+    }
 
 @router.get("/settings/auto-inspection", response_model=AutoInspectionSettings)
 async def get_auto_inspection_settings_endpoint(

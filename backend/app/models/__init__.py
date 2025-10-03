@@ -6,6 +6,7 @@ from .activity_log import ActivityLog
 from .distanciero import Distanciero
 from .truck_inspection import TruckInspection
 from .truck_inspection_request import TruckInspectionRequest, InspectionRequestStatus
+from .direct_inspection_order import DirectInspectionOrder, DirectInspectionOrderModule, VehicleKind
 
 __all__ = [
     "User", "UserRole", "MasterAdminUser", 
@@ -16,4 +17,5 @@ __all__ = [
     "Distanciero",
     "TruckInspection",
     "TruckInspectionRequest", "InspectionRequestStatus",
+    "DirectInspectionOrder", "DirectInspectionOrderModule", "VehicleKind",
 ]

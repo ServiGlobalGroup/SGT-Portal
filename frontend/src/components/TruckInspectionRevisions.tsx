@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+﻿import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -16,7 +16,6 @@ import {
   TableRow,
   TablePagination,
   IconButton,
-  Badge,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -32,8 +31,10 @@ import {
   Collapse,
   Snackbar,
   Tooltip,
+  useMediaQuery,
+  Switch,
 } from '@mui/material';
-import { alpha } from '@mui/material/styles';
+import { alpha, useTheme } from '@mui/material/styles';
 import {
   FactCheck,
   Visibility,
@@ -50,8 +51,10 @@ import {
   Done,
   Warning,
   Info,
+  Add,
+  Delete,
 } from '@mui/icons-material';
-import { Settings, ToggleOff, ToggleOn } from '@mui/icons-material';
+
 import { truckInspectionService } from '../services/truckInspectionService';
 import { usersAPI } from '../services/api';
 import {
@@ -59,9 +62,15 @@ import {
   TruckInspectionSummary,
   TruckInspectionResponse,
   TruckInspectionRequestCreate,
+  DirectInspectionOrderSummary,
 } from '../types/truck-inspection';
 import { useAuth } from '../hooks/useAuth';
 import { useAutoInspectionSettings } from '../hooks/useAutoInspectionSettings';
+
+// Tipo unificado para el historial (inspecciones y órdenes directas)
+type HistoryItem = (TruckInspectionSummary | DirectInspectionOrderSummary) & {
+  item_type: 'inspection' | 'direct_order';
+};
 
 const extractReviewNoteParts = (note?: string | null) => {
   if (!note) {
@@ -313,7 +322,7 @@ const InspectionDetailModal: React.FC<InspectionDetailModalProps> = ({ open, ins
         </Box>
       </Box>
       
-      <DialogContent>
+      <DialogContent sx={{ mt: 2 }}>
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
             <CircularProgress />
@@ -747,9 +756,558 @@ const InspectionDetailModal: React.FC<InspectionDetailModalProps> = ({ open, ins
   );
 };
 
+// Modal para detalle de orden directa
+interface DirectOrderDetailModalProps {
+  open: boolean;
+  order: DirectInspectionOrderSummary | null;
+  onClose: () => void;
+  onRefresh: () => void;
+}
+
+const DirectOrderDetailModal: React.FC<DirectOrderDetailModalProps> = ({ open, order, onClose, onRefresh }) => {
+  const [detailData, setDetailData] = useState<any | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [reviewNotes, setReviewNotes] = useState('');
+  const [markingReviewed, setMarkingReviewed] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [errorSnackbar, setErrorSnackbar] = useState<{ open: boolean; message: string }>({
+    open: false,
+    message: ''
+  });
+
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (open && order) {
+      loadOrderDetail();
+    }
+  }, [open, order]);
+
+  useEffect(() => {
+    if (!open) {
+      setReviewNotes('');
+    }
+  }, [open]);
+
+  const loadOrderDetail = async () => {
+    if (!order) return;
+    
+    try {
+      setLoading(true);
+      const detail = await truckInspectionService.getDirectInspectionOrderDetail(order.id);
+      setDetailData(detail);
+    } catch (error) {
+      console.error('Error loading order detail:', error);
+      setErrorSnackbar({
+        open: true,
+        message: 'Error al cargar el detalle de la orden'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMarkReviewed = async () => {
+    if (!order || !user) return;
+
+    try {
+      setMarkingReviewed(true);
+
+      await truckInspectionService.markDirectOrderReviewed(order.id, reviewNotes.trim() || undefined);
+
+      setShowSuccess(true);
+
+      setTimeout(() => {
+        onClose();
+        setShowSuccess(false);
+        onRefresh(); // Recargar la lista de órdenes
+      }, 2000);
+    } catch (error: any) {
+      console.error('Error marking order as reviewed:', error);
+      setErrorSnackbar({
+        open: true,
+        message: error?.message || 'No se pudo marcar la orden como revisada',
+      });
+    } finally {
+      setMarkingReviewed(false);
+    }
+  };
+
+  const isAlreadyReviewed = Boolean(detailData?.is_reviewed);
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth="md"
+      fullWidth
+      PaperProps={{
+        sx: {
+          borderRadius: 3,
+          maxHeight: '90vh',
+        }
+      }}
+    >
+      <DialogTitle
+        sx={{
+          background: 'linear-gradient(135deg, #501b36 0%, #6d2547 100%)',
+          color: 'white',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          py: 2.5,
+          px: 3,
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <FactCheck sx={{ fontSize: 28 }} />
+          <Box>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              Orden Directa de Inspección
+            </Typography>
+            {order && (
+              <Typography variant="caption" sx={{ opacity: 0.9 }}>
+                {order.truck_license_plate} - {order.vehicle_kind === 'TRACTORA' ? 'Tractora' : 'Semiremolque'}
+              </Typography>
+            )}
+          </Box>
+        </Box>
+        <IconButton
+          onClick={onClose}
+          sx={{
+            color: 'white',
+            '&:hover': {
+              bgcolor: 'rgba(255, 255, 255, 0.1)',
+            },
+          }}
+        >
+          <Close />
+        </IconButton>
+      </DialogTitle>
+
+      <DialogContent sx={{ p: 3 }}>
+        {loading ? (
+          <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
+            <CircularProgress sx={{ color: '#501b36' }} />
+          </Box>
+        ) : detailData ? (
+          <Stack spacing={3} sx={{ mt: 2 }}>
+            {/* Estado de revisión */}
+            {isAlreadyReviewed && (
+              <Alert severity="success" icon={<CheckCircleOutline />} sx={{ borderRadius: 2 }}>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                  Orden revisada
+                </Typography>
+                {detailData.reviewed_by && (
+                  <Typography variant="caption" sx={{ display: 'block' }}>
+                    Por {detailData.reviewed_by} el {new Date(detailData.reviewed_at).toLocaleString('es-ES')}
+                  </Typography>
+                )}
+                {detailData.revision_notes && (
+                  <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>
+                    "{detailData.revision_notes}"
+                  </Typography>
+                )}
+              </Alert>
+            )}
+
+            {/* Información general */}
+            <Box>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#501b36', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <Info fontSize="small" />
+                Información General
+              </Typography>
+              <Stack spacing={1.5}>
+                <Box sx={{ display: 'flex', gap: 1.5 }}>
+                  <LocalShipping sx={{ color: '#666', fontSize: 20 }} />
+                  <Typography variant="body2">
+                    <strong>Matrícula:</strong> {detailData.truck_license_plate}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', gap: 1.5 }}>
+                  <Person sx={{ color: '#666', fontSize: 20 }} />
+                  <Typography variant="body2">
+                    <strong>Creado por:</strong> {detailData.created_by}
+                  </Typography>
+                </Box>
+                <Box sx={{ display: 'flex', gap: 1.5 }}>
+                  <AccessTime sx={{ color: '#666', fontSize: 20 }} />
+                  <Typography variant="body2">
+                    <strong>Fecha:</strong> {new Date(detailData.created_at).toLocaleString('es-ES', {
+                      year: 'numeric',
+                      month: 'long',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit'
+                    })}
+                  </Typography>
+                </Box>
+              </Stack>
+            </Box>
+
+            {/* Módulos */}
+            <Box>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#501b36', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                <ErrorOutline fontSize="small" />
+                Módulos de Inspección ({detailData.modules?.length || 0})
+              </Typography>
+              
+              {detailData.modules && detailData.modules.length > 0 ? (
+                <Stack spacing={2}>
+                  {detailData.modules.map((module: any, index: number) => (
+                    <Paper
+                      key={module.id}
+                      variant="outlined"
+                      sx={{
+                        p: 2,
+                        borderRadius: 2,
+                        borderLeft: '4px solid #501b36',
+                        bgcolor: alpha('#501b36', 0.02),
+                      }}
+                    >
+                      <Typography variant="subtitle2" sx={{ fontWeight: 600, color: '#501b36', mb: module.notes ? 1 : 0 }}>
+                        {index + 1}. {module.title}
+                      </Typography>
+                      {module.notes && (
+                        <Typography variant="body2" sx={{ color: 'text.secondary', pl: 2 }}>
+                          {module.notes}
+                        </Typography>
+                      )}
+                    </Paper>
+                  ))}
+                </Stack>
+              ) : (
+                <Typography variant="body2" sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
+                  No hay módulos registrados
+                </Typography>
+              )}
+            </Box>
+
+            {/* Formulario de revisión */}
+            {!isAlreadyReviewed && (
+              <Paper variant="outlined" sx={{ p: 2.5, borderRadius: 2, bgcolor: alpha('#ffa726', 0.05), borderColor: '#ffa726' }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700, color: '#f57c00', mb: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <RateReview fontSize="small" />
+                  Marcar como Revisada
+                </Typography>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={3}
+                  placeholder="Notas de revisión (opcional)..."
+                  value={reviewNotes}
+                  onChange={(e) => setReviewNotes(e.target.value)}
+                  variant="outlined"
+                  size="small"
+                  sx={{ mb: 2 }}
+                />
+                <Button
+                  variant="contained"
+                  onClick={handleMarkReviewed}
+                  disabled={markingReviewed}
+                  startIcon={markingReviewed ? <CircularProgress size={18} sx={{ color: 'white' }} /> : <Done />}
+                  sx={{
+                    bgcolor: '#4caf50',
+                    '&:hover': {
+                      bgcolor: '#45a049',
+                    },
+                  }}
+                >
+                  {markingReviewed ? 'Marcando...' : 'Marcar como Revisada'}
+                </Button>
+              </Paper>
+            )}
+          </Stack>
+        ) : null}
+      </DialogContent>
+
+      <DialogActions sx={{ px: 3, pb: 2 }}>
+        <Button onClick={onClose} sx={{ color: '#501b36' }}>
+          Cerrar
+        </Button>
+      </DialogActions>
+
+      {/* Snackbar de éxito */}
+      <Snackbar
+        open={showSuccess}
+        autoHideDuration={2000}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert 
+          severity="success" 
+          variant="filled"
+          icon={<CheckCircleOutline />}
+          sx={{ borderRadius: 2 }}
+        >
+          ¡Orden marcada como revisada exitosamente!
+        </Alert>
+      </Snackbar>
+
+      {/* Snackbar de error */}
+      <Snackbar
+        open={errorSnackbar.open}
+        autoHideDuration={4000}
+        onClose={() => setErrorSnackbar({ open: false, message: '' })}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert 
+          severity="error" 
+          variant="filled"
+          sx={{ borderRadius: 2 }}
+        >
+          {errorSnackbar.message}
+        </Alert>
+      </Snackbar>
+    </Dialog>
+  );
+};
+
+interface InspectionActionsProps {
+  canManageAutoSettings: boolean;
+  autoSettingsEnabled?: boolean;
+  autoLoading: boolean;
+  onToggleAuto: () => void;
+  canCreateDirectOrder: boolean;
+  onCreateDirectOrder: () => void;
+  canSendManualRequests: boolean;
+  onOpenManualModal: () => void;
+}
+
+const InspectionActions: React.FC<InspectionActionsProps> = ({
+  canManageAutoSettings,
+  autoSettingsEnabled,
+  autoLoading,
+  onToggleAuto,
+  canCreateDirectOrder,
+  onCreateDirectOrder,
+  canSendManualRequests,
+  onOpenManualModal,
+}) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
+  const isCompactDesktop = useMediaQuery(theme.breakpoints.between('md', 'lg'));
+  const shouldStretchButtons = isMobile || isTablet || isCompactDesktop;
+
+  const autoCardContent = (
+    <Paper
+      elevation={0}
+      variant="outlined"
+      sx={{
+        borderRadius: 3,
+        px: 2.25,
+        py: 1.5,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 2,
+        width: '100%',
+        background: autoSettingsEnabled
+          ? 'linear-gradient(135deg, rgba(76,175,80,0.12) 0%, rgba(76,175,80,0.04) 100%)'
+          : 'linear-gradient(135deg, rgba(80,27,54,0.05) 0%, rgba(80,27,54,0.02) 100%)',
+        borderColor: autoSettingsEnabled ? alpha('#4caf50', 0.35) : alpha('#501b36', 0.2),
+      }}
+    >
+      <Box>
+        <Typography variant="body2" sx={{ fontWeight: 700, color: '#501b36' }}>
+          Auto 15d
+        </Typography>
+      </Box>
+      <Switch
+        checked={Boolean(autoSettingsEnabled)}
+        onChange={onToggleAuto}
+        disabled={autoLoading}
+        inputProps={{ 'aria-label': 'Activar inspecciones automáticas' }}
+      />
+    </Paper>
+  );
+
+  const autoCard = canManageAutoSettings
+    ? isMobile
+      ? autoCardContent
+      : (
+          <Tooltip
+            arrow
+            placement="top"
+            title={
+              <Box>
+                <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
+                  Inspecciones automáticas cada 15 días
+                </Typography>
+                <Typography variant="body2">
+                  {autoSettingsEnabled
+                    ? 'Activadas: se generan recordatorios a los conductores.'
+                    : 'Desactivadas: solo podrás enviar solicitudes manuales.'}
+                </Typography>
+              </Box>
+            }
+          >
+            {autoCardContent}
+          </Tooltip>
+        )
+    : null;
+
+  const directOrderButton = canCreateDirectOrder ? (
+    <Button
+      onClick={onCreateDirectOrder}
+      variant="outlined"
+      sx={{
+        textTransform: 'none',
+        fontWeight: 600,
+        fontSize: '0.875rem',
+        color: '#501b36',
+        borderColor: 'rgba(80, 27, 54, 0.3)',
+        backgroundColor: '#ffffff',
+        px: 2,
+        py: 0.75,
+        minHeight: 36,
+        width: shouldStretchButtons ? '100%' : 'auto',
+        borderRadius: 2,
+        boxShadow: '0 2px 4px rgba(80, 27, 54, 0.1)',
+        '&:hover': {
+          backgroundColor: 'rgba(80, 27, 54, 0.05)',
+          borderColor: 'rgba(80, 27, 54, 0.4)',
+          boxShadow: '0 4px 8px rgba(80, 27, 54, 0.15)',
+        },
+      }}
+    >
+      Crear orden directa
+    </Button>
+  ) : null;
+
+  const manualButton = canSendManualRequests ? (
+    <Button
+      onClick={onOpenManualModal}
+      startIcon={<RateReview />}
+      variant="contained"
+      sx={{
+        textTransform: 'none',
+        fontWeight: 600,
+        borderRadius: 999,
+        px: isMobile ? 2.8 : 2.75,
+        py: isMobile ? 1.2 : 0.9,
+  width: shouldStretchButtons ? '100%' : 'auto',
+        background: 'linear-gradient(135deg,#501b36 0%,#7a2b54 100%)',
+        boxShadow: '0 6px 16px rgba(80,27,54,0.28)',
+        minHeight: isMobile ? 48 : 44,
+        '&:hover': {
+          background: 'linear-gradient(135deg,#3d1429 0%,#5a1f3d 100%)',
+          boxShadow: '0 10px 22px rgba(80,27,54,0.35)',
+        },
+      }}
+    >
+      Solicitar inspección
+    </Button>
+  ) : null;
+
+  const stackedContent = [autoCard, directOrderButton, manualButton].filter(
+    (item): item is React.ReactNode => Boolean(item)
+  );
+
+  if (isMobile) {
+    return (
+      <Stack spacing={1.5} width="100%">
+        {autoCard && (
+          <Box key="auto" sx={{ width: '100%' }}>
+            {autoCard}
+          </Box>
+        )}
+        {directOrderButton && (
+          <Box key="direct" sx={{ width: '100%' }}>
+            {directOrderButton}
+          </Box>
+        )}
+        {manualButton && (
+          <Box key="manual" sx={{ width: '100%' }}>
+            {manualButton}
+          </Box>
+        )}
+      </Stack>
+    );
+  }
+
+  if (isTablet) {
+    return (
+      <Stack spacing={1.5} width="100%">
+        {autoCard && (
+          <Box key="auto-tablet" sx={{ width: '100%', maxWidth: 360 }}>
+            {autoCard}
+          </Box>
+        )}
+        <Stack direction="row" spacing={1.25} flexWrap="wrap">
+          {directOrderButton && (
+            <Box key="direct-tablet" sx={{ flex: '1 1 220px', maxWidth: 320 }}>
+              {directOrderButton}
+            </Box>
+          )}
+          {manualButton && (
+            <Box key="manual-tablet" sx={{ flex: '1 1 220px', maxWidth: 320 }}>
+              {manualButton}
+            </Box>
+          )}
+        </Stack>
+      </Stack>
+    );
+  }
+
+  if (isCompactDesktop) {
+    return (
+      <Stack spacing={1.5} width="100%">
+        {autoCard && (
+          <Box key="auto-compact" sx={{ width: '100%', maxWidth: 420 }}>
+            {autoCard}
+          </Box>
+        )}
+        <Stack direction="row" spacing={1.25} flexWrap="wrap" alignItems="center">
+          {directOrderButton && (
+            <Box key="direct-compact" sx={{ flex: '1 1 240px', maxWidth: 320 }}>
+              {directOrderButton}
+            </Box>
+          )}
+          {manualButton && (
+            <Box key="manual-compact" sx={{ flex: '1 1 240px', maxWidth: 320 }}>
+              {manualButton}
+            </Box>
+          )}
+        </Stack>
+      </Stack>
+    );
+  }
+
+  return (
+    <Box
+      sx={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 1.25,
+        padding: '0.6rem 0.9rem',
+        background: 'linear-gradient(135deg, rgba(250,249,251,0.95) 0%, rgba(238,228,235,0.85) 100%)',
+        borderRadius: 999,
+        border: '1px solid rgba(80,27,54,0.15)',
+        boxShadow: '0 3px 12px rgba(80,27,54,0.12)',
+      }}
+    >
+      {autoCard && (
+        <Box key="auto-desktop" sx={{ minWidth: 210, maxWidth: 260 }}>{autoCard}</Box>
+      )}
+      {directOrderButton && (
+        <Box key="direct-desktop">{directOrderButton}</Box>
+      )}
+      {manualButton && (
+        <Box key="manual-desktop">{manualButton}</Box>
+      )}
+    </Box>
+  );
+};
+
 export const TruckInspectionRevisions: React.FC = () => {
   const { selectedCompany, isAuthenticated, token, user } = useAuth();
   const { settings: autoSettings, loading: autoLoading, updateSettings: updateAutoSettings } = useAutoInspectionSettings();
+
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const isTabletOrBelow = useMediaQuery(theme.breakpoints.down('md'));
+  const isCompactDesktop = useMediaQuery(theme.breakpoints.between('md', 'lg'));
 
   // Si no está autenticado, no renderizar el componente
   if (!isAuthenticated || !token) {
@@ -772,9 +1330,15 @@ export const TruckInspectionRevisions: React.FC = () => {
   const [pendingPage, setPendingPage] = useState(0);
   const [pendingRowsPerPage, setPendingRowsPerPage] = useState(5);
 
+  // Estado para órdenes directas
+  const [directOrders, setDirectOrders] = useState<DirectInspectionOrderSummary[]>([]);
+  const [selectedDirectOrder, setSelectedDirectOrder] = useState<DirectInspectionOrderSummary | null>(null);
+  const [directOrderDetailModalOpen, setDirectOrderDetailModalOpen] = useState(false);
+
   // Estado para el historial
   const [rawInspections, setRawInspections] = useState<TruckInspectionSummary[]>([]); // Datos sin filtrar del servidor
-  const [allInspections, setAllInspections] = useState<TruckInspectionSummary[]>([]); // Datos filtrados para mostrar
+  const [rawDirectOrders, setRawDirectOrders] = useState<DirectInspectionOrderSummary[]>([]); // Órdenes directas revisadas
+  const [allInspections, setAllInspections] = useState<HistoryItem[]>([]); // Datos filtrados para mostrar (unificados)
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [historyPage, setHistoryPage] = useState(1);
@@ -804,6 +1368,71 @@ export const TruckInspectionRevisions: React.FC = () => {
   const canManageAutoSettings = Boolean(
     user && ['P_TALLER', 'ADMINISTRADOR', 'ADMINISTRACION', 'TRAFICO', 'MASTER_ADMIN'].includes(user.role)
   );
+
+  // Estado para orden directa a taller
+  const [directOrderOpen, setDirectOrderOpen] = useState(false);
+  const [directOrderSubmitting, setDirectOrderSubmitting] = useState(false);
+  const [directOrderPlate, setDirectOrderPlate] = useState('');
+  const [directOrderVehicleKind, setDirectOrderVehicleKind] = useState<'TRACTORA'|'SEMIREMOLQUE'>('TRACTORA');
+  const [directOrderModules, setDirectOrderModules] = useState<{temp_id:string; title:string; notes:string}[]>([
+    { temp_id: crypto.randomUUID(), title: '', notes: '' }
+  ]);
+  const [directOrderFeedback, setDirectOrderFeedback] = useState<{severity:'success'|'error'; message:string}|null>(null);
+
+  const canCreateDirectOrder = Boolean(
+    user && ['P_TALLER', 'ADMINISTRADOR', 'ADMINISTRACION', 'TRAFICO', 'MASTER_ADMIN'].includes(user.role)
+  );
+
+  const handleOpenDirectOrder = () => {
+    setDirectOrderPlate('');
+    setDirectOrderVehicleKind('TRACTORA');
+    setDirectOrderModules([{ temp_id: crypto.randomUUID(), title:'', notes:'' }]);
+    setDirectOrderOpen(true);
+  };
+  const handleCloseDirectOrder = () => {
+    if (directOrderSubmitting) return; // evitar cerrar mientras envía
+    setDirectOrderOpen(false);
+  };
+  const handleAddModule = () => {
+    setDirectOrderModules(prev => [...prev, { temp_id: crypto.randomUUID(), title:'', notes:'' }]);
+  };
+  const handleRemoveModule = (id: string) => {
+    setDirectOrderModules(prev => prev.length === 1 ? prev : prev.filter(m => m.temp_id !== id));
+  };
+  const handleModuleChange = (id: string, field: 'title'|'notes', value: string) => {
+    setDirectOrderModules(prev => prev.map(m => m.temp_id === id ? { ...m, [field]: value } : m));
+  };
+  const handleSubmitDirectOrder = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canCreateDirectOrder) return;
+    const cleanedModules = directOrderModules
+      .map(m => ({ title: m.title.trim(), notes: m.notes.trim() }))
+      .filter(m => m.title.length > 0 || m.notes.length > 0);
+    if (!directOrderPlate.trim()) {
+      setDirectOrderFeedback({severity:'error', message:'La matrícula es obligatoria.'});
+      return;
+    }
+    if (cleanedModules.length === 0) {
+      setDirectOrderFeedback({severity:'error', message:'Añade al menos un módulo con título u observaciones.'});
+      return;
+    }
+    setDirectOrderSubmitting(true);
+    try {
+      await truckInspectionService.createDirectInspectionOrder({
+        truck_license_plate: directOrderPlate.trim().toUpperCase(),
+        vehicle_kind: directOrderVehicleKind,
+        modules: cleanedModules
+      });
+      setDirectOrderFeedback({severity:'success', message:'Orden directa creada correctamente.'});
+      setDirectOrderOpen(false);
+      // Recargar las órdenes directas para mostrar la nueva
+      loadDirectOrders();
+    } catch (err:any) {
+      setDirectOrderFeedback({severity:'error', message: err?.message || 'No se pudo crear la orden.'});
+    } finally {
+      setDirectOrderSubmitting(false);
+    }
+  };
 
   const resetManualForm = () => {
     setManualSendToAll(false);
@@ -913,6 +1542,7 @@ export const TruckInspectionRevisions: React.FC = () => {
     // Solo cargar datos si el usuario está autenticado
     if (isAuthenticated && token) {
       loadPendingInspections();
+      loadDirectOrders();
       loadInspectionHistory();
     }
   }, [selectedCompany, isAuthenticated, token]); // Recargar cuando cambie la empresa o el estado de autenticación
@@ -947,6 +1577,20 @@ export const TruckInspectionRevisions: React.FC = () => {
     }
   };
 
+  const loadDirectOrders = async () => {
+    if (!isAuthenticated || !token) {
+      return;
+    }
+
+    try {
+      // Cargar solo las órdenes no revisadas
+      const orders = await truckInspectionService.getDirectInspectionOrders(false);
+      setDirectOrders(orders);
+    } catch (err: any) {
+      console.error('Error loading direct orders:', err);
+    }
+  };
+
   const loadInspectionHistory = async () => {
     // Verificar autenticación antes de hacer la petición
     if (!isAuthenticated || !token) {
@@ -959,15 +1603,17 @@ export const TruckInspectionRevisions: React.FC = () => {
       setHistoryLoading(true);
       setHistoryError(null);
       
-      // Cargar más datos para filtrado del lado del cliente (50 registros para debug)
-      const params = {
-        limit: 50,
-        offset: 0,
-      };
+      // Cargar inspecciones regulares y órdenes directas revisadas en paralelo
+      const [inspections, reviewedOrders] = await Promise.all([
+        truckInspectionService.getInspections({ limit: 50, offset: 0 }),
+        truckInspectionService.getDirectInspectionOrders(true) // true = solo revisadas
+      ]);
       
-      const inspections = await truckInspectionService.getInspections(params);
       console.log('DEBUG: Raw inspections loaded:', inspections.length, inspections);
+      console.log('DEBUG: Reviewed direct orders loaded:', reviewedOrders.length, reviewedOrders);
+      
       setRawInspections(inspections);
+      setRawDirectOrders(reviewedOrders);
     } catch (err: any) {
       console.error('Error loading inspection history:', err);
       setHistoryError(err.message || 'Error al cargar el historial de inspecciones');
@@ -978,12 +1624,12 @@ export const TruckInspectionRevisions: React.FC = () => {
 
   const refreshInspectionHistorySilently = useCallback(async () => {
     try {
-      const params = {
-        limit: 50,
-        offset: 0,
-      };
-      const inspections = await truckInspectionService.getInspections(params);
+      const [inspections, reviewedOrders] = await Promise.all([
+        truckInspectionService.getInspections({ limit: 50, offset: 0 }),
+        truckInspectionService.getDirectInspectionOrders(true)
+      ]);
       setRawInspections(inspections);
+      setRawDirectOrders(reviewedOrders);
     } catch (err: any) {
       console.error('Error refreshing inspection history silently:', err);
     }
@@ -1059,33 +1705,51 @@ export const TruckInspectionRevisions: React.FC = () => {
   useEffect(() => {
     console.log('DEBUG: Applying filters...');
     const applyFilters = () => {
-      let filteredInspections = [...rawInspections];
+      // Convertir inspecciones y órdenes directas a HistoryItem
+      const inspectionItems: HistoryItem[] = rawInspections.map(insp => ({
+        ...insp,
+        item_type: 'inspection' as const,
+      }));
+      
+      const directOrderItems: HistoryItem[] = rawDirectOrders.map(order => ({
+        ...order,
+        item_type: 'direct_order' as const,
+      }));
+      
+      // Combinar ambas listas
+      let combinedItems: HistoryItem[] = [...inspectionItems, ...directOrderItems];
 
       // Solo filtrar si hay filtros con valores reales
       const hasActiveFilters = historyFilters.dateFrom || historyFilters.dateTo || 
                               historyFilters.conductor.trim() || historyFilters.truckLicense.trim();
 
       if (hasActiveFilters) {
-        filteredInspections = rawInspections.filter(inspection => {
-          const inspectionDate = new Date(inspection.inspection_date);
+        combinedItems = combinedItems.filter(item => {
+          // Determinar el campo de fecha según el tipo
+          const dateField = item.item_type === 'inspection' 
+            ? (item as any).inspection_date 
+            : (item as any).created_at;
+          const itemDate = new Date(dateField);
           const from = historyFilters.dateFrom ? new Date(historyFilters.dateFrom) : null;
           const to = historyFilters.dateTo ? new Date(historyFilters.dateTo + 'T23:59:59') : null;
           
           // Filtro por fecha
-          if (from && inspectionDate < from) return false;
-          if (to && inspectionDate > to) return false;
+          if (from && itemDate < from) return false;
+          if (to && itemDate > to) return false;
           
-          // Filtro por conductor (usuario que hizo la revisión)
+          // Filtro por conductor/creador
           if (historyFilters.conductor.trim()) {
             const conductorFilter = historyFilters.conductor.toLowerCase();
-            const userName = inspection.user_name?.toLowerCase() || '';
+            const userName = item.item_type === 'inspection'
+              ? (item as any).user_name?.toLowerCase() || ''
+              : (item as any).created_by?.toLowerCase() || '';
             if (!userName.includes(conductorFilter)) return false;
           }
 
           // Filtro por matrícula
           if (historyFilters.truckLicense.trim()) {
             const licenseFilter = historyFilters.truckLicense.toLowerCase();
-            const truckLicense = inspection.truck_license_plate?.toLowerCase() || '';
+            const truckLicense = item.truck_license_plate?.toLowerCase() || '';
             if (!truckLicense.includes(licenseFilter)) return false;
           }
           
@@ -1093,16 +1757,23 @@ export const TruckInspectionRevisions: React.FC = () => {
         });
       }
 
-      setAllInspections(filteredInspections);
-      console.log('DEBUG: Filtered inspections:', filteredInspections.length, 'Raw:', rawInspections.length, 'Filters:', historyFilters);
+      // Ordenar por fecha descendente (más recientes primero)
+      combinedItems.sort((a, b) => {
+        const dateA = new Date(a.item_type === 'inspection' ? (a as any).inspection_date : (a as any).created_at);
+        const dateB = new Date(b.item_type === 'inspection' ? (b as any).inspection_date : (b as any).created_at);
+        return dateB.getTime() - dateA.getTime();
+      });
+
+      setAllInspections(combinedItems);
+      console.log('DEBUG: Filtered items:', combinedItems.length, 'Raw inspections:', rawInspections.length, 'Raw orders:', rawDirectOrders.length, 'Filters:', historyFilters);
       // Resetear página si el filtro reduce el número de elementos
-      if (historyPage > Math.ceil(filteredInspections.length / historyLimit)) {
+      if (historyPage > Math.ceil(combinedItems.length / historyLimit)) {
         setHistoryPage(1);
       }
     };
 
     applyFilters();
-  }, [rawInspections, historyFilters, historyLimit, historyPage]);
+  }, [rawInspections, rawDirectOrders, historyFilters, historyLimit, historyPage]);
 
   // Cargar opciones de usuarios al montar el componente
   // useEffect(() => {
@@ -1112,6 +1783,22 @@ export const TruckInspectionRevisions: React.FC = () => {
   const handleViewDetail = (inspection: TruckInspectionSummary) => {
     setSelectedInspection(inspection);
     setDetailModalOpen(true);
+  };
+
+  const handleViewDirectOrderDetail = (order: DirectInspectionOrderSummary) => {
+    setSelectedDirectOrder(order);
+    setDirectOrderDetailModalOpen(true);
+  };
+
+  const handleCloseDirectOrderDetail = () => {
+    setDirectOrderDetailModalOpen(false);
+    setSelectedDirectOrder(null);
+  };
+
+  const handleRefreshDirectOrders = () => {
+    // Recargar tanto las órdenes pendientes como el historial
+    loadDirectOrders();
+    loadInspectionHistory();
   };
 
   const handleMarkReviewed = async (
@@ -1175,7 +1862,16 @@ export const TruckInspectionRevisions: React.FC = () => {
   if (loading) {
     return (
       <Fade in timeout={1400}>
-        <Paper elevation={0} sx={{ borderRadius: 3, border: '1px solid #e2e8f0', background: '#ffffff', p: 4, minHeight: 400 }}>
+        <Paper
+          elevation={0}
+          sx={{
+            borderRadius: 3,
+            border: '1px solid #e2e8f0',
+            background: '#ffffff',
+            p: { xs: 2.5, sm: 3, lg: 4 },
+            minHeight: { xs: 'auto', md: 400 },
+          }}
+        >
           <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 200 }}>
             <CircularProgress />
           </Box>
@@ -1202,144 +1898,23 @@ export const TruckInspectionRevisions: React.FC = () => {
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
               <FactCheck sx={{ color: '#501b36', fontSize: 32 }} />
               <Box>
-                <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36', mb: 0.5 }}>
-                  Centro de Revisiones - Inspecciones Pendientes
-                </Typography>
-                <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                  Inspecciones de camiones con incidencias que requieren atención del taller
+                <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36' }}>
+                  Inspecciones Pendientes
                 </Typography>
               </Box>
             </Box>
 
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-              {canManageAutoSettings && autoSettings && (
-                <Box
-                  sx={{
-                    p: 2,
-                    borderRadius: 2,
-                    bgcolor: '#f8fafc',
-                    border: '1px solid #e2e8f0',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.05)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 1.5,
-                  }}
-                >
-                  <Tooltip
-                    title={
-                      <Box>
-                        <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
-                          Inspecciones Automáticas cada 15 días
-                        </Typography>
-                        <Typography variant="body2" sx={{ mb: 1 }}>
-                          {autoSettings.auto_inspection_enabled ? (
-                            <>
-                              <strong>Estado:</strong> ACTIVADAS ✅<br />
-                              • Los trabajadores deben realizar una inspección cada 15 días<br />
-                              • El sistema notifica automáticamente cuando es necesaria<br />
-                              • Ayuda a mantener el mantenimiento preventivo al día
-                            </>
-                          ) : (
-                            <>
-                              <strong>Estado:</strong> DESACTIVADAS ⚠️<br />
-                              • Los trabajadores NO reciben notificaciones automáticas<br />
-                              • Solo se pueden enviar solicitudes manuales<br />
-                              • Puede afectar el cumplimiento del mantenimiento preventivo
-                            </>
-                          )}
-                        </Typography>
-                        <Typography variant="caption" sx={{ opacity: 0.8 }}>
-                          Haz clic para {autoSettings.auto_inspection_enabled ? 'desactivar' : 'activar'}
-                        </Typography>
-                      </Box>
-                    }
-                    arrow
-                    placement="top"
-                  >
-                    <Box sx={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: 1.5,
-                      cursor: 'pointer',
-                    }}
-                    onClick={handleToggleAutoInspection}
-                    >
-                      <Typography 
-                        variant="body2" 
-                        sx={{ 
-                          fontWeight: 600,
-                          fontSize: '0.85rem',
-                          color: autoSettings.auto_inspection_enabled ? '#4caf50' : '#64748b',
-                        }}
-                      >
-                        Automática cada 15 días
-                      </Typography>
-                      <Box
-                        sx={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          cursor: autoLoading ? 'default' : 'pointer',
-                          opacity: autoLoading ? 0.6 : 1,
-                          userSelect: 'none',
-                          transition: 'opacity 0.2s ease',
-                          '&:hover': {
-                            opacity: autoLoading ? 0.6 : 0.8,
-                          }
-                        }}
-                      >
-                        <Box
-                          sx={{
-                            width: 44,
-                            height: 24,
-                            borderRadius: 2,
-                            bgcolor: autoSettings.auto_inspection_enabled ? '#4caf50' : '#e0e0e0',
-                            position: 'relative',
-                            transition: 'background-color 0.3s ease',
-                            cursor: 'pointer',
-                          }}
-                        >
-                          <Box
-                            sx={{
-                              width: 20,
-                              height: 20,
-                              borderRadius: 1,
-                              bgcolor: 'white',
-                              position: 'absolute',
-                              top: 2,
-                              left: autoSettings.auto_inspection_enabled ? 22 : 2,
-                              transition: 'left 0.3s ease',
-                              boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
-                            }}
-                          />
-                        </Box>
-                      </Box>
-                    </Box>
-                  </Tooltip>
-                </Box>
-              )}
-
-              {canSendManualRequests && (
-                <Button
-                  onClick={handleOpenManualModal}
-                  variant="contained"
-                  startIcon={<RateReview />}
-                  sx={{
-                    borderRadius: 999,
-                    textTransform: 'none',
-                    fontWeight: 600,
-                    px: 3,
-                    py: 1.2,
-                    background: 'linear-gradient(135deg, #501b36 0%, #7a2b54 100%)',
-                    boxShadow: '0 6px 16px rgba(80, 27, 54, 0.25)',
-                    '&:hover': {
-                      background: 'linear-gradient(135deg, #3d1429 0%, #5a1f3d 100%)',
-                      boxShadow: '0 10px 20px rgba(80, 27, 54, 0.3)',
-                    },
-                  }}
-                >
-                  Solicitar inspección manual
-                </Button>
-              )}
+            <Box sx={{ width: '100%', maxWidth: { xs: '100%', md: 520 } }}>
+              <InspectionActions
+                canManageAutoSettings={canManageAutoSettings}
+                autoSettingsEnabled={autoSettings?.auto_inspection_enabled}
+                autoLoading={autoLoading}
+                onToggleAuto={handleToggleAutoInspection}
+                canCreateDirectOrder={canCreateDirectOrder}
+                onCreateDirectOrder={handleOpenDirectOrder}
+                canSendManualRequests={canSendManualRequests}
+                onOpenManualModal={handleOpenManualModal}
+              />
             </Box>
           </Box>
 
@@ -1350,7 +1925,15 @@ export const TruckInspectionRevisions: React.FC = () => {
           )}
 
           {pendingInspections.length === 0 && !error ? (
-            <Paper variant="outlined" sx={{ p: 4, borderRadius: 2, bgcolor: '#f8f9fa', textAlign: 'center' }}>
+            <Paper
+              variant="outlined"
+              sx={{
+                p: { xs: 3, md: 4 },
+                borderRadius: 2,
+                bgcolor: '#f8f9fa',
+                textAlign: 'center',
+              }}
+            >
               <CheckCircleOutline sx={{ fontSize: 64, color: '#4caf50', mb: 2, opacity: 0.7 }} />
               <Typography variant="h6" sx={{ color: '#4caf50', fontWeight: 600, mb: 1 }}>
                 ¡Excelente trabajo!
@@ -1361,143 +1944,510 @@ export const TruckInspectionRevisions: React.FC = () => {
               </Typography>
             </Paper>
           ) : (
-            <TableContainer>
-              <Table>
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ fontWeight: 700, color: '#501b36' }}>Matrícula</TableCell>
-                    <TableCell sx={{ fontWeight: 700, color: '#501b36' }}>Inspector</TableCell>
-                    <TableCell sx={{ fontWeight: 700, color: '#501b36' }}>Fecha</TableCell>
-                    <TableCell sx={{ fontWeight: 700, color: '#501b36' }}>Componentes con Problemas</TableCell>
-                    <TableCell sx={{ fontWeight: 700, color: '#501b36' }}>Urgencia</TableCell>
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {paginatedPendingInspections.map((inspection: TruckInspectionSummary, index: number) => {
+            <>
+              {isTabletOrBelow ? (
+                <Stack spacing={2.5}>
+                  {paginatedPendingInspections.map((inspection: TruckInspectionSummary) => {
                     const urgency = getUrgencyLevel(inspection.inspection_date);
                     return (
-                      <TableRow
+                      <Paper
                         key={inspection.id}
-                        hover
-                        sx={{
-                          backgroundColor: index % 2 === 0 ? alpha('#501b36', 0.035) : alpha('#501b36', 0.05),
-                          transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                          cursor: 'pointer',
-                          '&:hover': {
-                            transform: 'translateY(-1px)',
-                            boxShadow: '0 6px 12px rgba(80, 27, 54, 0.12)',
-                          },
-                        }}
+                        variant="outlined"
                         onClick={() => handleViewDetail(inspection)}
                         role="button"
                         aria-label={`Ver detalles de la inspección de ${inspection.truck_license_plate}`}
+                        sx={{
+                          p: 2.5,
+                          borderRadius: 3,
+                          borderColor: alpha(urgency.color, 0.2),
+                          backgroundColor: alpha(urgency.color, 0.08),
+                          cursor: 'pointer',
+                          transition: 'transform 0.25s ease, box-shadow 0.25s ease',
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 1.25,
+                          '&:hover': {
+                            transform: 'translateY(-2px)',
+                            boxShadow: '0 12px 24px rgba(80, 27, 54, 0.18)',
+                          },
+                          '&:active': {
+                            transform: 'translateY(0)',
+                          },
+                        }}
                       >
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <LocalShipping sx={{ color: '#666', fontSize: 18 }} />
-                            <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                        <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1.5}>
+                          <Box>
+                            <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#501b36' }}>
                               {inspection.truck_license_plate}
                             </Typography>
+                            <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+                              <Person sx={{ color: '#666', fontSize: 18 }} />
+                              <Typography variant="body2" color="text.secondary">
+                                {inspection.user_name}
+                              </Typography>
+                            </Stack>
                           </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                            <Person sx={{ color: '#666', fontSize: 18 }} />
-                            <Typography variant="body2">
-                              {inspection.user_name}
-                            </Typography>
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">
-                            {new Date(inspection.inspection_date).toLocaleDateString('es-ES', {
-                              day: 'numeric',
-                              month: 'short',
-                              hour: '2-digit',
-                              minute: '2-digit'
-                            })}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                            {inspection.components_with_issues.slice(0, 3).map((component: string, index: number) => (
-                              <Chip 
-                                key={index}
-                                label={component}
-                                size="small"
-                                sx={{ 
-                                  bgcolor: alpha('#f44336', 0.1),
-                                  color: '#f44336',
-                                  fontSize: '0.7rem',
-                                  fontWeight: 600,
-                                  borderRadius: 999, // Estilo pill
-                                  border: `1px solid ${alpha('#f44336', 0.2)}`,
-                                }}
-                              />
-                            ))}
-                            {inspection.components_with_issues.length > 3 && (
-                              <Chip 
-                                label={`+${inspection.components_with_issues.length - 3}`}
-                                size="small"
-                                sx={{ 
-                                  bgcolor: alpha('#666', 0.1),
-                                  color: '#666',
-                                  fontSize: '0.7rem',
-                                  borderRadius: 999, // Estilo pill
-                                  border: `1px solid ${alpha('#666', 0.2)}`,
-                                }}
-                              />
-                            )}
-                          </Box>
-                        </TableCell>
-                        <TableCell>
-                          <Chip 
-                            icon={<AccessTime sx={{ fontSize: 14 }} />}
+                          <Chip
+                            icon={<AccessTime sx={{ fontSize: 16 }} />}
                             label={urgency.text}
                             size="small"
                             sx={{
-                              bgcolor: alpha(urgency.color, 0.1),
+                              bgcolor: '#fff',
                               color: urgency.color,
                               fontWeight: 600,
-                              fontSize: '0.7rem',
-                              borderRadius: 999, // Estilo pill
-                              border: `1px solid ${alpha(urgency.color, 0.2)}`,
+                              borderRadius: 999,
+                              border: `1px solid ${alpha(urgency.color, 0.4)}`,
+                              px: 1,
                             }}
                           />
-                        </TableCell>
-                      </TableRow>
+                        </Stack>
+
+                        <Stack spacing={1}>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <LocalShipping sx={{ color: '#666', fontSize: 18 }} />
+                            <Typography variant="body2" color="text.secondary">
+                              Inspectoría con incidencias
+                            </Typography>
+                          </Stack>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <AccessTime sx={{ color: '#666', fontSize: 16 }} />
+                            <Typography variant="body2">
+                              {new Date(inspection.inspection_date).toLocaleString('es-ES', {
+                                day: '2-digit',
+                                month: 'short',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })}
+                            </Typography>
+                          </Stack>
+                        </Stack>
+
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
+                          {inspection.components_with_issues.slice(0, 4).map((component: string, index: number) => (
+                            <Chip
+                              key={`${inspection.id}-component-${index}`}
+                              label={component}
+                              size="small"
+                              sx={{
+                                bgcolor: '#fff',
+                                color: '#f44336',
+                                fontSize: '0.75rem',
+                                fontWeight: 600,
+                                borderRadius: 999,
+                                border: `1px solid ${alpha('#f44336', 0.3)}`,
+                              }}
+                            />
+                          ))}
+                          {inspection.components_with_issues.length > 4 && (
+                            <Chip
+                              label={`+${inspection.components_with_issues.length - 4}`}
+                              size="small"
+                              sx={{
+                                bgcolor: alpha('#501b36', 0.1),
+                                color: '#501b36',
+                                fontSize: '0.75rem',
+                                borderRadius: 999,
+                                border: `1px solid ${alpha('#501b36', 0.2)}`,
+                              }}
+                            />
+                          )}
+                        </Box>
+                      </Paper>
                     );
                   })}
-                </TableBody>
-              </Table>
-              <TablePagination
-                component="div"
-                count={pendingInspections.length}
-                page={pendingPage}
-                onPageChange={handlePendingPageChange}
-                rowsPerPage={pendingRowsPerPage}
-                onRowsPerPageChange={handlePendingRowsPerPageChange}
-                rowsPerPageOptions={[5, 10, 15]}
-                labelRowsPerPage="Por página"
-                sx={{ borderTop: '1px solid rgba(80, 27, 54, 0.08)' }}
-              />
-            </TableContainer>
+                </Stack>
+              ) : (
+                <TableContainer sx={{ borderRadius: 2, overflowX: 'auto' }}>
+                  <Table size={isCompactDesktop ? 'small' : 'medium'}>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 700, color: '#501b36', whiteSpace: 'nowrap' }}>Matrícula</TableCell>
+                        <TableCell sx={{ fontWeight: 700, color: '#501b36', whiteSpace: 'nowrap' }}>Inspector</TableCell>
+                        <TableCell sx={{ fontWeight: 700, color: '#501b36', whiteSpace: 'nowrap' }}>Fecha</TableCell>
+                        <TableCell sx={{ fontWeight: 700, color: '#501b36' }}>Componentes con Problemas</TableCell>
+                        <TableCell sx={{ fontWeight: 700, color: '#501b36', whiteSpace: 'nowrap' }}>Urgencia</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {paginatedPendingInspections.map((inspection: TruckInspectionSummary, index: number) => {
+                        const urgency = getUrgencyLevel(inspection.inspection_date);
+                        return (
+                          <TableRow
+                            key={inspection.id}
+                            hover
+                            sx={{
+                              backgroundColor: index % 2 === 0 ? alpha('#501b36', 0.035) : alpha('#501b36', 0.05),
+                              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                              cursor: 'pointer',
+                              '&:hover': {
+                                transform: 'translateY(-1px)',
+                                boxShadow: '0 6px 12px rgba(80, 27, 54, 0.12)',
+                              },
+                            }}
+                            onClick={() => handleViewDetail(inspection)}
+                            role="button"
+                            aria-label={`Ver detalles de la inspección de ${inspection.truck_license_plate}`}
+                          >
+                            <TableCell>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <LocalShipping sx={{ color: '#666', fontSize: 18 }} />
+                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                  {inspection.truck_license_plate}
+                                </Typography>
+                              </Box>
+                            </TableCell>
+                            <TableCell>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                <Person sx={{ color: '#666', fontSize: 18 }} />
+                                <Typography variant="body2">
+                                  {inspection.user_name}
+                                </Typography>
+                              </Box>
+                            </TableCell>
+                            <TableCell>
+                              <Typography variant="body2">
+                                {new Date(inspection.inspection_date).toLocaleDateString('es-ES', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </Typography>
+                            </TableCell>
+                            <TableCell>
+                              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                                {inspection.components_with_issues.slice(0, 3).map((component: string, componentIndex: number) => (
+                                  <Chip
+                                    key={`${inspection.id}-table-component-${componentIndex}`}
+                                    label={component}
+                                    size="small"
+                                    sx={{
+                                      bgcolor: alpha('#f44336', 0.1),
+                                      color: '#f44336',
+                                      fontSize: '0.7rem',
+                                      fontWeight: 600,
+                                      borderRadius: 999,
+                                      border: `1px solid ${alpha('#f44336', 0.2)}`,
+                                    }}
+                                  />
+                                ))}
+                                {inspection.components_with_issues.length > 3 && (
+                                  <Chip
+                                    label={`+${inspection.components_with_issues.length - 3}`}
+                                    size="small"
+                                    sx={{
+                                      bgcolor: alpha('#666', 0.1),
+                                      color: '#666',
+                                      fontSize: '0.7rem',
+                                      borderRadius: 999,
+                                      border: `1px solid ${alpha('#666', 0.2)}`,
+                                    }}
+                                  />
+                                )}
+                              </Box>
+                            </TableCell>
+                            <TableCell>
+                              <Chip
+                                icon={<AccessTime sx={{ fontSize: 14 }} />}
+                                label={urgency.text}
+                                size="small"
+                                sx={{
+                                  bgcolor: alpha(urgency.color, 0.1),
+                                  color: urgency.color,
+                                  fontWeight: 600,
+                                  fontSize: '0.7rem',
+                                  borderRadius: 999,
+                                  border: `1px solid ${alpha(urgency.color, 0.2)}`,
+                                }}
+                              />
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+
+              {pendingInspections.length > 0 && (
+                <Box
+                  sx={{
+                    mt: 2.5,
+                    display: 'flex',
+                    justifyContent: { xs: 'center', sm: 'flex-end' },
+                    px: { xs: 0.5, sm: 0 },
+                  }}
+                >
+                  <TablePagination
+                    component="div"
+                    count={pendingInspections.length}
+                    page={pendingPage}
+                    onPageChange={handlePendingPageChange}
+                    rowsPerPage={pendingRowsPerPage}
+                    onRowsPerPageChange={handlePendingRowsPerPageChange}
+                    rowsPerPageOptions={[5, 10, 15]}
+                    labelRowsPerPage="Por página"
+                    sx={{
+                      borderTop: '1px solid rgba(80, 27, 54, 0.08)',
+                      borderRadius: { xs: 2, sm: 0 },
+                      width: '100%',
+                      maxWidth: 480,
+                      '& .MuiTablePagination-toolbar': {
+                        flexWrap: { xs: 'wrap', sm: 'nowrap' },
+                        justifyContent: { xs: 'center', sm: 'flex-end' },
+                        gap: { xs: 1, sm: 0 },
+                        py: { xs: 1.5, sm: 0 },
+                      },
+                      '& .MuiTablePagination-selectLabel, & .MuiTablePagination-input': {
+                        fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                      },
+                      '& .MuiTablePagination-displayedRows': {
+                        fontSize: { xs: '0.75rem', sm: '0.875rem' },
+                        mt: { xs: 0.5, sm: 0 },
+                      },
+                    }}
+                  />
+                </Box>
+              )}
+            </>
           )}
         </Paper>
       </Fade>
 
-      {/* Historial de Inspecciones */}
+      {/* Órdenes Pendientes */}
+      <Fade in timeout={1400}>
+        <Paper
+          elevation={0}
+          sx={{
+            borderRadius: 3,
+            border: '1px solid #e2e8f0',
+            background: '#ffffff',
+            p: { xs: 2.5, sm: 3, lg: 4 },
+            mt: { xs: 3, md: 4 },
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
+            <FactCheck sx={{ color: '#501b36', fontSize: 32 }} />
+            <Box>
+              <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36' }}>
+                Órdenes Pendientes
+              </Typography>
+            </Box>
+          </Box>
+
+          {directOrders.length === 0 ? (
+            <Paper
+              variant="outlined"
+              sx={{
+                p: { xs: 3, md: 4 },
+                borderRadius: 2,
+                bgcolor: '#f8f9fa',
+                textAlign: 'center',
+              }}
+            >
+              <CheckCircleOutline sx={{ fontSize: 64, color: '#4caf50', mb: 2, opacity: 0.7 }} />
+              <Typography variant="h6" sx={{ color: '#4caf50', fontWeight: 600, mb: 1 }}>
+                ¡Todo en orden!
+              </Typography>
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
+                No hay órdenes directas pendientes de revisión en este momento.
+              </Typography>
+            </Paper>
+          ) : (
+            <>
+              {isTabletOrBelow ? (
+                <Stack spacing={2.5}>
+                  {directOrders.map((order) => (
+                    <Paper
+                      key={order.id}
+                      variant="outlined"
+                      onClick={() => handleViewDirectOrderDetail(order)}
+                      role="button"
+                      aria-label={`Ver detalles de la orden de ${order.truck_license_plate}`}
+                      sx={{
+                        p: 2.5,
+                        borderRadius: 3,
+                        borderColor: alpha('#501b36', 0.25),
+                        background: 'linear-gradient(135deg, rgba(80,27,54,0.06) 0%, rgba(80,27,54,0.02) 100%)',
+                        cursor: 'pointer',
+                        transition: 'transform 0.25s ease, box-shadow 0.25s ease',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 1.25,
+                        '&:hover': {
+                          transform: 'translateY(-2px)',
+                          boxShadow: '0 12px 24px rgba(80, 27, 54, 0.18)',
+                        },
+                        '&:active': {
+                          transform: 'translateY(0)',
+                        },
+                      }}
+                    >
+                      <Stack direction="row" justifyContent="space-between" spacing={1.5} alignItems="flex-start">
+                        <Box>
+                          <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#501b36' }}>
+                            {order.truck_license_plate}
+                          </Typography>
+                          <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+                            <Person sx={{ color: '#666', fontSize: 18 }} />
+                            <Typography variant="body2" color="text.secondary">
+                              {order.created_by}
+                            </Typography>
+                          </Stack>
+                        </Box>
+                        <Chip
+                          label={order.vehicle_kind === 'TRACTORA' ? 'Tractora' : 'Semiremolque'}
+                          size="small"
+                          sx={{
+                            bgcolor: '#fff',
+                            color: order.vehicle_kind === 'TRACTORA' ? '#1976d2' : '#ef6c00',
+                            fontWeight: 600,
+                            borderRadius: 999,
+                            border: `1px solid ${alpha(order.vehicle_kind === 'TRACTORA' ? '#1976d2' : '#ef6c00', 0.4)}`,
+                          }}
+                        />
+                      </Stack>
+
+                      <Stack spacing={1}>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <AccessTime sx={{ color: '#666', fontSize: 18 }} />
+                          <Typography variant="body2">
+                            {new Date(order.created_at).toLocaleString('es-ES', {
+                              year: 'numeric',
+                              month: '2-digit',
+                              day: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </Typography>
+                        </Stack>
+                        <Stack direction="row" spacing={1} alignItems="center">
+                          <FactCheck sx={{ color: '#666', fontSize: 18 }} />
+                          <Typography variant="body2" color="text.secondary">
+                            {order.modules_count} módulo{order.modules_count !== 1 ? 's' : ''} registrados
+                          </Typography>
+                        </Stack>
+                      </Stack>
+                    </Paper>
+                  ))}
+                </Stack>
+              ) : (
+                <TableContainer sx={{ borderRadius: 2, overflowX: 'auto' }}>
+                  <Table size={isCompactDesktop ? 'small' : 'medium'}>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell sx={{ fontWeight: 700, color: '#501b36', whiteSpace: 'nowrap' }}>Matrícula</TableCell>
+                        <TableCell sx={{ fontWeight: 700, color: '#501b36', whiteSpace: 'nowrap' }}>Tipo</TableCell>
+                        <TableCell sx={{ fontWeight: 700, color: '#501b36', whiteSpace: 'nowrap' }}>Creado por</TableCell>
+                        <TableCell sx={{ fontWeight: 700, color: '#501b36', whiteSpace: 'nowrap' }}>Fecha</TableCell>
+                        <TableCell sx={{ fontWeight: 700, color: '#501b36', whiteSpace: 'nowrap' }}>Módulos</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {directOrders.map((order, index) => (
+                        <TableRow
+                          key={order.id}
+                          hover
+                          onClick={() => handleViewDirectOrderDetail(order)}
+                          sx={{
+                            backgroundColor: index % 2 === 0 ? alpha('#501b36', 0.035) : alpha('#501b36', 0.05),
+                            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                            cursor: 'pointer',
+                            '&:hover': {
+                              transform: 'translateY(-1px)',
+                              boxShadow: '0 6px 12px rgba(80, 27, 54, 0.12)',
+                            },
+                          }}
+                          role="button"
+                          aria-label={`Ver detalles de la orden de ${order.truck_license_plate}`}
+                        >
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <LocalShipping sx={{ color: '#666', fontSize: 18 }} />
+                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                {order.truck_license_plate}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={order.vehicle_kind === 'TRACTORA' ? 'Tractora' : 'Semiremolque'}
+                              size="small"
+                              sx={{
+                                bgcolor: order.vehicle_kind === 'TRACTORA' ? alpha('#2196f3', 0.1) : alpha('#ff9800', 0.1),
+                                color: order.vehicle_kind === 'TRACTORA' ? '#2196f3' : '#ff9800',
+                                fontSize: '0.7rem',
+                                fontWeight: 600,
+                                borderRadius: 999,
+                                border: `1px solid ${alpha(order.vehicle_kind === 'TRACTORA' ? '#2196f3' : '#ff9800', 0.2)}`,
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <Person sx={{ color: '#666', fontSize: 18 }} />
+                              <Typography variant="body2">
+                                {order.created_by}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                              <AccessTime sx={{ color: '#666', fontSize: 18 }} />
+                              <Typography variant="body2">
+                                {new Date(order.created_at).toLocaleString('es-ES', {
+                                  year: 'numeric',
+                                  month: '2-digit',
+                                  day: '2-digit',
+                                  hour: '2-digit',
+                                  minute: '2-digit',
+                                })}
+                              </Typography>
+                            </Box>
+                          </TableCell>
+                          <TableCell>
+                            <Chip
+                              label={`${order.modules_count} módulo${order.modules_count !== 1 ? 's' : ''}`}
+                              size="small"
+                              sx={{
+                                bgcolor: alpha('#4caf50', 0.1),
+                                color: '#4caf50',
+                                fontSize: '0.7rem',
+                                fontWeight: 600,
+                                borderRadius: 999,
+                                border: `1px solid ${alpha('#4caf50', 0.2)}`,
+                              }}
+                            />
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </>
+          )}
+        </Paper>
+      </Fade>
+
+      {/* Historial */}
       <Fade in timeout={1600}>
-        <Paper elevation={0} sx={{ borderRadius: 3, border: '1px solid #e2e8f0', background: '#ffffff', p: 4, mt: 4 }}>
+        <Paper
+          elevation={0}
+          sx={{
+            borderRadius: 3,
+            border: '1px solid #e2e8f0',
+            background: '#ffffff',
+            p: { xs: 2.5, sm: 3, lg: 4 },
+            mt: { xs: 3, md: 4 },
+          }}
+        >
           {/* Header del historial */}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
             <History sx={{ color: '#501b36', fontSize: 32 }} />
             <Box>
-              <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36', mb: 0.5 }}>
-                Historial de Inspecciones
-              </Typography>
-              <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                Registro completo de todas las inspecciones realizadas
+              <Typography variant="h6" sx={{ fontWeight: 700, color: '#501b36' }}>
+                Historial
               </Typography>
             </Box>
           </Box>
@@ -1653,177 +2603,443 @@ export const TruckInspectionRevisions: React.FC = () => {
             </Box>
           ) : (
             <>
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell sx={{ fontWeight: 700, color: '#501b36' }}>Matrícula</TableCell>
-                      <TableCell sx={{ fontWeight: 700, color: '#501b36' }}>Inspector</TableCell>
-                      <TableCell sx={{ fontWeight: 700, color: '#501b36' }}>Fecha</TableCell>
-                      <TableCell sx={{ fontWeight: 700, color: '#501b36' }}>Estado</TableCell>
-                      <TableCell sx={{ fontWeight: 700, color: '#501b36' }}>Problemas</TableCell>
-                      <TableCell sx={{ fontWeight: 700, color: '#501b36' }}>Revisado</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {allInspections.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={6} align="center" sx={{ py: 4 }}>
-                          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-                            No se encontraron inspecciones con los filtros aplicados
-                          </Typography>
-                        </TableCell>
-                      </TableRow>
-                    ) : (
-                      paginatedHistoryInspections.map((inspection: TruckInspectionSummary, index: number) => {
-                        const baseBg = index % 2 === 0 ? alpha('#501b36', 0.03) : alpha('#501b36', 0.05);
-                        const isConsideredReviewed = inspection.has_issues ? Boolean(inspection.is_reviewed) : true;
-                        const rowBg = isConsideredReviewed ? alpha('#4caf50', 0.12) : baseBg;
-                        const reviewChip = inspection.has_issues
-                          ? inspection.is_reviewed
-                            ? {
-                                label: 'Sí',
-                                color: '#4caf50',
-                                bgcolor: alpha('#4caf50', 0.1),
-                                border: alpha('#4caf50', 0.2),
-                              }
+              {allInspections.length === 0 ? (
+                <Paper
+                  variant="outlined"
+                  sx={{
+                    p: { xs: 3, md: 4 },
+                    borderRadius: 2,
+                    textAlign: 'center',
+                    bgcolor: '#f8f9fa',
+                  }}
+                >
+                  <History sx={{ fontSize: 52, color: '#501b36', mb: 1.5, opacity: 0.6 }} />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 600, color: '#501b36', mb: 0.5 }}>
+                    Sin resultados
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    No se encontraron inspecciones con los filtros aplicados.
+                  </Typography>
+                </Paper>
+              ) : (
+                <>
+                  {isTabletOrBelow ? (
+                    <Stack spacing={2.5}>
+                      {paginatedHistoryInspections.map((item: HistoryItem) => {
+                        const isInspection = item.item_type === 'inspection';
+                        const inspection = isInspection ? (item as TruckInspectionSummary) : null;
+                        const directOrder = !isInspection ? (item as DirectInspectionOrderSummary) : null;
+
+                        const isConsideredReviewed = isInspection
+                          ? (inspection!.has_issues ? Boolean(inspection!.is_reviewed) : true)
+                          : true;
+
+                        const reviewChip = isInspection
+                          ? inspection!.has_issues
+                            ? inspection!.is_reviewed
+                              ? {
+                                  label: 'Revisada',
+                                  color: '#2e7d32',
+                                  bgcolor: alpha('#4caf50', 0.15),
+                                  border: alpha('#4caf50', 0.35),
+                                }
+                              : {
+                                  label: 'Pendiente',
+                                  color: '#ef6c00',
+                                  bgcolor: alpha('#ff9800', 0.12),
+                                  border: alpha('#ff9800', 0.3),
+                                }
                             : {
-                                label: 'Pendiente',
-                                color: '#ff9800',
-                                bgcolor: alpha('#ff9800', 0.1),
-                                border: alpha('#ff9800', 0.2),
+                                label: 'Auto-OK',
+                                color: '#1565c0',
+                                bgcolor: alpha('#1976d2', 0.12),
+                                border: alpha('#1976d2', 0.3),
                               }
                           : {
-                              label: 'No requerido',
-                              color: '#1976d2',
-                              bgcolor: alpha('#1976d2', 0.15),
-                              border: alpha('#1976d2', 0.3),
+                              label: 'Revisada',
+                              color: '#2e7d32',
+                              bgcolor: alpha('#4caf50', 0.15),
+                              border: alpha('#4caf50', 0.35),
                             };
-                        return (
-                        <TableRow
-                          key={inspection.id}
-                          hover
-                          onClick={() => handleViewDetail(inspection)}
-                          onKeyDown={(event) => {
-                            if (event.key === 'Enter' || event.key === ' ') {
-                              event.preventDefault();
-                              handleViewDetail(inspection);
-                            }
-                          }}
-                          sx={{
-                            backgroundColor: rowBg,
-                            cursor: 'pointer',
-                            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
-                            '&:hover': {
-                              transform: 'translateY(-1px)',
-                              boxShadow: '0 6px 12px rgba(80, 27, 54, 0.12)',
-                            },
-                            '&:focus-visible': {
-                              outline: `2px solid ${alpha('#501b36', 0.5)}`,
-                              outlineOffset: 2,
-                            },
-                          }}
-                          tabIndex={0}
-                          role="button"
-                          aria-label={`Ver detalles de la inspección de ${inspection.truck_license_plate}`}
-                        >
-                          <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <LocalShipping sx={{ color: '#666', fontSize: 18 }} />
-                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                {inspection.truck_license_plate}
-                              </Typography>
-                            </Box>
-                          </TableCell>
-                          <TableCell>
-                            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                              <Person sx={{ color: '#666', fontSize: 18 }} />
-                              <Typography variant="body2">
-                                {inspection.user_name}
-                              </Typography>
-                            </Box>
-                          </TableCell>
-                          <TableCell>
-                            <Typography variant="body2">
-                              {new Date(inspection.inspection_date).toLocaleDateString('es-ES', {
-                                day: 'numeric',
-                                month: 'short',
-                                year: 'numeric',
-                                hour: '2-digit',
-                                minute: '2-digit'
-                              })}
-                            </Typography>
-                          </TableCell>
-                          <TableCell>
-                            <Chip 
-                              label={inspection.has_issues ? 'Con problemas' : 'Sin problemas'}
-                              size="small"
-                              sx={{
-                                bgcolor: inspection.has_issues ? alpha('#f44336', 0.1) : alpha('#4caf50', 0.1),
-                                color: inspection.has_issues ? '#f44336' : '#4caf50',
-                                fontWeight: 600,
-                                fontSize: '0.7rem',
-                                borderRadius: 999, // Estilo pill
-                                border: `1px solid ${alpha(inspection.has_issues ? '#f44336' : '#4caf50', 0.2)}`,
-                              }}
-                            />
-                          </TableCell>
-                          <TableCell>
-                            {inspection.has_issues ? (
-                              <Typography variant="body2" sx={{ color: '#f44336' }}>
-                                {inspection.components_with_issues.length} componente(s)
-                              </Typography>
-                            ) : (
-                              <Typography variant="body2" sx={{ color: '#4caf50' }}>
-                                Ninguno
-                              </Typography>
-                            )}
-                          </TableCell>
-                          <TableCell>
-                            <Chip 
-                              label={reviewChip.label}
-                              size="small"
-                              sx={{
-                                bgcolor: reviewChip.bgcolor,
-                                color: reviewChip.color,
-                                fontWeight: 600,
-                                fontSize: '0.7rem',
-                                borderRadius: 999, // Estilo pill
-                                border: `1px solid ${reviewChip.border}`,
-                              }}
-                            />
-                          </TableCell>
-                        </TableRow>
-                      );
-                      })
-                    )}
-                  </TableBody>
-                </Table>
-              </TableContainer>
 
-              {/* Paginación */}
-              {allInspections.length > 0 && (
-                <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-                  <Pagination
-                    count={Math.ceil(allInspections.length / historyLimit)}
-                    page={historyPage}
-                    onChange={(_, page) => setHistoryPage(page)}
-                    color="primary"
-                    size="small"
-                    sx={{
-                      '& .MuiPaginationItem-root': {
-                        borderRadius: 999,
-                      },
-                      '& .MuiPaginationItem-root.Mui-selected': {
-                        backgroundColor: '#501b36',
-                        color: 'white',
-                        '&:hover': {
-                          backgroundColor: alpha('#501b36', 0.8),
+                        const typeChip = isInspection
+                          ? {
+                              label: inspection!.has_issues ? 'Con incidencias' : 'Sin incidencias',
+                              color: inspection!.has_issues ? '#d32f2f' : '#388e3c',
+                              bgcolor: inspection!.has_issues ? alpha('#f44336', 0.12) : alpha('#4caf50', 0.12),
+                            }
+                          : {
+                              label: 'Orden directa',
+                              color: '#501b36',
+                              bgcolor: alpha('#501b36', 0.12),
+                            };
+
+                        const handleClick = () => {
+                          if (isInspection) {
+                            handleViewDetail(inspection!);
+                          } else {
+                            setSelectedDirectOrder(directOrder!);
+                            setDirectOrderDetailModalOpen(true);
+                          }
+                        };
+
+                        return (
+                          <Paper
+                            key={`${item.item_type}-${item.id}`}
+                            variant="outlined"
+                            onClick={handleClick}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                handleClick();
+                              }
+                            }}
+                            tabIndex={0}
+                            role="button"
+                            aria-label={`Ver detalles de ${isInspection ? 'la inspección' : 'la orden directa'} de ${item.truck_license_plate}`}
+                            sx={{
+                              p: 2.5,
+                              borderRadius: 3,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              gap: 1.5,
+                              borderColor: isConsideredReviewed ? alpha('#4caf50', 0.35) : alpha('#501b36', 0.2),
+                              background: isConsideredReviewed
+                                ? alpha('#4caf50', 0.08)
+                                : 'linear-gradient(135deg, rgba(80,27,54,0.05) 0%, rgba(80,27,54,0.02) 100%)',
+                              cursor: 'pointer',
+                              transition: 'transform 0.25s ease, box-shadow 0.25s ease',
+                              '&:hover': {
+                                transform: 'translateY(-2px)',
+                                boxShadow: '0 12px 24px rgba(80, 27, 54, 0.18)',
+                              },
+                              '&:focus-visible': {
+                                outline: `2px solid ${alpha('#501b36', 0.5)}`,
+                                outlineOffset: 3,
+                              },
+                            }}
+                          >
+                            <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1.5}>
+                              <Stack direction="row" spacing={1.25} alignItems="center">
+                                {isInspection ? (
+                                  <LocalShipping sx={{ color: '#666', fontSize: 20 }} />
+                                ) : (
+                                  <RateReview sx={{ color: '#501b36', fontSize: 20 }} />
+                                )}
+                                <Box>
+                                  <Typography variant="subtitle1" sx={{ fontWeight: 700, color: '#501b36' }}>
+                                    {item.truck_license_plate}
+                                  </Typography>
+                                  <Typography variant="caption" color="text.secondary">
+                                    {isInspection ? 'Inspección registrada' : 'Orden directa revisada'}
+                                  </Typography>
+                                </Box>
+                              </Stack>
+                              <Chip
+                                label={typeChip.label}
+                                size="small"
+                                sx={{
+                                  bgcolor: typeChip.bgcolor,
+                                  color: typeChip.color,
+                                  fontWeight: 600,
+                                  borderRadius: 999,
+                                  border: `1px solid ${alpha(typeChip.color, 0.25)}`,
+                                }}
+                              />
+                            </Stack>
+
+                            <Stack spacing={1}>
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                <Person sx={{ color: '#666', fontSize: 18 }} />
+                                <Typography variant="body2" color="text.secondary">
+                                  {isInspection ? inspection!.user_name : directOrder!.created_by}
+                                </Typography>
+                              </Stack>
+                              <Stack direction="row" spacing={1} alignItems="center">
+                                <AccessTime sx={{ color: '#666', fontSize: 18 }} />
+                                <Typography variant="body2">
+                                  {new Date(isInspection ? inspection!.inspection_date : directOrder!.created_at).toLocaleDateString('es-ES', {
+                                    day: 'numeric',
+                                    month: 'short',
+                                    year: 'numeric',
+                                    hour: '2-digit',
+                                    minute: '2-digit',
+                                  })}
+                                </Typography>
+                              </Stack>
+                              {isInspection ? (
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                  <Warning sx={{ color: inspection!.has_issues ? '#d32f2f' : '#4caf50', fontSize: 18 }} />
+                                  <Typography variant="body2" sx={{ color: inspection!.has_issues ? '#d32f2f' : '#4caf50' }}>
+                                    {inspection!.has_issues
+                                      ? `${inspection!.components_with_issues.length} componente(s) con incidencias`
+                                      : 'Sin incidencias registradas'}
+                                  </Typography>
+                                </Stack>
+                              ) : (
+                                <Stack direction="row" spacing={1} alignItems="center">
+                                  <FactCheck sx={{ color: '#501b36', fontSize: 18 }} />
+                                  <Typography variant="body2" color="text.secondary">
+                                    {directOrder!.modules_count} módulo(s) registrados
+                                  </Typography>
+                                </Stack>
+                              )}
+                            </Stack>
+
+                            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}
+                              alignItems={{ xs: 'stretch', sm: 'center' }}
+                              justifyContent="space-between"
+                            >
+                              {isInspection && inspection!.has_issues && (
+                                <Typography variant="body2" color="text.secondary">
+                                  {inspection!.is_reviewed
+                                    ? 'Cierre registrado por taller'
+                                    : 'Revisión del taller pendiente'}
+                                </Typography>
+                              )}
+                              <Chip
+                                label={reviewChip.label}
+                                size="small"
+                                sx={{
+                                  alignSelf: { xs: 'flex-start', sm: 'center' },
+                                  bgcolor: reviewChip.bgcolor,
+                                  color: reviewChip.color,
+                                  fontWeight: 600,
+                                  fontSize: '0.75rem',
+                                  borderRadius: 999,
+                                  border: `1px solid ${reviewChip.border}`,
+                                }}
+                              />
+                            </Stack>
+                          </Paper>
+                        );
+                      })}
+                    </Stack>
+                  ) : (
+                    <TableContainer sx={{ borderRadius: 2, overflowX: 'auto' }}>
+                      <Table size={isCompactDesktop ? 'small' : 'medium'}>
+                        <TableHead>
+                          <TableRow>
+                            <TableCell sx={{ fontWeight: 700, color: '#501b36', whiteSpace: 'nowrap' }}>Matrícula</TableCell>
+                            <TableCell sx={{ fontWeight: 700, color: '#501b36', whiteSpace: 'nowrap' }}>Inspector</TableCell>
+                            <TableCell sx={{ fontWeight: 700, color: '#501b36', whiteSpace: 'nowrap' }}>Fecha</TableCell>
+                            <TableCell sx={{ fontWeight: 700, color: '#501b36', whiteSpace: 'nowrap' }}>Estado</TableCell>
+                            <TableCell sx={{ fontWeight: 700, color: '#501b36', whiteSpace: 'nowrap' }}>Problemas</TableCell>
+                            <TableCell sx={{ fontWeight: 700, color: '#501b36', whiteSpace: 'nowrap' }}>Revisado</TableCell>
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {paginatedHistoryInspections.map((item: HistoryItem, index: number) => {
+                            const baseBg = index % 2 === 0 ? alpha('#501b36', 0.03) : alpha('#501b36', 0.05);
+                            const isInspection = item.item_type === 'inspection';
+                            const inspection = isInspection ? (item as TruckInspectionSummary) : null;
+                            const directOrder = !isInspection ? (item as DirectInspectionOrderSummary) : null;
+
+                            const isConsideredReviewed = isInspection
+                              ? (inspection!.has_issues ? Boolean(inspection!.is_reviewed) : true)
+                              : true;
+                            const rowBg = isConsideredReviewed ? alpha('#4caf50', 0.12) : baseBg;
+
+                            const reviewChip = isInspection
+                              ? inspection!.has_issues
+                                ? inspection!.is_reviewed
+                                  ? {
+                                      label: 'Sí',
+                                      color: '#4caf50',
+                                      bgcolor: alpha('#4caf50', 0.1),
+                                      border: alpha('#4caf50', 0.2),
+                                    }
+                                  : {
+                                      label: 'Pendiente',
+                                      color: '#ff9800',
+                                      bgcolor: alpha('#ff9800', 0.1),
+                                      border: alpha('#ff9800', 0.2),
+                                    }
+                                : {
+                                    label: 'No requerido',
+                                    color: '#1976d2',
+                                    bgcolor: alpha('#1976d2', 0.15),
+                                    border: alpha('#1976d2', 0.3),
+                                  }
+                              : {
+                                  label: 'Sí',
+                                  color: '#4caf50',
+                                  bgcolor: alpha('#4caf50', 0.1),
+                                  border: alpha('#4caf50', 0.2),
+                                };
+
+                            const handleClick = () => {
+                              if (isInspection) {
+                                handleViewDetail(inspection!);
+                              } else {
+                                setSelectedDirectOrder(directOrder!);
+                                setDirectOrderDetailModalOpen(true);
+                              }
+                            };
+
+                            return (
+                              <TableRow
+                                key={`${item.item_type}-${item.id}`}
+                                hover
+                                onClick={handleClick}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    handleClick();
+                                  }
+                                }}
+                                sx={{
+                                  backgroundColor: rowBg,
+                                  cursor: 'pointer',
+                                  transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+                                  '&:hover': {
+                                    transform: 'translateY(-1px)',
+                                    boxShadow: '0 6px 12px rgba(80, 27, 54, 0.12)',
+                                  },
+                                  '&:focus-visible': {
+                                    outline: `2px solid ${alpha('#501b36', 0.5)}`,
+                                    outlineOffset: 2,
+                                  },
+                                }}
+                                tabIndex={0}
+                                role="button"
+                                aria-label={`Ver detalles de ${isInspection ? 'la inspección' : 'la orden directa'} de ${item.truck_license_plate}`}
+                              >
+                                <TableCell>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    {isInspection ? (
+                                      <LocalShipping sx={{ color: '#666', fontSize: 18 }} />
+                                    ) : (
+                                      <RateReview sx={{ color: '#501b36', fontSize: 18 }} />
+                                    )}
+                                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                      {item.truck_license_plate}
+                                    </Typography>
+                                    {!isInspection && (
+                                      <Chip
+                                        label="Orden directa"
+                                        size="small"
+                                        sx={{
+                                          ml: 1,
+                                          height: 20,
+                                          fontSize: '0.65rem',
+                                          bgcolor: alpha('#501b36', 0.1),
+                                          color: '#501b36',
+                                          fontWeight: 600,
+                                        }}
+                                      />
+                                    )}
+                                  </Box>
+                                </TableCell>
+                                <TableCell>
+                                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                                    <Person sx={{ color: '#666', fontSize: 18 }} />
+                                    <Typography variant="body2">
+                                      {isInspection ? inspection!.user_name : directOrder!.created_by}
+                                    </Typography>
+                                  </Box>
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant="body2">
+                                    {new Date(isInspection ? inspection!.inspection_date : directOrder!.created_at).toLocaleDateString('es-ES', {
+                                      day: 'numeric',
+                                      month: 'short',
+                                      year: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                  </Typography>
+                                </TableCell>
+                                <TableCell>
+                                  {isInspection ? (
+                                    <Chip
+                                      label={inspection!.has_issues ? 'Con problemas' : 'Sin problemas'}
+                                      size="small"
+                                      sx={{
+                                        bgcolor: inspection!.has_issues ? alpha('#f44336', 0.1) : alpha('#4caf50', 0.1),
+                                        color: inspection!.has_issues ? '#f44336' : '#4caf50',
+                                        fontWeight: 600,
+                                        fontSize: '0.7rem',
+                                        borderRadius: 999,
+                                        border: `1px solid ${alpha(inspection!.has_issues ? '#f44336' : '#4caf50', 0.2)}`,
+                                      }}
+                                    />
+                                  ) : (
+                                    <Chip
+                                      label="Orden directa"
+                                      size="small"
+                                      sx={{
+                                        bgcolor: alpha('#501b36', 0.1),
+                                        color: '#501b36',
+                                        fontWeight: 600,
+                                        fontSize: '0.7rem',
+                                        borderRadius: 999,
+                                        border: `1px solid ${alpha('#501b36', 0.2)}`,
+                                      }}
+                                    />
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {isInspection ? (
+                                    inspection!.has_issues ? (
+                                      <Typography variant="body2" sx={{ color: '#f44336' }}>
+                                        {inspection!.components_with_issues.length} componente(s)
+                                      </Typography>
+                                    ) : (
+                                      <Typography variant="body2" sx={{ color: '#4caf50' }}>
+                                        Ninguno
+                                      </Typography>
+                                    )
+                                  ) : (
+                                    <Typography variant="body2" sx={{ color: '#501b36' }}>
+                                      {directOrder!.modules_count} módulo(s)
+                                    </Typography>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <Chip
+                                    label={reviewChip.label}
+                                    size="small"
+                                    sx={{
+                                      bgcolor: reviewChip.bgcolor,
+                                      color: reviewChip.color,
+                                      fontWeight: 600,
+                                      fontSize: '0.7rem',
+                                      borderRadius: 999,
+                                      border: `1px solid ${reviewChip.border}`,
+                                    }}
+                                  />
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  )}
+
+                  <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
+                    <Pagination
+                      count={Math.ceil(allInspections.length / historyLimit)}
+                      page={historyPage}
+                      onChange={(_, page) => setHistoryPage(page)}
+                      color="primary"
+                      size="small"
+                      sx={{
+                        '& .MuiPaginationItem-root': {
+                          borderRadius: 999,
                         },
-                      },
-                    }}
-                  />
-                </Box>
+                        '& .MuiPaginationItem-root.Mui-selected': {
+                          backgroundColor: '#501b36',
+                          color: 'white',
+                          '&:hover': {
+                            backgroundColor: alpha('#501b36', 0.8),
+                          },
+                        },
+                      }}
+                    />
+                  </Box>
+                </>
               )}
             </>
           )}
@@ -1949,9 +3165,25 @@ export const TruckInspectionRevisions: React.FC = () => {
         <DialogActions sx={{ px: 3, py: 2.5, gap: 1.5 }}>
           <Button
             onClick={handleCloseManualModal}
-            variant="text"
-            sx={{ textTransform: 'none', fontWeight: 600, color: '#501b36' }}
+            variant="outlined"
             disabled={manualSubmitting}
+            sx={{
+              textTransform:'none',
+              fontWeight:600,
+              borderRadius:999,
+              px:3,
+              borderColor:'#c8b1bd',
+              color:'#501b36',
+              background:'linear-gradient(#ffffff,#faf7f9)',
+              '&:hover':{
+                borderColor:'#501b36',
+                background:'linear-gradient(#fff,#f3eaef)'
+              },
+              '&:disabled':{
+                opacity:0.5,
+                background:'linear-gradient(#ffffff,#faf7f9)'
+              }
+            }}
           >
             Cancelar
           </Button>
@@ -2006,6 +3238,155 @@ export const TruckInspectionRevisions: React.FC = () => {
         </Snackbar>
       )}
 
+      {/* Modal orden directa a taller */}
+      <Dialog 
+        open={directOrderOpen} 
+        onClose={handleCloseDirectOrder} 
+        maxWidth="md" 
+        fullWidth
+        PaperProps={{
+          sx:{
+            borderRadius:3,
+            overflow:'hidden',
+            border:'1px solid',
+            borderColor:'rgba(80,27,54,0.18)',
+            boxShadow:'0 8px 32px rgba(80,27,54,0.25)'
+          }
+        }}
+      >
+        <DialogTitle sx={{ fontWeight:600, color:'#501b36' }}>Crear orden directa de inspección</DialogTitle>
+        <Box component="form" onSubmit={handleSubmitDirectOrder}>
+          <DialogContent dividers sx={{ display:'flex', flexDirection:'column', gap:3 }}>
+            <Alert severity="info" sx={{ borderRadius:2 }}>
+              Genera una orden inmediata para revisar un vehículo concreto. Añade tantos módulos de incidencia como necesites.
+            </Alert>
+            <Stack direction={{xs:'column', sm:'row'}} spacing={2}>
+              <TextField
+                label="Matrícula"
+                value={directOrderPlate}
+                onChange={(e)=>setDirectOrderPlate(e.target.value.toUpperCase())}
+                required
+                inputProps={{ maxLength: 12 }}
+                sx={{ flex:1 }}
+              />
+              <TextField
+                select
+                label="Tipo"
+                value={directOrderVehicleKind}
+                onChange={(e)=>setDirectOrderVehicleKind(e.target.value as any)}
+                sx={{ width:220 }}
+                SelectProps={{ native:true }}
+              >
+                <option value="TRACTORA">Tractora</option>
+                <option value="SEMIREMOLQUE">Semiremolque</option>
+              </TextField>
+            </Stack>
+            <Box>
+              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb:1 }}>
+                <Typography variant="subtitle1" sx={{ fontWeight:600 }}>Módulos / Incidencias</Typography>
+                <Button onClick={handleAddModule} startIcon={<Add />} size="small" variant="outlined" sx={{ textTransform:'none', borderRadius:2 }}>Añadir módulo</Button>
+              </Stack>
+              <Stack spacing={2}>
+                {directOrderModules.map((mod, idx) => (
+                  <Paper key={mod.temp_id} variant="outlined" sx={{ p:2, borderRadius:2, position:'relative' }}>
+                    <Stack spacing={1.5}>
+                      <Stack direction={{xs:'column', sm:'row'}} spacing={2}>
+                        <TextField
+                          label={`Título ${idx+1}`}
+                          value={mod.title}
+                          onChange={(e)=>handleModuleChange(mod.temp_id,'title', e.target.value)}
+                          required={idx===0}
+                          sx={{ flex:1 }}
+                          placeholder="Ej: Fuga de aceite"
+                        />
+                        <IconButton
+                          aria-label="Eliminar módulo"
+                          onClick={()=>handleRemoveModule(mod.temp_id)}
+                          disabled={directOrderModules.length===1}
+                          size="small"
+                          disableRipple
+                          sx={{ 
+                            alignSelf:'flex-start', 
+                            mt:{xs:0.5, sm:0}, 
+                            color: directOrderModules.length===1 ? 'text.disabled':'#b71c1c',
+                            background:'transparent !important',
+                            boxShadow:'none !important',
+                            borderRadius:0,
+                            padding:0.25,
+                            '&:hover':{
+                              background:'transparent !important',
+                              boxShadow:'none',
+                              color: directOrderModules.length===1 ? 'text.disabled':'#7f0000'
+                            },
+                            '& .MuiTouchRipple-root':{
+                              display:'none'
+                            },
+                            '&:focus':{
+                              outline:'none'
+                            },
+                            '&:disabled':{
+                              color:'text.disabled'
+                            }
+                          }}
+                        >
+                          <Delete fontSize="small" />
+                        </IconButton>
+                      </Stack>
+                      <TextField
+                        label="Observaciones"
+                        value={mod.notes}
+                        onChange={(e)=>handleModuleChange(mod.temp_id,'notes', e.target.value)}
+                        multiline
+                        minRows={2}
+                        placeholder="Detalles, síntomas, contexto..."
+                      />
+                    </Stack>
+                  </Paper>
+                ))}
+              </Stack>
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ px:3, py:2.5, gap:1.5 }}>
+            <Button 
+              onClick={handleCloseDirectOrder} 
+              disabled={directOrderSubmitting}
+              variant="outlined"
+              sx={{
+                textTransform:'none',
+                fontWeight:600,
+                borderRadius:999,
+                px:3,
+                borderColor:'#c8b1bd',
+                color:'#501b36',
+                background:'linear-gradient(#ffffff,#faf7f9)',
+                '&:hover':{
+                  borderColor:'#501b36',
+                  background:'linear-gradient(#fff,#f3eaef)'
+                },
+                '&:disabled':{
+                  opacity:0.5,
+                  background:'linear-gradient(#ffffff,#faf7f9)'
+                }
+              }}
+            >Cancelar</Button>
+            <Button type="submit" variant="contained" disabled={directOrderSubmitting} sx={{ borderRadius:999, px:3, fontWeight:600 }}>
+              {directOrderSubmitting ? 'Creando...' : 'Crear Orden'}
+            </Button>
+          </DialogActions>
+        </Box>
+      </Dialog>
+
+      <Snackbar
+        open={!!directOrderFeedback}
+        autoHideDuration={3000}
+        onClose={()=>setDirectOrderFeedback(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity={directOrderFeedback?.severity || 'info'} onClose={()=>setDirectOrderFeedback(null)} sx={{ fontWeight:600 }}>
+          {directOrderFeedback?.message || ''}
+        </Alert>
+      </Snackbar>
+
       <InspectionDetailModal
         open={detailModalOpen}
         inspection={selectedInspection}
@@ -2014,6 +3395,14 @@ export const TruckInspectionRevisions: React.FC = () => {
           setSelectedInspection(null);
         }}
         onMarkReviewed={handleMarkReviewed}
+      />
+
+      {/* Modal de detalle de orden directa */}
+      <DirectOrderDetailModal
+        open={directOrderDetailModalOpen}
+        order={selectedDirectOrder}
+        onClose={handleCloseDirectOrderDetail}
+        onRefresh={handleRefreshDirectOrders}
       />
 
       {/* Modal de advertencia para desactivación */}

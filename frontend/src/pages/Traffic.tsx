@@ -592,11 +592,11 @@ export const Traffic: React.FC = () => {
                   </Box>
                   <Box>
                     <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
-                      Gestión de Tráfico
+                      Gestión de Taller
                     </Typography>
 
                     <Typography variant="h6" sx={{ opacity: 0.9, fontWeight: 400, fontSize: { xs: '1rem', sm: '1.1rem' } }}>
-                      Gestión integral de documentos y archivos del departamento de tráfico
+                      Gestión integral de inspecciones, documentos y archivos del taller
                     </Typography>
                   </Box>
                 </Box>
