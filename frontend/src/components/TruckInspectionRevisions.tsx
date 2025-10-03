@@ -1280,6 +1280,8 @@ export const TruckInspectionRevisions: React.FC = () => {
   
   // Estado para el modal de advertencia de desactivación
   const [deactivationWarningOpen, setDeactivationWarningOpen] = useState(false);
+  // Estado para confirmación de activación
+  const [activationConfirmOpen, setActivationConfirmOpen] = useState(false);
   
   const canSendManualRequests = Boolean(
     user && ['P_TALLER', 'ADMINISTRADOR', 'ADMINISTRACION', 'TRAFICO'].includes(user.role)
@@ -1420,14 +1422,15 @@ export const TruckInspectionRevisions: React.FC = () => {
   const handleToggleAutoInspection = async () => {
     if (!canManageAutoSettings || !autoSettings || autoLoading) return;
 
-    // Si está activado y se va a desactivar, mostrar modal de advertencia
     if (autoSettings.auto_inspection_enabled) {
+      // Desactivar -> modal existente de advertencia
       setDeactivationWarningOpen(true);
       return;
+    } else {
+      // Activar -> nueva confirmación
+      setActivationConfirmOpen(true);
+      return;
     }
-
-    // Si está desactivado, activar directamente
-    await performToggleAutoInspection();
   };
 
   const performToggleAutoInspection = async () => {
@@ -1454,6 +1457,15 @@ export const TruckInspectionRevisions: React.FC = () => {
 
   const handleCancelDeactivation = () => {
     setDeactivationWarningOpen(false);
+  };
+
+  const handleConfirmActivation = async () => {
+    setActivationConfirmOpen(false);
+    await performToggleAutoInspection();
+  };
+
+  const handleCancelActivation = () => {
+    setActivationConfirmOpen(false);
   };
   // const [userOptions, setUserOptions] = useState<{ id: number; name: string }[]>([]);
 
@@ -3370,6 +3382,43 @@ export const TruckInspectionRevisions: React.FC = () => {
           >
             Sí, Desactivar
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Modal de confirmación para ACTIVAR inspecciones automáticas */}
+      <Dialog
+        open={activationConfirmOpen}
+        onClose={handleCancelActivation}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle sx={{ display:'flex', alignItems:'center', gap:1 }}>
+          <Info sx={{ color:'#4caf50', fontSize:24 }} />
+          <Typography variant="h6">Activar Inspecciones Automáticas</Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb:2 }}>
+            Vas a activar la generación automática de solicitudes de inspección cada 15 días.
+          </Typography>
+          <Typography variant="body2" sx={{ mb:1 }}>
+            Al activar:
+          </Typography>
+          <Box component="ul" sx={{ pl:2, mb:2 }}>
+            <Typography component="li" variant="body2" sx={{ mb:0.5 }}>
+              Se crearán recordatorios periódicos sin intervención manual
+            </Typography>
+            <Typography component="li" variant="body2" sx={{ mb:0.5 }}>
+              Los trabajadores recibirán notificaciones para realizar la inspección
+            </Typography>
+            <Typography component="li" variant="body2" sx={{ mb:0.5 }}>
+              Podrás desactivarlo en cualquier momento
+            </Typography>
+          </Box>
+          <Alert severity="info" sx={{ borderRadius:2 }} icon={<Schedule />}>La próxima ejecución se calculará desde hoy.</Alert>
+        </DialogContent>
+        <DialogActions sx={{ px:3, pb:2 }}>
+          <Button onClick={handleCancelActivation} variant="outlined">Cancelar</Button>
+          <Button onClick={handleConfirmActivation} variant="contained" color="success">Activar</Button>
         </DialogActions>
       </Dialog>
     </>
