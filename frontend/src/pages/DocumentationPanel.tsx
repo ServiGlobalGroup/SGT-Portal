@@ -275,27 +275,25 @@ const DocumentationPanel: React.FC = () => {
       setLoadingActions(prev => ({ ...prev, [documentFile.id]: 'previewing' }));
       
       if (documentFile.type === '.pdf') {
-        // Para PDFs, obtener el archivo como blob usando la API autenticada
-        const blob = await documentationAPI.previewDocument(
+        // Para PDFs, usar la URL directa con token en lugar de blob
+        // Esto permite que el iframe pueda autenticarse correctamente
+        const previewUrl = documentationAPI.getPreviewUrl(
           documentFile.user_dni,
           documentFile.folder,
           documentFile.name
         );
-
-        // Crear blob URL para mostrar en el iframe
-        const blobUrl = window.URL.createObjectURL(blob);
         
-        console.log('Blob URL creada:', blobUrl);
+        console.log('Preview URL generada:', previewUrl);
         
         setPreviewModal({
           open: true,
-          fileUrl: blobUrl,
+          fileUrl: previewUrl,
           fileName: documentFile.name,
           title: `${documentFile.name} - ${documentFile.user_dni}`,
-          isBlobUrl: true
+          isBlobUrl: false  // No es blob URL, es URL directa con autenticación
         });
         
-        console.log('Modal de preview configurado con blob URL');
+        console.log('Modal de preview configurado con URL directa');
       } else {
         // Para otros tipos de archivo, hacer descarga directa
         await handleDownloadDocument(documentFile);
@@ -887,12 +885,33 @@ const DocumentationPanel: React.FC = () => {
                                           size="small"
                                           onClick={() => handleDownloadDocument(doc)}
                                           disabled={loadingActions[doc.id] === 'downloading'}
+                                          disableRipple
+                                          disableFocusRipple
+                                          disableTouchRipple
                                           sx={{
                                             color: '#4caf50',
                                             padding: 0.5,
+                                            backgroundColor: 'transparent !important',
+                                            boxShadow: 'none !important',
                                             '&:hover': {
-                                              backgroundColor: 'transparent',
+                                              backgroundColor: 'transparent !important',
+                                              bgcolor: 'transparent !important',
+                                              boxShadow: 'none !important',
                                               color: '#388e3c',
+                                            },
+                                            '&:active': {
+                                              backgroundColor: 'transparent !important',
+                                              bgcolor: 'transparent !important',
+                                              boxShadow: 'none !important',
+                                            },
+                                            '&:focus': {
+                                              backgroundColor: 'transparent !important',
+                                              bgcolor: 'transparent !important',
+                                              boxShadow: 'none !important',
+                                            },
+                                            '&.MuiIconButton-root': {
+                                              backgroundColor: 'transparent !important',
+                                              bgcolor: 'transparent !important',
                                             },
                                             '&:disabled': {
                                               color: alpha('#4caf50', 0.5),
@@ -909,12 +928,33 @@ const DocumentationPanel: React.FC = () => {
                                           size="small"
                                           onClick={() => handlePreviewDocument(doc)}
                                           disabled={loadingActions[doc.id] === 'previewing'}
+                                          disableRipple
+                                          disableFocusRipple
+                                          disableTouchRipple
                                           sx={{
                                             color: '#2196f3',
                                             padding: 0.5,
+                                            backgroundColor: 'transparent !important',
+                                            boxShadow: 'none !important',
                                             '&:hover': {
-                                              backgroundColor: 'transparent',
+                                              backgroundColor: 'transparent !important',
+                                              bgcolor: 'transparent !important',
+                                              boxShadow: 'none !important',
                                               color: '#1976d2',
+                                            },
+                                            '&:active': {
+                                              backgroundColor: 'transparent !important',
+                                              bgcolor: 'transparent !important',
+                                              boxShadow: 'none !important',
+                                            },
+                                            '&:focus': {
+                                              backgroundColor: 'transparent !important',
+                                              bgcolor: 'transparent !important',
+                                              boxShadow: 'none !important',
+                                            },
+                                            '&.MuiIconButton-root': {
+                                              backgroundColor: 'transparent !important',
+                                              bgcolor: 'transparent !important',
                                             },
                                             '&:disabled': {
                                               color: alpha('#2196f3', 0.5),

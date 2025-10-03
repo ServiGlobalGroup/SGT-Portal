@@ -777,7 +777,15 @@ export const documentationAPI = {
   downloadDocument: (userDni: string, folder: string, filename: string): Promise<Blob> => 
     api.get(`/api/documentation/download/${userDni}/${folder}/${filename}`, { responseType: 'blob' }).then(res => res.data),
   
-  // Previsualizar documento
-  previewDocument: (userDni: string, folder: string, filename: string): Promise<Blob> => 
-    api.get(`/api/documentation/preview/${userDni}/${folder}/${filename}`, { responseType: 'blob' }).then(res => res.data),
+  // Previsualizar documento - incluye token en query para permitir iframe
+  previewDocument: (userDni: string, folder: string, filename: string): Promise<Blob> => {
+    const token = localStorage.getItem('access_token');
+    return api.get(`/api/documentation/preview/${userDni}/${folder}/${filename}?token=${token}`, { responseType: 'blob' }).then(res => res.data);
+  },
+  
+  // Obtener URL de preview con token para uso en iframe
+  getPreviewUrl: (userDni: string, folder: string, filename: string): string => {
+    const token = localStorage.getItem('access_token');
+    return `${API_BASE_URL}/api/documentation/preview/${userDni}/${folder}/${filename}?token=${token}`;
+  },
 };
