@@ -193,17 +193,38 @@ export const MobileDocumentCard: React.FC<MobileDocumentCardProps> = ({
               e.stopPropagation();
               if (onView) onView(document);
             }}
+            disableRipple
+            disableFocusRipple
+            disableTouchRipple
             sx={{
-              width: 40,
-              height: 40,
-              bgcolor: alpha(corporateColor, 0.1),
               color: corporateColor,
-              border: `1px solid ${alpha(corporateColor, 0.2)}`,
+              backgroundColor: 'transparent !important',
+              border: 'none',
+              boxShadow: 'none !important',
+              padding: 0,
+              minWidth: 'auto',
+              minHeight: 'auto',
               '&:hover': {
-                bgcolor: alpha(corporateColor, 0.2),
-                transform: 'scale(1.1)',
+                bgcolor: 'transparent !important',
+                backgroundColor: 'transparent !important',
+                boxShadow: 'none !important',
+                transform: 'none',
               },
-              transition: 'all 0.2s ease',
+              '&:active': {
+                bgcolor: 'transparent !important',
+                backgroundColor: 'transparent !important',
+                boxShadow: 'none !important',
+              },
+              '&:focus': {
+                bgcolor: 'transparent !important',
+                backgroundColor: 'transparent !important',
+                boxShadow: 'none !important',
+              },
+              '&.MuiIconButton-root': {
+                bgcolor: 'transparent !important',
+                backgroundColor: 'transparent !important',
+              },
+              transition: 'none',
             }}
           >
             <Visibility sx={{ fontSize: 20 }} />
@@ -215,17 +236,38 @@ export const MobileDocumentCard: React.FC<MobileDocumentCardProps> = ({
               e.stopPropagation();
               if (onDownload) onDownload(document);
             }}
+            disableRipple
+            disableFocusRipple
+            disableTouchRipple
             sx={{
-              width: 40,
-              height: 40,
-              bgcolor: alpha('#4caf50', 0.1),
               color: '#4caf50',
-              border: `1px solid ${alpha('#4caf50', 0.2)}`,
+              backgroundColor: 'transparent !important',
+              border: 'none',
+              boxShadow: 'none !important',
+              padding: 0,
+              minWidth: 'auto',
+              minHeight: 'auto',
               '&:hover': {
-                bgcolor: alpha('#4caf50', 0.2),
-                transform: 'scale(1.1)',
+                bgcolor: 'transparent !important',
+                backgroundColor: 'transparent !important',
+                boxShadow: 'none !important',
+                transform: 'none',
               },
-              transition: 'all 0.2s ease',
+              '&:active': {
+                bgcolor: 'transparent !important',
+                backgroundColor: 'transparent !important',
+                boxShadow: 'none !important',
+              },
+              '&:focus': {
+                bgcolor: 'transparent !important',
+                backgroundColor: 'transparent !important',
+                boxShadow: 'none !important',
+              },
+              '&.MuiIconButton-root': {
+                bgcolor: 'transparent !important',
+                backgroundColor: 'transparent !important',
+              },
+              transition: 'none',
             }}
           >
             <CloudDownload sx={{ fontSize: 20 }} />

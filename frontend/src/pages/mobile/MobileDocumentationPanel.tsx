@@ -244,29 +244,18 @@ export const MobileDocumentationPanel: React.FC = () => {
         const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         
         if (isMobile) {
-          // Para móvil: descargar y abrir en el visor nativo
-          const blob = await documentationAPI.downloadDocument(
+          // Para móvil: abrir directamente la URL con autenticación en nueva pestaña
+          const previewUrl = documentationAPI.getPreviewUrl(
             documentFile.user_dni,
             documentFile.folder,
             documentFile.name
           );
 
-          if (!blob || blob.size === 0) {
-            throw new Error('Archivo PDF vacío o no válido');
-          }
-
-          // Crear blob URL y abrir en nueva pestaña
-          const blobUrl = window.URL.createObjectURL(blob);
-          const newWindow = window.open(blobUrl, '_blank');
+          const newWindow = window.open(previewUrl, '_blank');
           
           if (!newWindow) {
-            // Si no se puede abrir nueva ventana, forzar descarga
-            const link = document.createElement('a');
-            link.href = blobUrl;
-            link.download = documentFile.name;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            // Si no se puede abrir nueva ventana, intentar descargar
+            await handleDownloadDocument(documentFile);
             
             setSnackbar({
               open: true,
@@ -281,31 +270,20 @@ export const MobileDocumentationPanel: React.FC = () => {
             });
           }
           
-          // Limpiar blob URL después de un tiempo
-          setTimeout(() => {
-            window.URL.revokeObjectURL(blobUrl);
-          }, 60000); // 1 minuto
-          
         } else {
-          // Para desktop: usar modal como siempre
-          const blob = await documentationAPI.downloadDocument(
+          // Para desktop: usar modal con URL directa
+          const previewUrl = documentationAPI.getPreviewUrl(
             documentFile.user_dni,
             documentFile.folder,
             documentFile.name
           );
-
-          if (!blob || blob.size === 0) {
-            throw new Error('Archivo PDF vacío o no válido');
-          }
-
-          const blobUrl = window.URL.createObjectURL(blob);
           
           setPreviewModal({
             open: true,
-            fileUrl: blobUrl,
+            fileUrl: previewUrl,
             fileName: documentFile.name,
             title: `${documentFile.name} - ${documentFile.user_dni}`,
-            isBlobUrl: true
+            isBlobUrl: false  // No es blob URL, es URL directa con autenticación
           });
         }
       } else {

@@ -346,11 +346,37 @@ export const MobileUserCard: React.FC<MobileUserCardProps> = ({
                               size="small"
                               onClick={() => onDownloadDocument(doc)}
                               disabled={loadingActions[doc.id] === 'downloading'}
+                              disableRipple
+                              disableFocusRipple
+                              disableTouchRipple
                               sx={{
-                                width: 24,
-                                height: 24,
                                 color: '#4caf50',
-                                '&:hover': { bgcolor: alpha('#4caf50', 0.1) },
+                                backgroundColor: 'transparent !important',
+                                border: 'none',
+                                boxShadow: 'none !important',
+                                padding: 0,
+                                minWidth: 'auto',
+                                minHeight: 'auto',
+                                '&:hover': { 
+                                  bgcolor: 'transparent !important',
+                                  backgroundColor: 'transparent !important',
+                                  boxShadow: 'none !important',
+                                  transform: 'none',
+                                },
+                                '&:active': {
+                                  bgcolor: 'transparent !important',
+                                  backgroundColor: 'transparent !important',
+                                  boxShadow: 'none !important',
+                                },
+                                '&:focus': {
+                                  bgcolor: 'transparent !important',
+                                  backgroundColor: 'transparent !important',
+                                  boxShadow: 'none !important',
+                                },
+                                '&.MuiIconButton-root': {
+                                  bgcolor: 'transparent !important',
+                                  backgroundColor: 'transparent !important',
+                                },
                                 '&:disabled': { color: alpha('#4caf50', 0.5) },
                               }}
                             >
@@ -367,11 +393,37 @@ export const MobileUserCard: React.FC<MobileUserCardProps> = ({
                               size="small"
                               onClick={() => onPreviewDocument(doc)}
                               disabled={loadingActions[doc.id] === 'previewing'}
+                              disableRipple
+                              disableFocusRipple
+                              disableTouchRipple
                               sx={{
-                                width: 24,
-                                height: 24,
                                 color: '#2196f3',
-                                '&:hover': { bgcolor: alpha('#2196f3', 0.1) },
+                                backgroundColor: 'transparent !important',
+                                border: 'none',
+                                boxShadow: 'none !important',
+                                padding: 0,
+                                minWidth: 'auto',
+                                minHeight: 'auto',
+                                '&:hover': { 
+                                  bgcolor: 'transparent !important',
+                                  backgroundColor: 'transparent !important',
+                                  boxShadow: 'none !important',
+                                  transform: 'none',
+                                },
+                                '&:active': {
+                                  bgcolor: 'transparent !important',
+                                  backgroundColor: 'transparent !important',
+                                  boxShadow: 'none !important',
+                                },
+                                '&:focus': {
+                                  bgcolor: 'transparent !important',
+                                  backgroundColor: 'transparent !important',
+                                  boxShadow: 'none !important',
+                                },
+                                '&.MuiIconButton-root': {
+                                  bgcolor: 'transparent !important',
+                                  backgroundColor: 'transparent !important',
+                                },
                                 '&:disabled': { color: alpha('#2196f3', 0.5) },
                               }}
                             >
