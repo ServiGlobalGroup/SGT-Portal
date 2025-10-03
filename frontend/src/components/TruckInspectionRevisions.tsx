@@ -32,7 +32,6 @@ import {
   Snackbar,
   Tooltip,
   useMediaQuery,
-  Switch,
 } from '@mui/material';
 import { alpha, useTheme } from '@mui/material/styles';
 import {
@@ -53,6 +52,9 @@ import {
   Info,
   Add,
   Delete,
+  Autorenew,
+  Schedule,
+  NoteAdd,
 } from '@mui/icons-material';
 
 import { truckInspectionService } from '../services/truckInspectionService';
@@ -1086,216 +1088,133 @@ const InspectionActions: React.FC<InspectionActionsProps> = ({
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isTablet = useMediaQuery(theme.breakpoints.between('sm', 'md'));
-  const isCompactDesktop = useMediaQuery(theme.breakpoints.between('md', 'lg'));
-  const shouldStretchButtons = isMobile || isTablet || isCompactDesktop;
 
-  const autoCardContent = (
-    <Paper
-      elevation={0}
-      variant="outlined"
-      sx={{
-        borderRadius: 3,
-        px: 2.25,
-        py: 1.5,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 2,
-        width: '100%',
-        background: autoSettingsEnabled
-          ? 'linear-gradient(135deg, rgba(76,175,80,0.12) 0%, rgba(76,175,80,0.04) 100%)'
-          : 'linear-gradient(135deg, rgba(80,27,54,0.05) 0%, rgba(80,27,54,0.02) 100%)',
-        borderColor: autoSettingsEnabled ? alpha('#4caf50', 0.35) : alpha('#501b36', 0.2),
-      }}
+  // Icon styles (redondos y algo más grandes)
+  const iconBtnBase = {
+    width: isMobile ? 42 : isTablet ? 44 : 48,
+    height: isMobile ? 42 : isTablet ? 44 : 48,
+    borderRadius: '50%',
+    background: '#ffffff',
+    border: '1px solid #e0e0e0',
+    boxShadow: '0 3px 6px rgba(0,0,0,0.10)',
+    color: '#501b36',
+    transition: 'all .25s',
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    '&:hover': {
+      background: 'linear-gradient(135deg, #ffffff 0%, #f4eef2 100%)',
+      transform: 'translateY(-3px)',
+      boxShadow: '0 8px 18px rgba(80,27,54,0.28)',
+      borderColor: '#d3c4cc'
+    },
+    '&:active': { transform: 'translateY(-1px)', boxShadow: '0 4px 10px rgba(80,27,54,0.22)' },
+  } as const;
+
+  const autoIcon = (
+    <Tooltip
+      arrow
+      placement="top"
+      title={autoSettingsEnabled ? 'Desactivar inspecciones automáticas (cada 15 días)' : 'Activar inspecciones automáticas (cada 15 días)'}
     >
-      <Box>
-        <Typography variant="body2" sx={{ fontWeight: 700, color: '#501b36' }}>
-          Auto 15d
-        </Typography>
+      <IconButton
+        aria-label={autoSettingsEnabled ? 'Desactivar inspecciones automáticas' : 'Activar inspecciones automáticas'}
+        disabled={!canManageAutoSettings || autoLoading}
+        onClick={() => canManageAutoSettings && onToggleAuto()}
+        size="small"
+        sx={{
+          ...iconBtnBase,
+          background: autoSettingsEnabled
+            ? 'linear-gradient(135deg, rgba(76,175,80,0.15) 0%, rgba(76,175,80,0.05) 100%)'
+            : iconBtnBase.background,
+          borderColor: autoSettingsEnabled ? alpha('#4caf50',0.5) : iconBtnBase['border'],
+          color: autoSettingsEnabled ? '#2e7d32' : '#501b36',
+          position: 'relative',
+          '&:after': autoLoading ? {
+            content: '""',
+            position: 'absolute',
+            inset: 4,
+            borderRadius: '50%',
+            border: '2px solid rgba(80,27,54,0.3)',
+            borderTopColor: 'transparent',
+            animation: 'spin 0.9s linear infinite'
+          } : undefined,
+          '@keyframes spin': { '0%': { transform: 'rotate(0deg)' }, '100%': { transform: 'rotate(360deg)' } }
+        }}
+      >
+        {autoSettingsEnabled ? <Autorenew fontSize="small" /> : <Schedule fontSize="small" />}
+      </IconButton>
+    </Tooltip>
+  );
+
+  const directOrderIcon = canCreateDirectOrder && (
+    <Tooltip arrow placement="top" title="Crear orden directa">
+      <IconButton
+        aria-label="Crear orden directa"
+        onClick={onCreateDirectOrder}
+        size="small"
+        sx={iconBtnBase}
+      >
+        <NoteAdd fontSize="small" />
+      </IconButton>
+    </Tooltip>
+  );
+
+  const requestIcon = canSendManualRequests && (
+    <Tooltip arrow placement="top" title="Solicitar inspección">
+      <IconButton
+        aria-label="Solicitar inspección"
+        onClick={onOpenManualModal}
+        size="small"
+        sx={{
+          ...iconBtnBase,
+          background: 'linear-gradient(135deg, #501b36 0%, #6d2548 70%)',
+          color: '#fff',
+          border: '1px solid #501b36',
+          '&:hover': {
+            background: 'linear-gradient(135deg, #3d1429 0%, #5a1d3a 70%)',
+            transform: 'translateY(-2px)',
+            boxShadow: '0 6px 16px rgba(80,27,54,0.35)'
+          }
+        }}
+      >
+        <RateReview fontSize="small" />
+      </IconButton>
+    </Tooltip>
+  );
+
+  const items = [autoIcon, directOrderIcon, requestIcon].filter(Boolean);
+
+  if (!items.length) return null;
+
+  // Mobile / tablet: misma fila con pequeña separación y posibilidad de agrandar si se desea
+  if (isMobile || isTablet) {
+    return (
+      <Box sx={{ display: 'flex', gap: 1.2 }}>
+        {items.map((el, idx) => <Box key={idx}>{el}</Box>)}
       </Box>
-      <Switch
-        checked={Boolean(autoSettingsEnabled)}
-        onChange={onToggleAuto}
-        disabled={autoLoading}
-        inputProps={{ 'aria-label': 'Activar inspecciones automáticas' }}
-      />
-    </Paper>
-  );
-
-  const autoCard = canManageAutoSettings
-    ? isMobile
-      ? autoCardContent
-      : (
-          <Tooltip
-            arrow
-            placement="top"
-            title={
-              <Box>
-                <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }}>
-                  Inspecciones automáticas cada 15 días
-                </Typography>
-                <Typography variant="body2">
-                  {autoSettingsEnabled
-                    ? 'Activadas: se generan recordatorios a los conductores.'
-                    : 'Desactivadas: solo podrás enviar solicitudes manuales.'}
-                </Typography>
-              </Box>
-            }
-          >
-            {autoCardContent}
-          </Tooltip>
-        )
-    : null;
-
-  const directOrderButton = canCreateDirectOrder ? (
-    <Button
-      onClick={onCreateDirectOrder}
-      variant="outlined"
-      sx={{
-        textTransform: 'none',
-        fontWeight: 600,
-        fontSize: '0.875rem',
-        color: '#501b36',
-        borderColor: 'rgba(80, 27, 54, 0.3)',
-        backgroundColor: '#ffffff',
-        px: 2,
-        py: 0.75,
-        minHeight: 36,
-        width: shouldStretchButtons ? '100%' : 'auto',
-        borderRadius: 2,
-        boxShadow: '0 2px 4px rgba(80, 27, 54, 0.1)',
-        '&:hover': {
-          backgroundColor: 'rgba(80, 27, 54, 0.05)',
-          borderColor: 'rgba(80, 27, 54, 0.4)',
-          boxShadow: '0 4px 8px rgba(80, 27, 54, 0.15)',
-        },
-      }}
-    >
-      Crear orden directa
-    </Button>
-  ) : null;
-
-  const manualButton = canSendManualRequests ? (
-    <Button
-      onClick={onOpenManualModal}
-      startIcon={<RateReview />}
-      variant="contained"
-      sx={{
-        textTransform: 'none',
-        fontWeight: 600,
-        borderRadius: 999,
-        px: isMobile ? 2.8 : 2.75,
-        py: isMobile ? 1.2 : 0.9,
-  width: shouldStretchButtons ? '100%' : 'auto',
-        background: 'linear-gradient(135deg,#501b36 0%,#7a2b54 100%)',
-        boxShadow: '0 6px 16px rgba(80,27,54,0.28)',
-        minHeight: isMobile ? 48 : 44,
-        '&:hover': {
-          background: 'linear-gradient(135deg,#3d1429 0%,#5a1f3d 100%)',
-          boxShadow: '0 10px 22px rgba(80,27,54,0.35)',
-        },
-      }}
-    >
-      Solicitar inspección
-    </Button>
-  ) : null;
-
-  const stackedContent = [autoCard, directOrderButton, manualButton].filter(
-    (item): item is React.ReactNode => Boolean(item)
-  );
-
-  if (isMobile) {
-    return (
-      <Stack spacing={1.5} width="100%">
-        {autoCard && (
-          <Box key="auto" sx={{ width: '100%' }}>
-            {autoCard}
-          </Box>
-        )}
-        {directOrderButton && (
-          <Box key="direct" sx={{ width: '100%' }}>
-            {directOrderButton}
-          </Box>
-        )}
-        {manualButton && (
-          <Box key="manual" sx={{ width: '100%' }}>
-            {manualButton}
-          </Box>
-        )}
-      </Stack>
     );
   }
 
-  if (isTablet) {
-    return (
-      <Stack spacing={1.5} width="100%">
-        {autoCard && (
-          <Box key="auto-tablet" sx={{ width: '100%', maxWidth: 360 }}>
-            {autoCard}
-          </Box>
-        )}
-        <Stack direction="row" spacing={1.25} flexWrap="wrap">
-          {directOrderButton && (
-            <Box key="direct-tablet" sx={{ flex: '1 1 220px', maxWidth: 320 }}>
-              {directOrderButton}
-            </Box>
-          )}
-          {manualButton && (
-            <Box key="manual-tablet" sx={{ flex: '1 1 220px', maxWidth: 320 }}>
-              {manualButton}
-            </Box>
-          )}
-        </Stack>
-      </Stack>
-    );
-  }
-
-  if (isCompactDesktop) {
-    return (
-      <Stack spacing={1.5} width="100%">
-        {autoCard && (
-          <Box key="auto-compact" sx={{ width: '100%', maxWidth: 420 }}>
-            {autoCard}
-          </Box>
-        )}
-        <Stack direction="row" spacing={1.25} flexWrap="wrap" alignItems="center">
-          {directOrderButton && (
-            <Box key="direct-compact" sx={{ flex: '1 1 240px', maxWidth: 320 }}>
-              {directOrderButton}
-            </Box>
-          )}
-          {manualButton && (
-            <Box key="manual-compact" sx={{ flex: '1 1 240px', maxWidth: 320 }}>
-              {manualButton}
-            </Box>
-          )}
-        </Stack>
-      </Stack>
-    );
-  }
-
+  // Desktop: agrupar en cápsula
   return (
-    <Box
-      sx={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 1.25,
-        padding: '0.6rem 0.9rem',
-        background: 'linear-gradient(135deg, rgba(250,249,251,0.95) 0%, rgba(238,228,235,0.85) 100%)',
-        borderRadius: 999,
-        border: '1px solid rgba(80,27,54,0.15)',
-        boxShadow: '0 3px 12px rgba(80,27,54,0.12)',
-      }}
-    >
-      {autoCard && (
-        <Box key="auto-desktop" sx={{ minWidth: 210, maxWidth: 260 }}>{autoCard}</Box>
-      )}
-      {directOrderButton && (
-        <Box key="direct-desktop">{directOrderButton}</Box>
-      )}
-      {manualButton && (
-        <Box key="manual-desktop">{manualButton}</Box>
-      )}
+    <Box sx={{ width: '100%', display: 'flex', justifyContent: 'flex-end' }}>
+      <Box
+        sx={{
+          p: 0.6,
+          pr: 0.75,
+            pl: 0.9,
+          borderRadius: 999,
+          background: 'linear-gradient(135deg, #fafafa 0%, #ececec 100%)',
+          border: '2px solid #e0e0e0',
+          boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.08)',
+          display: 'flex',
+          gap: 0.85,
+          alignItems: 'center'
+        }}
+      >
+        {items.map((el, idx) => <Box key={idx}>{el}</Box>)}
+      </Box>
     </Box>
   );
 };
@@ -1997,7 +1916,6 @@ export const TruckInspectionRevisions: React.FC = () => {
                               fontWeight: 600,
                               borderRadius: 999,
                               border: `1px solid ${alpha(urgency.color, 0.4)}`,
-                              px: 1,
                             }}
                           />
                         </Stack>
@@ -2639,15 +2557,15 @@ export const TruckInspectionRevisions: React.FC = () => {
                             ? inspection!.is_reviewed
                               ? {
                                   label: 'Revisada',
-                                  color: '#2e7d32',
-                                  bgcolor: alpha('#4caf50', 0.15),
-                                  border: alpha('#4caf50', 0.35),
+                                  color: '#4caf50',
+                                  bgcolor: alpha('#4caf50', 0.1),
+                                  border: alpha('#4caf50', 0.2),
                                 }
                               : {
                                   label: 'Pendiente',
-                                  color: '#ef6c00',
-                                  bgcolor: alpha('#ff9800', 0.12),
-                                  border: alpha('#ff9800', 0.3),
+                                  color: '#ff9800',
+                                  bgcolor: alpha('#ff9800', 0.1),
+                                  border: alpha('#ff9800', 0.2),
                                 }
                             : {
                                 label: 'Auto-OK',
@@ -3195,16 +3113,15 @@ export const TruckInspectionRevisions: React.FC = () => {
               manualSubmitting ? <CircularProgress size={18} color="inherit" /> : <Done />
             }
             sx={{
-              textTransform: 'none',
-              fontWeight: 600,
-              borderRadius: 999,
-              px: 3.5,
-              py: 1.1,
+              borderRadius:999,
+              px:3,
+              py:1.1,
+              fontWeight:600,
               background: 'linear-gradient(135deg, #501b36 0%, #7a2b54 100%)',
-              boxShadow: '0 6px 16px rgba(80, 27, 54, 0.25)',
+              boxShadow: '0 6px 16px rgba(80,27,54,0.25)',
               '&:hover': {
-                background: 'linear-gradient(135deg, #3d1429 0%, #5a1f3d 100%)',
-                boxShadow: '0 10px 20px rgba(80, 27, 54, 0.3)',
+                background: 'linear-gradient(135deg, #3d1429 0%, #5a1d3a 30%, #6b2545 70%, #3d1429 100%)',
+                boxShadow: '0 10px 20px rgba(80,27,54,0.35)',
               },
               '&:disabled': {
                 background: alpha('#501b36', 0.2),
@@ -3217,165 +3134,6 @@ export const TruckInspectionRevisions: React.FC = () => {
         </DialogActions>
       </Dialog>
 
-      {manualFeedback && (
-        <Snackbar
-          open
-          autoHideDuration={3000}
-          onClose={handleManualFeedbackClose}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        >
-          <Alert
-            severity={manualFeedback.severity}
-            onClose={handleManualFeedbackClose}
-            sx={{ 
-              width: '100%',
-              borderRadius: 2,
-              fontWeight: 600,
-            }}
-          >
-            {manualFeedback.message}
-          </Alert>
-        </Snackbar>
-      )}
-
-      {/* Modal orden directa a taller */}
-      <Dialog 
-        open={directOrderOpen} 
-        onClose={handleCloseDirectOrder} 
-        maxWidth="md" 
-        fullWidth
-        PaperProps={{
-          sx:{
-            borderRadius:3,
-            overflow:'hidden',
-            border:'1px solid',
-            borderColor:'rgba(80,27,54,0.18)',
-            boxShadow:'0 8px 32px rgba(80,27,54,0.25)'
-          }
-        }}
-      >
-        <DialogTitle sx={{ fontWeight:600, color:'#501b36' }}>Crear orden directa de inspección</DialogTitle>
-        <Box component="form" onSubmit={handleSubmitDirectOrder}>
-          <DialogContent dividers sx={{ display:'flex', flexDirection:'column', gap:3 }}>
-            <Alert severity="info" sx={{ borderRadius:2 }}>
-              Genera una orden inmediata para revisar un vehículo concreto. Añade tantos módulos de incidencia como necesites.
-            </Alert>
-            <Stack direction={{xs:'column', sm:'row'}} spacing={2}>
-              <TextField
-                label="Matrícula"
-                value={directOrderPlate}
-                onChange={(e)=>setDirectOrderPlate(e.target.value.toUpperCase())}
-                required
-                inputProps={{ maxLength: 12 }}
-                sx={{ flex:1 }}
-              />
-              <TextField
-                select
-                label="Tipo"
-                value={directOrderVehicleKind}
-                onChange={(e)=>setDirectOrderVehicleKind(e.target.value as any)}
-                sx={{ width:220 }}
-                SelectProps={{ native:true }}
-              >
-                <option value="TRACTORA">Tractora</option>
-                <option value="SEMIREMOLQUE">Semiremolque</option>
-              </TextField>
-            </Stack>
-            <Box>
-              <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb:1 }}>
-                <Typography variant="subtitle1" sx={{ fontWeight:600 }}>Módulos / Incidencias</Typography>
-                <Button onClick={handleAddModule} startIcon={<Add />} size="small" variant="outlined" sx={{ textTransform:'none', borderRadius:2 }}>Añadir módulo</Button>
-              </Stack>
-              <Stack spacing={2}>
-                {directOrderModules.map((mod, idx) => (
-                  <Paper key={mod.temp_id} variant="outlined" sx={{ p:2, borderRadius:2, position:'relative' }}>
-                    <Stack spacing={1.5}>
-                      <Stack direction={{xs:'column', sm:'row'}} spacing={2}>
-                        <TextField
-                          label={`Título ${idx+1}`}
-                          value={mod.title}
-                          onChange={(e)=>handleModuleChange(mod.temp_id,'title', e.target.value)}
-                          required={idx===0}
-                          sx={{ flex:1 }}
-                          placeholder="Ej: Fuga de aceite"
-                        />
-                        <IconButton
-                          aria-label="Eliminar módulo"
-                          onClick={()=>handleRemoveModule(mod.temp_id)}
-                          disabled={directOrderModules.length===1}
-                          size="small"
-                          disableRipple
-                          sx={{ 
-                            alignSelf:'flex-start', 
-                            mt:{xs:0.5, sm:0}, 
-                            color: directOrderModules.length===1 ? 'text.disabled':'#b71c1c',
-                            background:'transparent !important',
-                            boxShadow:'none !important',
-                            borderRadius:0,
-                            padding:0.25,
-                            '&:hover':{
-                              background:'transparent !important',
-                              boxShadow:'none',
-                              color: directOrderModules.length===1 ? 'text.disabled':'#7f0000'
-                            },
-                            '& .MuiTouchRipple-root':{
-                              display:'none'
-                            },
-                            '&:focus':{
-                              outline:'none'
-                            },
-                            '&:disabled':{
-                              color:'text.disabled'
-                            }
-                          }}
-                        >
-                          <Delete fontSize="small" />
-                        </IconButton>
-                      </Stack>
-                      <TextField
-                        label="Observaciones"
-                        value={mod.notes}
-                        onChange={(e)=>handleModuleChange(mod.temp_id,'notes', e.target.value)}
-                        multiline
-                        minRows={2}
-                        placeholder="Detalles, síntomas, contexto..."
-                      />
-                    </Stack>
-                  </Paper>
-                ))}
-              </Stack>
-            </Box>
-          </DialogContent>
-          <DialogActions sx={{ px:3, py:2.5, gap:1.5 }}>
-            <Button 
-              onClick={handleCloseDirectOrder} 
-              disabled={directOrderSubmitting}
-              variant="outlined"
-              sx={{
-                textTransform:'none',
-                fontWeight:600,
-                borderRadius:999,
-                px:3,
-                borderColor:'#c8b1bd',
-                color:'#501b36',
-                background:'linear-gradient(#ffffff,#faf7f9)',
-                '&:hover':{
-                  borderColor:'#501b36',
-                  background:'linear-gradient(#fff,#f3eaef)'
-                },
-                '&:disabled':{
-                  opacity:0.5,
-                  background:'linear-gradient(#ffffff,#faf7f9)'
-                }
-              }}
-            >Cancelar</Button>
-            <Button type="submit" variant="contained" disabled={directOrderSubmitting} sx={{ borderRadius:999, px:3, fontWeight:600 }}>
-              {directOrderSubmitting ? 'Creando...' : 'Crear Orden'}
-            </Button>
-          </DialogActions>
-        </Box>
-      </Dialog>
-
       <Snackbar
         open={!!directOrderFeedback}
         autoHideDuration={3000}
@@ -3386,6 +3144,158 @@ export const TruckInspectionRevisions: React.FC = () => {
           {directOrderFeedback?.message || ''}
         </Alert>
       </Snackbar>
+
+      {/* Modal creación de orden directa */}
+      <Dialog
+        open={directOrderOpen}
+        onClose={handleCloseDirectOrder}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          component: 'form',
+          onSubmit: handleSubmitDirectOrder,
+          sx: { borderRadius: 3, overflow: 'hidden' }
+        }}
+      >
+        <DialogTitle
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            pr: 2,
+            background: 'linear-gradient(135deg, #501b36 0%, #6d2547 100%)',
+            color: 'white'
+          }}
+        >
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            <Typography variant="h6" sx={{ fontWeight: 700 }}>
+              Crear orden directa
+            </Typography>
+            <Typography variant="caption" sx={{ opacity: 0.85 }}>
+              Registra una orden manual para revisión en taller.
+            </Typography>
+          </Box>
+          <IconButton onClick={handleCloseDirectOrder} aria-label="Cerrar" sx={{ color: 'white' }}>
+            <Close />
+          </IconButton>
+        </DialogTitle>
+        <DialogContent dividers sx={{ py: 3 }}>
+          <Stack spacing={2.5}>
+            <Alert severity="info" icon={<FactCheck fontSize="small" />} sx={{ borderRadius: 2 }}>
+              Esta orden aparecerá como pendiente hasta que sea revisada y marcada como completada.
+            </Alert>
+            <TextField
+              label="Matrícula"
+              value={directOrderPlate}
+              onChange={(e)=>setDirectOrderPlate(e.target.value.toUpperCase())}
+              placeholder="Ej: 1234ABC"
+              required
+              inputProps={{ maxLength: 10 }}
+              fullWidth
+            />
+            <Autocomplete
+              options={[{label:'Tractora', value:'TRACTORA'},{label:'Semiremolque', value:'SEMIREMOLQUE'}]}
+              value={directOrderVehicleKind === 'TRACTORA' ? {label:'Tractora', value:'TRACTORA'} : {label:'Semiremolque', value:'SEMIREMOLQUE'}}
+              onChange={(_e, val)=> val && setDirectOrderVehicleKind(val.value as 'TRACTORA'|'SEMIREMOLQUE')}
+              renderInput={(params)=>(<TextField {...params} label="Tipo de vehículo" />)}
+            />
+            <Box>
+              <Typography variant="subtitle2" sx={{ fontWeight:600, mb:1 }}>Módulos / puntos a revisar</Typography>
+              <Stack spacing={1.5}>
+                {directOrderModules.map(module => (
+                  <Paper 
+                    key={module.temp_id} 
+                    variant="outlined" 
+                    sx={{ 
+                      p:1.5, 
+                      pt: directOrderModules.length > 1 ? 1 : 1.5,
+                      borderRadius:2, 
+                      display:'flex', 
+                      flexDirection:'column', 
+                      gap:1
+                    }}
+                  >
+                    {directOrderModules.length > 1 && (
+                      <Box sx={{ display:'flex', justifyContent:'flex-end', mb:0.5 }}>
+                        <IconButton
+                          size="small"
+                          onClick={()=>handleRemoveModule(module.temp_id)}
+                          aria-label="Eliminar módulo"
+                          sx={{
+                            width:26,
+                            height:26,
+                            color:'#7a2b54',
+                            border:'1px solid rgba(122,43,84,0.25)',
+                            background:'transparent',
+                            borderRadius: '8px',
+                            transition:'all .2s',
+                            boxShadow:'none',
+                            '&:hover':{
+                              background:'rgba(122,43,84,0.08)',
+                              color:'#501b36'
+                            },
+                            '&:active':{
+                              transform:'scale(.95)'
+                            }
+                          }}
+                        >
+                          <Delete sx={{ fontSize:16 }} />
+                        </IconButton>
+                      </Box>
+                    )}
+                    <Stack spacing={1}>
+                      <TextField
+                        label="Título" size="small" value={module.title}
+                        onChange={(e)=>handleModuleChange(module.temp_id,'title', e.target.value)}
+                        placeholder="Ej: Frenos, Neumáticos..."
+                      />
+                      <TextField
+                        label="Notas" size="small" multiline minRows={2} value={module.notes}
+                        onChange={(e)=>handleModuleChange(module.temp_id,'notes', e.target.value)}
+                        placeholder="Observaciones específicas a revisar"
+                      />
+                    </Stack>
+                  </Paper>
+                ))}
+                <Button
+                  type="button"
+                  startIcon={<Add />}
+                  onClick={handleAddModule}
+                  variant="outlined"
+                  sx={{ alignSelf:'flex-start', borderRadius:999 }}
+                >
+                  Añadir módulo
+                </Button>
+              </Stack>
+            </Box>
+            {directOrderFeedback && directOrderFeedback.severity==='error' && (
+              <Alert severity="error" onClose={()=>setDirectOrderFeedback(null)} sx={{ borderRadius:2 }}>
+                {directOrderFeedback.message}
+              </Alert>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px:3, py:2.5, gap:1 }}>
+          <Button
+            onClick={handleCloseDirectOrder}
+            type="button"
+            disabled={directOrderSubmitting}
+            variant="outlined"
+            sx={{ textTransform:'none', borderRadius:2 }}
+          >
+            Cancelar
+          </Button>
+          <Button
+            type="submit"
+            disabled={directOrderSubmitting}
+            variant="contained"
+            startIcon={directOrderSubmitting ? <CircularProgress size={18} color="inherit" /> : <FactCheck />}
+            sx={{ textTransform:'none', borderRadius:2, fontWeight:600, background:'linear-gradient(135deg,#501b36,#6d2547)' }}
+          >
+            {directOrderSubmitting ? 'Creando...' : 'Crear orden'}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <InspectionDetailModal
         open={detailModalOpen}
