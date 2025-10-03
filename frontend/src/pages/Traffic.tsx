@@ -49,6 +49,7 @@ import {
   Delete,
   FactCheck,
   Refresh,
+  Handyman,
 } from '@mui/icons-material';
 import { trafficFilesAPI, API_BASE_URL } from '../services/api';
 import { PdfPreview } from '../components/PdfPreview';
@@ -588,7 +589,7 @@ export const Traffic: React.FC = () => {
                       justifyContent:'center'
                     }}
                   >
-                    <LocalShipping sx={{ fontSize:32, color:'#ffffff' }} />
+                    <Handyman sx={{ fontSize:32, color:'#ffffff' }} />
                   </Box>
                   <Box>
                     <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>

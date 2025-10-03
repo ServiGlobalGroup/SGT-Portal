@@ -22,7 +22,7 @@ import {
 import {
   Business,
   Check,
-  Traffic,
+  Handyman,
   EventNote,
   Description,
   LocalShipping,
@@ -71,7 +71,7 @@ const menuItems: MenuItem[] = [
   },
   { text: 'Ausencias', icon: <EventNote />, path: '/vacations' },
   { text: 'Dietas', icon: <RestaurantMenu />, path: '/dietas' },
-  { text: 'Taller', icon: <Traffic />, path: '/traffic' },
+  { text: 'Taller', icon: <Handyman />, path: '/traffic' },
   { text: 'Viajes', icon: <LocalShipping />, path: '/trips' },
   { text: 'Gestión de Usuarios', icon: <ManageAccounts />, path: '/users' },
 ];
